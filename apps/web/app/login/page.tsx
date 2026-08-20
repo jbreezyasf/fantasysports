@@ -18,7 +18,22 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <input type="hidden" name="next" value={next} />
           {isSignup && <label>Manager name<input name="display_name" required autoComplete="name" placeholder="How your league will know you" /></label>}
           <label>Email<input name="email" type="email" required autoComplete="email" /></label>
-          <label>Password<input name="password" type="password" minLength={8} required autoComplete={isSignup ? 'new-password' : 'current-password'} /></label>
+          <label>
+            Password
+            <input name="password" type="password" minLength={8} required autoComplete={isSignup ? 'new-password' : 'current-password'} aria-describedby={isSignup ? 'password-help' : undefined} />
+          </label>
+          {isSignup && (
+            <div id="password-help" className="passwordHelp">
+              <strong>Password requirements</strong>
+              <span>Use at least 8 characters with:</span>
+              <ul>
+                <li>1 uppercase letter</li>
+                <li>1 lowercase letter</li>
+                <li>1 number</li>
+                <li>1 symbol, such as ! @ # $ %</li>
+              </ul>
+            </div>
+          )}
           <div className="actions">
             {isSignup ? (
               <>
