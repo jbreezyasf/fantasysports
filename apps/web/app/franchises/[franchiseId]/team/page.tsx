@@ -1,0 +1,95 @@
+import { notFound, redirect } from 'next/navigation';
+import { createClient } from '../../../../lib/supabase/server';
+import { setLineup } from '../../../team/actions';
+
+const slots = [
+  ['QB',1,'QB'],['RB',1,'RB1'],['RB',2,'RB2'],['WR',1,'WR1'],['WR',2,'WR2'],['TE',1,'TE'],['FLEX',1,'FLEX'],['K',1,'K'],['DST',1,'D/ST']
+] as const;
+
+export default async function TeamPage({ params, searchParams }: { params: Promise<{ franchiseId: string }>; searchParams: Promise<{ week?: string; error?: string }> }) {
+  const { franchiseId } = await params;
+  const query = await searchParams;
+  const week = Math.max(1, Math.min(18, Number(query.week ?? 1)));
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data: franchise } = await supabase.from('franchises').select('id,name,abbreviation,league_id').eq('id', franchiseId).maybeSingle();
+  if (!franchise) notFound();
+  const { data: seasonFranchise } = await supabase.from('season_franchises').select('id,league_season_id').eq('franchise_id', franchiseId).maybeSingle();
+  if (!seasonFranchise) notFound();
+  const { data: ownership } = await supabase.from('franchise_owners').select('user_id').eq('franchise_id', franchiseId).eq('user_id', user.id).is('ends_on', null).maybeSingle();
+  if (!ownership) redirect(`/leagues/${franchise.league_id}`);
+
+  const { data: roster } = await supabase.from('roster_entries')
+    .select('id,athlete_id,real_team_id,athletes(display_name,position,real_teams(abbreviation)),real_teams(display_name,abbreviation)')
+    .eq('season_franchise_id', seasonFranchise.id).is('dropped_at', null).order('added_at');
+  const { data: lineup } = await supabase.from('lineups').select('slot,slot_index,athlete_id,real_team_id').eq('season_franchise_id', seasonFranchise.id).eq('week', week);
+
+  const lineupMap = new Map((lineup ?? []).map(item => [`${item.slot}:${item.slot_index}`, item]));
+  const starterAssetIds = new Set((lineup ?? []).flatMap(item => [item.athlete_id, item.real_team_id]).filter(Boolean));
+
+  function labelForAsset(asset: NonNullable<typeof roster>[number]) {
+    if (asset.athlete_id && asset.athletes) {
+      const athlete = Array.isArray(asset.athletes) ? asset.athletes[0] : asset.athletes as {display_name?: string;position?: string;real_teams?: {abbreviation?:string}|{abbreviation?:string}[]|null};
+      const team = Array.isArray(athlete?.real_teams) ? athlete?.real_teams[0] : athlete?.real_teams;
+      return `${athlete?.display_name ?? 'Athlete'} • ${athlete?.position ?? ''} • ${team?.abbreviation ?? 'FA'}`;
+    }
+    const team = Array.isArray(asset.real_teams) ? asset.real_teams[0] : asset.real_teams as {display_name?:string;abbreviation?:string}|null;
+    return `${team?.abbreviation ?? team?.display_name ?? 'Team'} D/ST`;
+  }
+
+  return (
+    <main>
+      <section className="panel">
+        <p className="eyebrow">TEAM / WEEK {week}</p>
+        <h1>{franchise.name}</h1>
+        <p className="lede">Set the starting nine. Each real player locks when their game begins once the current-season live schedule is connected.</p>
+        {query.error && <p className="errorNotice">{query.error}</p>}
+        <div className="actions">
+          {week > 1 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week-1}`}>← Week {week-1}</a>}
+          {week < 18 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week+1}`}>Week {week+1} →</a>}
+        </div>
+      </section>
+
+      <section className="panel">
+        <p className="eyebrow">STARTERS</p>
+        <div className="lineupGrid">
+          {slots.map(([slot,slotIndex,label]) => {
+            const current = lineupMap.get(`${slot}:${slotIndex}`);
+            const currentRoster = roster?.find(r => (current?.athlete_id && r.athlete_id===current.athlete_id) || (current?.real_team_id && r.real_team_id===current.real_team_id));
+            const eligible = (roster ?? []).filter(r => {
+              if (r.real_team_id) return slot==='DST';
+              const athlete = Array.isArray(r.athletes) ? r.athletes[0] : r.athletes as {position?:string}|null;
+              const pos = athlete?.position;
+              if (slot==='FLEX') return ['RB','WR','TE'].includes(pos ?? '');
+              return pos===slot;
+            });
+            return <article className="lineupSlot" key={`${slot}-${slotIndex}`}>
+              <span>{label}</span>
+              <strong>{currentRoster ? labelForAsset(currentRoster) : 'EMPTY'}</strong>
+              {!!eligible.length && <div className="slotChoices">{eligible.slice(0,12).map(asset => <form action={setLineup} key={asset.id}>
+                <input type="hidden" name="season_franchise_id" value={seasonFranchise.id}/>
+                <input type="hidden" name="franchise_id" value={franchiseId}/>
+                <input type="hidden" name="week" value={week}/>
+                <input type="hidden" name="slot" value={slot}/>
+                <input type="hidden" name="slot_index" value={slotIndex}/>
+                {asset.athlete_id && <input type="hidden" name="athlete_id" value={asset.athlete_id}/>} 
+                {asset.real_team_id && <input type="hidden" name="real_team_id" value={asset.real_team_id}/>} 
+                <button className="miniAction" type="submit">{labelForAsset(asset)}</button>
+              </form>)}</div>}
+            </article>;
+          })}
+        </div>
+      </section>
+
+      <section className="panel">
+        <p className="eyebrow">BENCH / ROSTER</p>
+        <div className="playerList">
+          {(roster ?? []).filter(asset => !starterAssetIds.has(asset.athlete_id ?? asset.real_team_id)).map(asset => <div className="playerRow" key={asset.id}><div><span>AVAILABLE TO START</span><strong>{labelForAsset(asset)}</strong></div></div>)}
+          {!roster?.length && <p className="errorNotice">No roster yet. Players appear here as soon as the draft is completed.</p>}
+        </div>
+      </section>
+    </main>
+  );
+}
