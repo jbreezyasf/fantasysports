@@ -2,6 +2,7 @@ type SendEmailInput = {
   to: string;
   subject: string;
   html: string;
+  text?: string;
   from?: string;
   idempotencyKey?: string;
 };
@@ -24,7 +25,7 @@ export async function sendTransactionalEmail(input: SendEmailInput) {
       'Content-Type': 'application/json',
       ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {})
     },
-    body: JSON.stringify({ from, to: [input.to], subject: input.subject, html: input.html })
+    body: JSON.stringify({ from, to: [input.to], subject: input.subject, html: input.html, ...(input.text ? { text: input.text } : {}) })
   });
 
   if (!response.ok) {
