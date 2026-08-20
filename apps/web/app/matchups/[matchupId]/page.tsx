@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
-import { finalizeMatchup, refreshMatchup } from '../actions';
+import { finalizeMatchup, generatePostgameTalk, postGeneratedTalk, refreshMatchup } from '../actions';
 
 type FranchiseCard = { name?: string; abbreviation?: string; primary_color?: string };
 type TeamRef = { abbreviation?: string };
@@ -11,7 +11,7 @@ function firstRelation<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-export default async function MatchupPage({ params, searchParams }: { params: Promise<{ matchupId: string }>; searchParams: Promise<{ error?: string; finalized?: string }> }) {
+export default async function MatchupPage({ params, searchParams }: { params: Promise<{ matchupId: string }>; searchParams: Promise<{ error?: string; finalized?: string; talk?: string }> }) {
   const { matchupId } = await params;
   const query = await searchParams;
   const supabase = await createClient();
@@ -27,10 +27,16 @@ export default async function MatchupPage({ params, searchParams }: { params: Pr
   const awayFranchise = firstRelation(away?.franchises as FranchiseCard | FranchiseCard[] | null | undefined);
   const { data: member } = await supabase.from('league_seasons').select('league_id').eq('id', matchup.league_season_id).maybeSingle();
   const { data: leagueRole } = member ? await supabase.from('league_members').select('role').eq('league_id', member.league_id).eq('user_id', user.id).maybeSingle() : { data:null };
+  const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id',user.id).is('ends_on',null);
+  const ownedIds=new Set((ownerships??[]).map(o=>o.franchise_id));
+  const isParticipant=(sf??[]).some(x=>ownedIds.has(x.franchise_id));
 
-  const { data: lineups } = await supabase.from('lineups').select('season_franchise_id,slot,slot_index,athlete_id,real_team_id,athletes(display_name,position,real_teams(abbreviation)),real_teams(abbreviation)').eq('week', matchup.week).in('season_franchise_id',[matchup.home_season_franchise_id,matchup.away_season_franchise_id]);
-  const { data: playerScores } = await supabase.from('fantasy_player_scores').select('athlete_id,points').eq('league_season_id',matchup.league_season_id).eq('week',matchup.week);
-  const { data: teamScores } = await supabase.from('fantasy_team_scores').select('real_team_id,points').eq('league_season_id',matchup.league_season_id).eq('week',matchup.week);
+  const [{ data: lineups },{ data: playerScores },{ data: teamScores },{ data: generated }] = await Promise.all([
+    supabase.from('lineups').select('season_franchise_id,slot,slot_index,athlete_id,real_team_id,athletes(display_name,position,real_teams(abbreviation)),real_teams(abbreviation)').eq('week', matchup.week).in('season_franchise_id',[matchup.home_season_franchise_id,matchup.away_season_franchise_id]),
+    supabase.from('fantasy_player_scores').select('athlete_id,points').eq('league_season_id',matchup.league_season_id).eq('week',matchup.week),
+    supabase.from('fantasy_team_scores').select('real_team_id,points').eq('league_season_id',matchup.league_season_id).eq('week',matchup.week),
+    query.talk ? supabase.from('generated_messages').select('id,tone,body,provider,created_at').eq('matchup_id',matchupId).eq('requested_by',user.id).eq('tone',query.talk).order('created_at',{ascending:false}).limit(3) : Promise.resolve({data:[]})
+  ]);
   const playerMap = new Map((playerScores ?? []).map(x => [x.athlete_id, Number(x.points)]));
   const teamMap = new Map((teamScores ?? []).map(x => [x.real_team_id, Number(x.points)]));
 
@@ -56,10 +62,17 @@ export default async function MatchupPage({ params, searchParams }: { params: Pr
         <b>VS</b>
         <div><span>{awayFranchise?.abbreviation ?? 'AWAY'}</span><strong>{Number(matchup.away_points).toFixed(2)}</strong><p>{awayFranchise?.name}</p></div>
       </div>
-      {query.error && <p className="errorNotice">{query.error}</p>}
+      {query.error && <p className="errorNotice" role="alert">{query.error}</p>}
       {query.finalized && <p className="successNotice">Matchup finalized and standings updated.</p>}
-      <div className="actions"><form action={refreshMatchup}><input type="hidden" name="matchup_id" value={matchupId}/><button className="secondary">Refresh Scores</button></form>{leagueRole?.role==='commissioner' && !matchup.is_final && <form action={finalizeMatchup}><input type="hidden" name="matchup_id" value={matchupId}/><button className="primary">Finalize When Games End</button></form>}</div>
+      <div className="actions"><form action={refreshMatchup}><input type="hidden" name="matchup_id" value={matchupId}/><button className="secondary">Refresh Scores</button></form>{leagueRole?.role==='commissioner' && !matchup.is_final && <form action={finalizeMatchup}><input type="hidden" name="matchup_id" value={matchupId}/><button className="primary">Finalize When Games End</button></form>}{member?.league_id&&<a className="secondary" href={`/leagues/${member.league_id}/locker-room`}>Locker Room</a>}</div>
     </section>
+
+    {matchup.is_final&&isParticipant&&<section className="panel">
+      <p className="eyebrow">POSTGAME MIC</p><h2>Choose your energy.</h2><p className="lede">Big Exec uses only public matchup facts here. Pick a tone, choose one of three editable lines, then send it to the Locker Room.</p>
+      <div className="actions">{(['respect','playful','petty','savage'] as const).map(tone=><form action={generatePostgameTalk} key={tone}><input type="hidden" name="matchup_id" value={matchupId}/><input type="hidden" name="tone" value={tone}/><button className={query.talk===tone?'primary':'secondary'}>{tone}</button></form>)}</div>
+      {!!generated?.length&&<div className="weekStack" style={{marginTop:24}}>{generated.map(option=><article className="weekCard" key={option.id}><div className="weekHeader"><div><span>{option.tone.toUpperCase()}</span><strong>{option.provider.startsWith('openai')?'AI OPTION':'BIG EXEC OPTION'}</strong></div></div><form className="authForm" action={postGeneratedTalk}><input type="hidden" name="matchup_id" value={matchupId}/><input type="hidden" name="message_id" value={option.id}/><label>Edit before posting<textarea name="body" defaultValue={option.body} maxLength={1200} rows={3}/></label><button className="primary">Post to Locker Room</button></form></article>)}</div>}
+    </section>}
+
     <section className="panel">
       <p className="eyebrow">HEAD-TO-HEAD LINEUP</p>
       <div className="battleList">{slotOrder.map(key => { const h=assetRow(matchup.home_season_franchise_id,key); const a=assetRow(matchup.away_season_franchise_id,key); return <div className="battleRow" key={key}><div><span>{h.meta}</span><strong>{h.name}</strong><b>{h.points.toFixed(2)}</b></div><em>{key.split(':')[0]==='DST'?'D/ST':key.split(':')[0]}</em><div><span>{a.meta}</span><strong>{a.name}</strong><b>{a.points.toFixed(2)}</b></div></div>})}</div>
