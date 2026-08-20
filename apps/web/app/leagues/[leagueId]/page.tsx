@@ -23,7 +23,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
     ? await supabase.from('league_invites').select('id,email,status,expires_at,invite_token').eq('league_id', leagueId).order('created_at', { ascending: false })
     : { data: [] as Array<{ id: string; email: string; status: string; expires_at: string; invite_token: string }> };
   const memberCount = franchises?.length ?? 0;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://fantasysports-tawny.vercel.app';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bigexecfs.com';
 
   return (
     <main>
@@ -39,13 +39,13 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
         <section className="panel">
           <p className="eyebrow">COMMISSIONER / INVITES</p>
           <h2>Bring your league in.</h2>
-          <p className="lede">Invite managers by email. Until Resend is connected, the app creates a secure claim link you can copy and send manually.</p>
+          <p className="lede">Invite managers by email. Big Exec creates a secure claim link and sends it automatically when email delivery is configured.</p>
           {query.invite_error && <p className="errorNotice">{query.invite_error}</p>}
           {query.invite_created && query.invite_token && (
             <div className="inviteLinkBox">
               <span>INVITE READY FOR {query.invite_email}</span>
               <code>{`${appUrl}/invite/${query.invite_token}`}</code>
-              <p className="lede">Once Resend is configured, this same action will send the branded invitation automatically.</p>
+              <p className="lede">You can copy this claim link as a fallback if the email is delayed.</p>
             </div>
           )}
           {memberCount < 10 ? (
