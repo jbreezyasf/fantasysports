@@ -21,7 +21,8 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   const leagueName = Array.isArray(invite.fantasy_leagues) ? invite.fantasy_leagues[0]?.name : (invite.fantasy_leagues as { name?: string } | null)?.name;
 
   if (!user) {
-    redirect(`/login?message=${encodeURIComponent(`You've been invited to ${leagueName ?? 'a fantasy league'}. Sign in or create your account, then return to your invite link.`)}`);
+    const next = `/invite/${token}`;
+    redirect(`/login?message=${encodeURIComponent(`You've been invited to ${leagueName ?? 'a fantasy league'}. Sign in or create your account to claim your franchise.`)}&next=${encodeURIComponent(next)}`);
   }
 
   return (
