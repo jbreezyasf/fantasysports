@@ -8,8 +8,8 @@ export default function HomePage() {
         <h1>Run the franchise.<br />Own the season.</h1>
         <p className="lede">Big Exec is a multi-sport fantasy franchise platform built around real athletes, persistent teams, live competition, rivalry, legacy and the feeling that you are running your own front office.</p>
         <div className="actions">
-          <a className="primary" href="/play">Enter Pro Football</a>
-          <a className="secondary" href="#sports">Explore Big Exec</a>
+          <a className="primary" href="/login?mode=signup&role=commissioner">Create Commissioner Account</a>
+          <a className="secondary" href="/login">Sign In</a>
         </div>
       </section>
 
