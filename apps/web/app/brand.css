@@ -1,0 +1,18 @@
+:root {
+  --accent:#D4AF37;
+  --exec-gold:#D4AF37;
+  --exec-gold-light:#F3D777;
+  --exec-black:#08090B;
+  --exec-charcoal:#15161A;
+  --exec-white:#F7F4ED;
+  --exec-silver:#C5C7CB;
+}
+
+body {
+  background:
+    radial-gradient(circle at 82% 3%, rgba(212,175,55,.13) 0, transparent 28%),
+    radial-gradient(circle at 8% 70%, rgba(255,255,255,.035) 0, transparent 24%),
+    #08090B;
+}
+
+::selection { background:var(--exec-gold); color:var(--exec-black); }
