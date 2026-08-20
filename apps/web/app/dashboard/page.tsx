@@ -7,13 +7,17 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const [{ data: leagues }, { data: profile }, { data: invites }] = await Promise.all([
+  const [leagueResult, profileResult, inviteResult] = await Promise.all([
     supabase.from('fantasy_leagues').select('id,name,created_at').order('created_at', { ascending: false }),
     supabase.from('user_profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
     supabase.from('league_invites').select('id,invite_token,email,status,expires_at,fantasy_leagues(name)').eq('status','pending').order('created_at', { ascending:false })
   ]);
 
+  const leagues = leagueResult.data;
+  const profile = profileResult.data;
+  const invites = inviteResult.data;
   const displayName = profile?.display_name || user.user_metadata?.display_name || 'Manager';
+  const dataError = leagueResult.error?.message || profileResult.error?.message || inviteResult.error?.message;
 
   return (
     <main>
@@ -21,6 +25,7 @@ export default async function DashboardPage() {
         <p className="eyebrow">BIG EXEC FRONT OFFICE</p>
         <h1>Welcome, {displayName}.</h1>
         <p className="lede">Your Big Exec account follows you across leagues and sports. Your role is determined inside each league: create one to become its commissioner, or join one as a franchise manager.</p>
+        {dataError && <p className="errorNotice">We could not load all of your Front Office data: {dataError}</p>}
         <div className="actions">
           <a className="primary" href="/leagues/new">Create a League</a>
           <a className="secondary" href="/join">Join a League</a>
@@ -57,7 +62,7 @@ export default async function DashboardPage() {
               <strong>{league.name}</strong>
             </a>
           ))}
-          {!leagues?.length && (
+          {!dataError && !leagues?.length && (
             <article className="sportCard">
               <span>NO LEAGUES YET</span>
               <strong>Build or join your first franchise universe.</strong>
