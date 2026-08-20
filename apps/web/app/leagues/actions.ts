@@ -27,14 +27,14 @@ export async function createLeagueInvite(formData: FormData) {
   if (error) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(error.message));
   const invite = data as { invite_id: string; invite_token: string; email: string };
   const [{ data: league }, { data: profile }, { data: inviteRecord }, { count: claimedCount }] = await Promise.all([
-    supabase.from('fantasy_leagues').select('name').eq('id', leagueId).maybeSingle(),
+    supabase.from('fantasy_leagues').select('name,draft_min_franchises').eq('id', leagueId).maybeSingle(),
     supabase.from('user_profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
     supabase.from('league_invites').select('expires_at').eq('id', invite.invite_id).maybeSingle(),
     supabase.from('league_members').select('id', { count:'exact', head:true }).eq('league_id', leagueId)
   ]);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bigexecfs.com';
-  const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: inviteRecord?.expires_at ? new Date(inviteRecord.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
-  const delivery = await sendTransactionalEmail({ to:email, subject:message.subject, html:message.html, idempotencyKey:`league-invite/${invite.invite_id}` });
+  const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, totalSpots: league?.draft_min_franchises ?? 10, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: inviteRecord?.expires_at ? new Date(inviteRecord.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
+  const delivery = await sendTransactionalEmail({ to:email, subject:message.subject, html:message.html, text:message.text, idempotencyKey:`league-invite/${invite.invite_id}` });
   revalidatePath(`/leagues/${leagueId}`);
   redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${invite.invite_token}&invite_email=${encodeURIComponent(email)}&email_status=${delivery.sent ? 'sent' : 'manual'}`);
 }
