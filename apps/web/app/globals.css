@@ -65,5 +65,21 @@ h2 { margin:8px 0 20px; max-width:760px; font-size:clamp(2rem, 5vw, 4.4rem); lin
 .battleRow strong { font-size:.9rem; }
 .battleRow b { color:var(--accent); font-size:1.15rem; }
 .battleRow em { color:var(--muted); font-size:.68rem; font-style:normal; text-align:center; }
-@media (max-width:560px) { .inlineForm { grid-template-columns:1fr; }.sportGrid{grid-template-columns:1fr;}.playerRow{grid-template-columns:1fr auto;}.scoreboard{gap:4px}.scoreboard p{font-size:.75rem}.battleRow{grid-template-columns:1fr 38px 1fr}.battleRow strong{font-size:.78rem} }
+.standingsList { width:min(760px,100%); border-top:1px solid var(--line); }
+.standingRow { display:grid; grid-template-columns:32px 1fr auto auto; gap:12px; align-items:center; padding:13px 0; border-bottom:1px solid var(--line); }
+.standingRow > b { color:var(--accent); }
+.standingRow > span { font-weight:800; }
+.standingRow small { color:var(--muted); }
+.weekStack { display:grid; gap:12px; width:min(900px,100%); }
+.weekCard { padding:18px; background:var(--panel); border:1px solid var(--line); }
+.weekHeader { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:12px; }
+.weekHeader div { display:grid; gap:4px; }
+.weekHeader span { color:var(--accent); font-size:.68rem; font-weight:800; letter-spacing:.1em; }
+.weekHeader strong { font-size:1.05rem; }
+.scheduleGame { display:grid; grid-template-columns:1fr 44px 1fr; gap:10px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
+.scheduleGame > div { display:flex; justify-content:space-between; gap:10px; }
+.scheduleGame > div:last-child { flex-direction:row-reverse; text-align:right; }
+.scheduleGame span { color:var(--accent); font-weight:800; }
+.scheduleGame em { color:var(--muted); font-style:normal; font-size:.65rem; text-align:center; }
+@media (max-width:560px) { .inlineForm { grid-template-columns:1fr; }.sportGrid{grid-template-columns:1fr;}.playerRow{grid-template-columns:1fr auto;}.scoreboard{gap:4px}.scoreboard p{font-size:.75rem}.battleRow{grid-template-columns:1fr 38px 1fr}.battleRow strong{font-size:.78rem}.standingRow{grid-template-columns:26px 1fr auto}.standingRow small{display:none}.scheduleGame>div{display:grid;gap:2px}.scheduleGame>div:last-child{display:grid;direction:rtl} }
 @media (min-width:760px) { main{padding-left:34px;padding-right:34px}.sportGrid{grid-template-columns:repeat(3,1fr)}.split{grid-template-columns:1.2fr .8fr;align-items:end}.lineupGrid{grid-template-columns:repeat(2,1fr)} }
