@@ -2,6 +2,15 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
 import { finalizeMatchup, refreshMatchup } from '../actions';
 
+type FranchiseCard = { name?: string; abbreviation?: string; primary_color?: string };
+type TeamRef = { abbreviation?: string };
+type AthleteRef = { display_name?: string; position?: string; real_teams?: TeamRef | TeamRef[] | null };
+
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
 export default async function MatchupPage({ params, searchParams }: { params: Promise<{ matchupId: string }>; searchParams: Promise<{ error?: string; finalized?: string }> }) {
   const { matchupId } = await params;
   const query = await searchParams;
@@ -14,8 +23,8 @@ export default async function MatchupPage({ params, searchParams }: { params: Pr
   const { data: sf } = await supabase.from('season_franchises').select('id,franchise_id,franchises(name,abbreviation,primary_color)').in('id', [matchup.home_season_franchise_id, matchup.away_season_franchise_id]);
   const home = sf?.find(x => x.id === matchup.home_season_franchise_id);
   const away = sf?.find(x => x.id === matchup.away_season_franchise_id);
-  const homeFranchise = Array.isArray(home?.franchises) ? home?.franchises[0] : home?.franchises as {name?:string;abbreviation?:string;primary_color?:string}|null;
-  const awayFranchise = Array.isArray(away?.franchises) ? away?.franchises[0] : away?.franchises as {name?:string;abbreviation?:string;primary_color?:string}|null;
+  const homeFranchise = firstRelation(home?.franchises as FranchiseCard | FranchiseCard[] | null | undefined);
+  const awayFranchise = firstRelation(away?.franchises as FranchiseCard | FranchiseCard[] | null | undefined);
   const { data: member } = await supabase.from('league_seasons').select('league_id').eq('id', matchup.league_season_id).maybeSingle();
   const { data: leagueRole } = member ? await supabase.from('league_members').select('role').eq('league_id', member.league_id).eq('user_id', user.id).maybeSingle() : { data:null };
 
@@ -31,11 +40,11 @@ export default async function MatchupPage({ params, searchParams }: { params: Pr
     const item = lineups?.find(l => l.season_franchise_id===seasonFranchiseId && l.slot===slot && l.slot_index===Number(index));
     if (!item) return { name:'EMPTY', meta:slot==='DST'?'D/ST':slot, points:0 };
     if (item.athlete_id) {
-      const athlete = Array.isArray(item.athletes) ? item.athletes[0] : item.athletes as {display_name?:string;position?:string;real_teams?:{abbreviation?:string}|{abbreviation?:string}[]|null}|null;
-      const team = Array.isArray(athlete?.real_teams) ? athlete?.real_teams[0] : athlete?.real_teams;
+      const athlete = firstRelation(item.athletes as AthleteRef | AthleteRef[] | null | undefined);
+      const team = firstRelation(athlete?.real_teams);
       return { name:athlete?.display_name ?? 'Athlete', meta:`${slot==='FLEX'?athlete?.position:slot} • ${team?.abbreviation ?? 'FA'}`, points:playerMap.get(item.athlete_id) ?? 0 };
     }
-    const team = Array.isArray(item.real_teams) ? item.real_teams[0] : item.real_teams as {abbreviation?:string}|null;
+    const team = firstRelation(item.real_teams as TeamRef | TeamRef[] | null | undefined);
     return { name:`${team?.abbreviation ?? 'Team'} D/ST`, meta:'D/ST', points:teamMap.get(item.real_team_id!) ?? 0 };
   }
 
