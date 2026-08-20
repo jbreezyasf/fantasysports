@@ -58,3 +58,15 @@ export async function acceptLeagueInvite(formData: FormData) {
   const result = data as { league_id: string };
   redirect(`/leagues/${result.league_id}?joined=1`);
 }
+
+export async function generateCircuitSchedule(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+  const leagueId = String(formData.get('league_id') ?? '');
+  const { data, error } = await supabase.rpc('generate_circuit_schedule', { p_league_id: leagueId });
+  if (error) redirect(`/leagues/${leagueId}?schedule_error=${encodeURIComponent(error.message)}`);
+  const result = data as { status: string; matchups?: number };
+  revalidatePath(`/leagues/${leagueId}`);
+  redirect(`/leagues/${leagueId}?schedule_status=${encodeURIComponent(result.status)}`);
+}
