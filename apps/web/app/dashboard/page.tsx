@@ -7,20 +7,63 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: leagues } = await supabase.from('fantasy_leagues').select('id,name,created_at').order('created_at', { ascending: false });
+  const [{ data: leagues }, { data: profile }, { data: invites }] = await Promise.all([
+    supabase.from('fantasy_leagues').select('id,name,created_at').order('created_at', { ascending: false }),
+    supabase.from('user_profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
+    supabase.from('league_invites').select('id,invite_token,email,status,expires_at,fantasy_leagues(name)').eq('status','pending').order('created_at', { ascending:false })
+  ]);
+
+  const displayName = profile?.display_name || user.user_metadata?.display_name || 'Manager';
 
   return (
     <main>
       <section className="panel">
-        <p className="eyebrow">FRONT OFFICE</p>
-        <h1>Your leagues.</h1>
-        <p className="lede">Signed in as {user.email}</p>
-        <div className="actions"><a className="primary" href="/leagues/new">Create league</a><form><button className="secondary" formAction={signOut}>Sign out</button></form></div>
+        <p className="eyebrow">BIG EXEC FRONT OFFICE</p>
+        <h1>Welcome, {displayName}.</h1>
+        <p className="lede">Your Big Exec account follows you across leagues and sports. Your role is determined inside each league: create one to become its commissioner, or join one as a franchise manager.</p>
+        <div className="actions">
+          <a className="primary" href="/leagues/new">Create a League</a>
+          <a className="secondary" href="/join">Join a League</a>
+          <form><button className="secondary" formAction={signOut}>Sign out</button></form>
+        </div>
       </section>
+
+      {!!invites?.length && (
+        <section className="panel">
+          <p className="eyebrow">YOUR INVITATIONS</p>
+          <h2>Franchises waiting for you.</h2>
+          <div className="sportGrid">
+            {invites.map((invite) => {
+              const leagueRelation = invite.fantasy_leagues as unknown as { name?: string } | { name?: string }[] | null;
+              const leagueName = Array.isArray(leagueRelation) ? leagueRelation[0]?.name : leagueRelation?.name;
+              return (
+                <a className="sportCard" key={invite.id} href={`/invite/${invite.invite_token}`}>
+                  <span>PENDING INVITE</span>
+                  <strong>{leagueName ?? 'Big Exec League'}</strong>
+                  <p className="lede">Claim your franchise</p>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="panel">
+        <p className="eyebrow">YOUR LEAGUES</p>
         <div className="sportGrid">
-          {(leagues ?? []).map((league) => <a className="sportCard" key={league.id} href={`/leagues/${league.id}`}><span>PRO FOOTBALL</span><strong>{league.name}</strong></a>)}
-          {!leagues?.length && <article className="sportCard"><span>NO LEAGUES YET</span><strong>Create your first franchise league.</strong></article>}
+          {(leagues ?? []).map((league) => (
+            <a className="sportCard" key={league.id} href={`/leagues/${league.id}`}>
+              <span>PRO FOOTBALL</span>
+              <strong>{league.name}</strong>
+            </a>
+          ))}
+          {!leagues?.length && (
+            <article className="sportCard">
+              <span>NO LEAGUES YET</span>
+              <strong>Build or join your first franchise universe.</strong>
+              <p className="lede">Creating a league makes you its commissioner. Joining an invitation makes you a franchise manager.</p>
+            </article>
+          )}
         </div>
       </section>
     </main>
