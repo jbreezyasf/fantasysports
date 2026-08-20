@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
 import { acceptLeagueInvite } from '../../leagues/actions';
+import { signOutTo } from '../../auth/actions';
 
 export default async function InvitePage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ error?: string }> }) {
   const { token } = await params;
@@ -22,10 +23,41 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   }
 
   const leagueName = invite.league_name as string | undefined;
+  const next = `/invite/${token}`;
 
   if (!user) {
-    const next = `/invite/${token}`;
     redirect(`/login?message=${encodeURIComponent(`You've been invited to ${leagueName ?? 'a fantasy league'}. Sign in or create your account to claim your franchise.`)}&next=${encodeURIComponent(next)}`);
+  }
+
+  const { data: inviteMatchesUser, error: matchError } = await supabase.rpc('invite_matches_current_user', {
+    p_invite_token: token
+  });
+
+  if (matchError) {
+    return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>We couldn't verify your account.</h1><p className="lede">Please try this invitation again in a moment.</p></section></main>;
+  }
+
+  if (!inviteMatchesUser) {
+    return (
+      <main>
+        <section className="panel">
+          <p className="eyebrow">ACCOUNT SWITCH REQUIRED</p>
+          <h1>This invite belongs to a different email.</h1>
+          <p className="lede">You are currently signed in as <strong>{user.email ?? 'another Big Exec account'}</strong>. For security, league invitations can only be claimed by the exact email address that received them.</p>
+          <div className="inviteLinkBox" role="status" aria-live="polite">
+            <span>YOUR INVITE IS STILL SAFE</span>
+            <p className="lede">Switch accounts and Big Exec will bring you straight back to this invitation. You will not lose the invite or need a new link.</p>
+          </div>
+          <div className="actions">
+            <form action={signOutTo}>
+              <input type="hidden" name="next" value={next} />
+              <button className="primary" type="submit">Switch to Invited Account</button>
+            </form>
+            <a className="secondary" href="/dashboard">Stay Signed In</a>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -34,7 +66,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
         <p className="eyebrow">YOU'VE BEEN INVITED</p>
         <h1>Claim your franchise.</h1>
         <p className="lede">You're joining <strong>{leagueName ?? 'this league'}</strong>. Create the franchise identity that will carry your record, rivalry history, achievements and future championship banners.</p>
-        {query.error && <p className="errorNotice">{query.error}</p>}
+        {query.error && <p className="errorNotice" role="alert">{query.error}</p>}
         <form className="authForm" action={acceptLeagueInvite}>
           <input type="hidden" name="invite_token" value={token} />
           <label>Franchise name<input name="franchise_name" required placeholder="Atlanta Phantoms" /></label>
