@@ -8,17 +8,20 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: invite } = await supabase
-    .from('league_invites')
-    .select('email,status,expires_at,league_id,fantasy_leagues(name)')
-    .eq('invite_token', token)
-    .maybeSingle();
+  const { data: inviteRows, error: inviteLookupError } = await supabase.rpc('get_public_league_invite', {
+    p_invite_token: token
+  });
+  const invite = Array.isArray(inviteRows) ? inviteRows[0] : null;
 
-  if (!invite || invite.status !== 'pending') {
+  if (inviteLookupError) {
+    return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>We couldn't load this invite.</h1><p className="lede">The invitation service is temporarily unavailable. Please try the link again in a moment or ask your commissioner to resend it.</p></section></main>;
+  }
+
+  if (!invite) {
     return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>This invite is unavailable.</h1><p className="lede">It may have expired, already been claimed, or been replaced by a newer invitation.</p></section></main>;
   }
 
-  const leagueName = Array.isArray(invite.fantasy_leagues) ? invite.fantasy_leagues[0]?.name : (invite.fantasy_leagues as { name?: string } | null)?.name;
+  const leagueName = invite.league_name as string | undefined;
 
   if (!user) {
     const next = `/invite/${token}`;
@@ -37,8 +40,8 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
           <label>Franchise name<input name="franchise_name" required placeholder="Atlanta Phantoms" /></label>
           <label>Abbreviation<input name="abbreviation" maxLength={5} placeholder="ATL" /></label>
           <div className="colorRow">
-            <label>Primary color<input name="primary_color" type="color" defaultValue="#e9ff70" /></label>
-            <label>Secondary color<input name="secondary_color" type="color" defaultValue="#0b0c0f" /></label>
+            <label>Primary color<input name="primary_color" type="color" defaultValue="#D4AF37" /></label>
+            <label>Secondary color<input name="secondary_color" type="color" defaultValue="#0B0C0F" /></label>
           </div>
           <button className="primary" type="submit">Claim My Franchise</button>
         </form>
