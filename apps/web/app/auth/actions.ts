@@ -46,3 +46,10 @@ export async function signOut() {
   await supabase.auth.signOut();
   redirect('/');
 }
+
+export async function signOutTo(formData: FormData) {
+  const supabase = await createClient();
+  const next = safeNext(formData.get('next'));
+  await supabase.auth.signOut();
+  redirect('/login?message=' + encodeURIComponent('Sign in with the email address that received this invitation.') + '&next=' + encodeURIComponent(next));
+}
