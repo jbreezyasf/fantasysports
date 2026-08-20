@@ -34,7 +34,7 @@ Closed August 20, 2026 after live two-account testing plus rollback-safe 10-fran
 - Winner assignment and standings mutation validated: Boston Ghosts 1–0; Milwaukee Voltage 0–1; points-for/against and streaks reconciled exactly.
 - Manager can update own lineup and is rejected from editing another franchise.
 - Manager can read league rosters, lineups, matchup and standings under RLS.
-- Matchup finalization is now enforced commissioner-only in the database, not merely hidden in UI.
+- Matchup finalization is enforced commissioner-only in the database, not merely hidden in UI.
 - Re-finalizing an already final matchup does not double-count standings.
 
 ### Production-size structural simulation
@@ -48,29 +48,61 @@ A rollback-safe 10-franchise league simulation produced:
 
 The simulation was rolled back and left no test league residue.
 
-Gate 2 is considered functionally closed. Full 10-human-device UX stress testing remains part of the Friend Beta gate rather than blocking the core fantasy-engine gate.
+Gate 2 is functionally closed. Full 10-human-device UX stress testing remains part of the Friend Beta gate rather than blocking the core fantasy-engine gate.
 
-## Gate 3 — Season Works: IN PROGRESS
+## Gate 3 — Season Works: PASS
 
-### Validated
+Closed August 20, 2026 after approved competition rules were implemented and exercised through rollback-safe 10-franchise season simulations.
 
-- Weeks 1–9 Circuit generator: 45 matchups / 45 unique pairings in a 10-franchise rollback-safe simulation.
-- Rivalry Week generator: 5 matchups covering all 10 franchises exactly once.
-- Revenge Week generator: 5 matchups covering all 10 franchises exactly once.
-- Position Week generator: 5 matchups covering all 10 franchises exactly once.
-- Dynamic-week authorization remains commissioner-only.
+### Locked season format
 
-### Product-rule decisions required before implementation
+- Weeks 1–9: The Circuit — one full 10-team round robin, 45 unique matchups.
+- Week 10: Rivalry Week — designated rivalries first, then history/closest-game fallback.
+- Week 11: Revenge Week — meaningful-loss matching with full-league coverage.
+- Week 12: Position Week — #1 vs #2, #3 vs #4, #5 vs #6, #7 vs #8, #9 vs #10.
+- Week 13: Chaos Week — standings inversion: #1 vs #10, #2 vs #9, #3 vs #8, #4 vs #7, #5 vs #6. Fantasy scoring remains unchanged.
+- Week 14: Judgment Week — #1 vs #4, #2 vs #3, #5 vs #6, #7 vs #8, #9 vs #10.
+- Weeks 15–17: six-team championship field plus four-team Redemption tournament.
+- Championship seeds #1–2 receive Week 15 byes; #3 vs #6 and #4 vs #5 play quarterfinals.
+- Week 16 championship semifinals reseed so #1 receives the lowest surviving seed; Redemption winners rest.
+- Week 17 contains the League Championship and Redemption Final.
 
-The remaining phases were intentionally not hard-coded because their exact competition rules materially affect the product:
+### Validation results
 
-1. **Chaos Week (Week 13):** the event must remain scoring-neutral, but the exact matchup pairing/achievement mechanic is not yet locked.
-2. **Judgment Week (Week 14):** standings/playoff-scenario-aware pairing is required, but the exact pairing algorithm is not yet locked.
-3. **Weeks 15–17 playoffs:** playoff field size, bye structure, reseeding behavior, and secondary-tournament bracket format are not yet locked.
+A full rollback-safe 10-franchise season simulation produced:
 
-### Remaining Gate 3 acceptance path
+- Circuit: 45 matchups
+- Rivalry Week: 5 matchups
+- Revenge Week: 5 matchups
+- Position Week: 5 matchups
+- Chaos Week: 5 matchups
+- Judgment Week: 5 matchups
+- Championship field: 6 persistent postseason seeds
+- Redemption field: 4 persistent postseason seeds
+- Week 15: 4 postseason matchups
+- Week 16: 2 championship semifinals
+- Week 17: 2 finals
+- 2 persistent title records at season close
+- 2 permanent postseason achievements
+- League season status transitions to `complete`
 
-1. Lock the three product rules above.
-2. Implement Chaos Week, Judgment Week, championship playoffs, and the secondary tournament as configurable season modules.
-3. Persist championship result and season-close history.
-4. Run a complete historical season simulation and verify schedule/standings/bracket invariants.
+Chaos scoring integrity was separately exercised through the real Week 1 scoring function: a simulated #10-over-#1 upset produced exactly one `CHAOS_GIANT_KILLER` achievement, and the test rolled back cleanly.
+
+Season close was called twice in a rollback-safe idempotence test and still produced exactly 2 title records, 2 achievements, 1 season-close feed event, and one completed season state.
+
+Postseason and special-week generation are commissioner-only at the database boundary. League members can read postseason seeds and championship records under RLS.
+
+The League Schedule UI now exposes Weeks 1–17, Chaos/Judgment generation, postseason seeding/advancement, finals and season close.
+
+## Gate 4 — Social + League Story Works: IN PROGRESS
+
+Validate the public-by-default league conversation and story surface without introducing general DMs:
+
+1. Locker Room / League Feed for human messages, system events, trade announcements, recap posts and awards.
+2. Reactions on public feed items.
+3. Private Trade Room restricted to managers participating in that trade.
+4. Accepted trade result posts publicly to the Locker Room while private negotiation text stays private.
+5. AI-generated Respect / Playful / Petty / Savage options use league facts as context but never alter game facts.
+6. Commissioner/system announcements and weekly awards surface in the same feed.
+7. RLS verifies league members can see the public league feed, outsiders cannot, and private trade content is visible only to participants.
+8. Mobile League UI makes the Locker Room and league activity feel alive rather than administrative.
