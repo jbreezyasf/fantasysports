@@ -34,7 +34,8 @@ export async function createLeagueInvite(formData: FormData) {
   ]);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bigexecfs.com';
   const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, totalSpots: league?.draft_min_franchises ?? 10, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: inviteRecord?.expires_at ? new Date(inviteRecord.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
-  const delivery = await sendTransactionalEmail({ to:email, subject:message.subject, html:message.html, text:message.text, idempotencyKey:`league-invite/${invite.invite_id}` });
+  const resendBucket = Math.floor(Date.now() / 60000);
+  const delivery = await sendTransactionalEmail({ to:email, subject:message.subject, html:message.html, text:message.text, idempotencyKey:`league-invite/${invite.invite_id}/${resendBucket}` });
   revalidatePath(`/leagues/${leagueId}`);
   redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${invite.invite_token}&invite_email=${encodeURIComponent(email)}&email_status=${delivery.sent ? 'sent' : 'manual'}`);
 }
