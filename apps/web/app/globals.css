@@ -42,5 +42,12 @@ h2 { margin:8px 0 20px; max-width:760px; font-size:clamp(2rem, 5vw, 4.4rem); lin
 .playerRow div { display:grid; gap:4px; }
 .playerRow span { color:var(--muted); font-size:.68rem; letter-spacing:.08em; }
 .playerRow strong { font-size:1rem; }
+.lineupGrid { display:grid; gap:10px; width:min(880px,100%); }
+.lineupSlot { padding:16px; background:var(--panel); border:1px solid var(--line); display:grid; gap:10px; }
+.lineupSlot > span { color:var(--accent); font-size:.7rem; font-weight:800; letter-spacing:.12em; }
+.lineupSlot > strong { font-size:1rem; }
+.slotChoices { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; }
+.slotChoices form { flex:0 0 auto; }
+.miniAction { cursor:pointer; border:1px solid var(--line); background:#0b0c0f; color:var(--ink); padding:8px 10px; font-size:.72rem; white-space:nowrap; }
 @media (max-width:560px) { .inlineForm { grid-template-columns:1fr; }.sportGrid{grid-template-columns:1fr;}.playerRow{grid-template-columns:1fr auto;} }
-@media (min-width:760px) { main{padding-left:34px;padding-right:34px}.sportGrid{grid-template-columns:repeat(3,1fr)}.split{grid-template-columns:1.2fr .8fr;align-items:end} }
+@media (min-width:760px) { main{padding-left:34px;padding-right:34px}.sportGrid{grid-template-columns:repeat(3,1fr)}.split{grid-template-columns:1.2fr .8fr;align-items:end}.lineupGrid{grid-template-columns:repeat(2,1fr)} }
