@@ -2,6 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
 import { makeDraftPick, startDraft } from '../actions';
 
+const FANTASY_ELIGIBLE_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
+
 export default async function DraftPage({ params, searchParams }: { params: Promise<{ draftId: string }>; searchParams: Promise<{ error?: string }> }) {
   const { draftId } = await params;
   const query = await searchParams;
@@ -54,7 +56,13 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
 
   const draftedAthleteIds = new Set((picks ?? []).map(p => p.athlete_id).filter(Boolean));
   const draftedTeamIds = new Set((picks ?? []).map(p => p.real_team_id).filter(Boolean));
-  const availableAthletes = (athletes ?? []).filter(a => !draftedAthleteIds.has(a.id));
+
+  // Defense in depth: the default Big Exec football format never exposes IDP players.
+  // Even if a provider/query unexpectedly returns one, reject it before rendering.
+  const availableAthletes = (athletes ?? [])
+    .filter(a => FANTASY_ELIGIBLE_POSITIONS.has(String(a.position ?? '').toUpperCase()))
+    .filter(a => !draftedAthleteIds.has(a.id));
+
   const availableDST = (realTeams ?? []).filter(team => !draftedTeamIds.has(team.id));
   const poolError = athleteError?.message || teamError?.message;
 
@@ -80,7 +88,8 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
 
       <section className="panel">
         <p className="eyebrow">PLAYER POOL</p>
-        <h2>Available athletes.</h2>
+        <h2>Skill players & kickers.</h2>
+        <p className="lede">Individual draft eligibility: QB • RB • WR • TE • K. Defensive players are not drafted individually in this format.</p>
         {poolError ? (
           <p className="errorNotice" role="alert">The draft pool could not be loaded. {poolError}</p>
         ) : !availableAthletes.length ? (
@@ -100,6 +109,7 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
       <section className="panel">
         <p className="eyebrow">TEAM D/ST</p>
         <h2>Available defenses.</h2>
+        <p className="lede">Draft the entire team defense/special-teams unit. No individual defensive players are used in this league format.</p>
         {!availableDST.length ? <p className="lede">No D/ST units remain available.</p> : <div className="playerList">{availableDST.map(team => (
           <form className="playerRow" action={makeDraftPick} key={team.id}>
             <input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="real_team_id" value={team.id}/>
