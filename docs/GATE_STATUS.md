@@ -14,21 +14,52 @@ Validated against the imported 2025 Pro Football Week 1 historical slice in Supa
 
 Gate 1 closed after full scoring-surface validation on the historical slice.
 
-## Gate 2 — Fantasy Game Works: IN PROGRESS
+## Gate 2 — Fantasy Game Works: PASS
 
-Built foundations already include authentication UI, league creation, commissioner role, invitations, persistent franchises, 10-franchise cap, snake draft engine/UI, roster ownership, nine-slot starting lineup model, matchup scoring/finalization, standings, and Circuit scheduling.
+Closed August 20, 2026 after live two-account testing plus rollback-safe 10-franchise scale validation.
 
-### Next acceptance path
+### Production flow proven
 
-1. Create a real commissioner account through production auth.
-2. Create the first Big Exec league and commissioner franchise.
-3. Invite/accept managers until a 10-franchise test league exists.
-4. Execute a complete snake draft against the real player pool.
-5. Set valid starting lineups.
-6. Apply historical Week 1 scores to the league season.
-7. Recompute/finalize matchups and verify winners/standings.
-8. Fix any end-to-end defects and repeat until the 10-owner flow passes.
+- Real commissioner Big Exec account created and email-confirmed.
+- Real invited manager account created through the invite flow.
+- Commissioner and manager roles are league-specific and enforced in the database.
+- Two persistent franchises created and owned by separate authenticated accounts.
+- Configurable league capacity and draft minimum implemented; production defaults remain 10 while the disposable test league is 2/2.
+- Two-team test draft completed: 15 rounds, 30/30 picks, 30 roster entries.
+- Both rosters validated at 15 slots each: 2 QB, 4 RB, 5 WR, 2 TE, 1 K, and 1 team D/ST.
+- Default draft pool hard-blocks IDP positions; only QB/RB/WR/TE/K plus whole-team D/ST units are draftable.
+- Week 1 historical scoring generated for 1,071 player rows and 32 D/ST rows.
+- Valid nine-slot starting lineups created for both franchises.
+- Historical Week 1 matchup finalized at 196.06–171.92.
+- Winner assignment and standings mutation validated: Boston Ghosts 1–0; Milwaukee Voltage 0–1; points-for/against and streaks reconciled exactly.
+- Manager can update own lineup and is rejected from editing another franchise.
+- Manager can read league rosters, lineups, matchup and standings under RLS.
+- Matchup finalization is now enforced commissioner-only in the database, not merely hidden in UI.
+- Re-finalizing an already final matchup does not double-count standings.
 
-### Current human-only dependency
+### Production-size structural simulation
 
-Supabase currently has zero `auth.users`. A real production account must be created to validate the actual email-confirmation/authentication lifecycle rather than a synthetic database-only fixture. Resend/domain configuration must also be active in the production runtime for branded confirmation/invite delivery.
+A rollback-safe 10-franchise league simulation produced:
+
+- 10 season franchises
+- 150 snake-draft picks (15 rounds × 10)
+- 45 Circuit matchups across Weeks 1–9
+- 45 unique head-to-head pairings
+
+The simulation was rolled back and left no test league residue.
+
+Gate 2 is considered functionally closed. Full 10-human-device UX stress testing remains part of the Friend Beta gate rather than blocking the core fantasy-engine gate.
+
+## Gate 3 — Season Works: IN PROGRESS
+
+Validate the complete season structure and dynamic scheduling engine:
+
+1. Weeks 1–9 Circuit round robin.
+2. Rivalry Week.
+3. Revenge Week.
+4. Position Week.
+5. Chaos Week status/achievement mechanic without changing fantasy scoring integrity.
+6. Judgment Week standings-aware pairing.
+7. Weeks 15–17 championship playoffs plus the secondary tournament.
+8. Championship result and season-close persistence.
+9. Run a complete historical season simulation and verify standings/schedule invariants.
