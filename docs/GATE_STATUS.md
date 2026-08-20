@@ -94,15 +94,48 @@ Postseason and special-week generation are commissioner-only at the database bou
 
 The League Schedule UI now exposes Weeks 1–17, Chaos/Judgment generation, postseason seeding/advancement, finals and season close.
 
-## Gate 4 — Social + League Story Works: IN PROGRESS
+## Gate 4 — Social + League Story Works: HUMAN ACTIVATION PENDING
 
-Validate the public-by-default league conversation and story surface without introducing general DMs:
+The functional social/story surface is implemented and validated. True paid AI generation is the remaining activation dependency; the product currently falls back safely to deterministic Big Exec copy when no OpenAI API key is configured.
 
-1. Locker Room / League Feed for human messages, system events, trade announcements, recap posts and awards.
-2. Reactions on public feed items.
-3. Private Trade Room restricted to managers participating in that trade.
-4. Accepted trade result posts publicly to the Locker Room while private negotiation text stays private.
-5. AI-generated Respect / Playful / Petty / Savage options use league facts as context but never alter game facts.
-6. Commissioner/system announcements and weekly awards surface in the same feed.
-7. RLS verifies league members can see the public league feed, outsiders cannot, and private trade content is visible only to participants.
-8. Mobile League UI makes the Locker Room and league activity feel alive rather than administrative.
+### Implemented
+
+- Locker Room / unified league feed for human messages, existing system events, accepted trade announcements, weekly awards and postgame talk.
+- League-member reactions: 🔥 😂 👀 👏 💀 🏆.
+- Shared mobile league navigation: HQ / Locker Room / Schedule / Trades.
+- Private Trade Center and Trade Room. Active trade proposals, assets and negotiation messages are visible only to the two franchise owners.
+- Trade acceptance revalidates every asset, moves roster ownership, clears affected future lineup slots, and posts exactly one public `trade_accepted` event. Private negotiation text is never copied to the public feed.
+- Weekly awards engine currently posts Highest Score, Biggest Blowout and Closest Win after all games for the selected week are final.
+- Story Engine tables separate public immutable facts from generated personality copy: `story_events` and `generated_messages`.
+- Postgame Mic is available to the two matchup managers after a final result with Respect / Playful / Petty / Savage tones.
+- Postgame Mic generates three editable choices and can post the selected/edited line to the Locker Room.
+- Only final matchup facts are sent into the talk generator: week, teams, score, winner, loser, margin and whether the requesting manager won. Private trade conversation is excluded.
+- If `OPENAI_API_KEY` is configured, the server attempts OpenAI Responses API generation using the cost-sensitive model configured in code. If the API is unavailable or the key is absent, the feature automatically uses deterministic fact-grounded Big Exec templates instead of failing.
+
+### Validation
+
+Rollback-safe test on the real two-account test league produced:
+
+- 1 Locker Room message
+- 1 reaction
+- 1 accepted trade
+- 2 private Trade Room messages
+- 1 public accepted-trade event
+- 3 weekly-award records
+- 1 public weekly-awards feed event
+
+RLS outsider replay under the actual `authenticated` role returned:
+
+- 0 visible active trades
+- 0 visible private trade messages
+- 0 visible league-feed events
+- 0 visible generated-talk records
+- 0 visible Story Engine records
+
+Generated-talk persistence/posting was separately exercised in rollback: 1 generated option was recorded, 1 edited post reached the league feed, and the associated Story Engine record contained public matchup facts only.
+
+The latest production deployment containing the Postgame Mic and all prior Gate 4 UI is READY on `bigexecfs.com` with no new runtime errors at verification time.
+
+### Human activation dependency
+
+To validate true AI-generated copy rather than the zero-cost deterministic fallback, configure a funded OpenAI API key as the production `OPENAI_API_KEY` environment variable. This introduces metered API spend and therefore requires human authorization. Until then, the entire social UX remains functional with the template fallback.
