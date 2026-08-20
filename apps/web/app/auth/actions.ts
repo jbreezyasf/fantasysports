@@ -8,6 +8,11 @@ function safeNext(value: FormDataEntryValue | null) {
   return next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
 }
 
+function appUrl() {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  return configured || 'https://bigexecfs.com';
+}
+
 export async function signIn(formData: FormData) {
   const supabase = await createClient();
   const email = String(formData.get('email') ?? '');
@@ -29,7 +34,7 @@ export async function signUp(formData: FormData) {
     password,
     options: {
       data: { display_name: displayName },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://fantasysports-tawny.vercel.app'}/auth/confirm?next=${encodeURIComponent(next)}`
+      emailRedirectTo: `${appUrl()}/auth/confirm?next=${encodeURIComponent(next)}`
     }
   });
   if (error) redirect('/login?error=' + encodeURIComponent(error.message) + '&next=' + encodeURIComponent(next));
