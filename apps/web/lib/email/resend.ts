@@ -7,11 +7,11 @@ type SendEmailInput = {
 };
 
 export function emailDeliveryConfigured() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_LEAGUE_FROM);
+  return Boolean(process.env.RESEND_BIGEXEC_API_KEY && process.env.EMAIL_LEAGUE_FROM);
 }
 
 export async function sendTransactionalEmail(input: SendEmailInput) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_BIGEXEC_API_KEY;
   const from = input.from ?? process.env.EMAIL_LEAGUE_FROM;
   if (!apiKey || !from) return { sent: false as const, reason: 'not_configured' as const };
 
