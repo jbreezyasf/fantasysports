@@ -52,14 +52,25 @@ Gate 2 is considered functionally closed. Full 10-human-device UX stress testing
 
 ## Gate 3 — Season Works: IN PROGRESS
 
-Validate the complete season structure and dynamic scheduling engine:
+### Validated
 
-1. Weeks 1–9 Circuit round robin.
-2. Rivalry Week.
-3. Revenge Week.
-4. Position Week.
-5. Chaos Week status/achievement mechanic without changing fantasy scoring integrity.
-6. Judgment Week standings-aware pairing.
-7. Weeks 15–17 championship playoffs plus the secondary tournament.
-8. Championship result and season-close persistence.
-9. Run a complete historical season simulation and verify standings/schedule invariants.
+- Weeks 1–9 Circuit generator: 45 matchups / 45 unique pairings in a 10-franchise rollback-safe simulation.
+- Rivalry Week generator: 5 matchups covering all 10 franchises exactly once.
+- Revenge Week generator: 5 matchups covering all 10 franchises exactly once.
+- Position Week generator: 5 matchups covering all 10 franchises exactly once.
+- Dynamic-week authorization remains commissioner-only.
+
+### Product-rule decisions required before implementation
+
+The remaining phases were intentionally not hard-coded because their exact competition rules materially affect the product:
+
+1. **Chaos Week (Week 13):** the event must remain scoring-neutral, but the exact matchup pairing/achievement mechanic is not yet locked.
+2. **Judgment Week (Week 14):** standings/playoff-scenario-aware pairing is required, but the exact pairing algorithm is not yet locked.
+3. **Weeks 15–17 playoffs:** playoff field size, bye structure, reseeding behavior, and secondary-tournament bracket format are not yet locked.
+
+### Remaining Gate 3 acceptance path
+
+1. Lock the three product rules above.
+2. Implement Chaos Week, Judgment Week, championship playoffs, and the secondary tournament as configurable season modules.
+3. Persist championship result and season-close history.
+4. Run a complete historical season simulation and verify schedule/standings/bracket invariants.
