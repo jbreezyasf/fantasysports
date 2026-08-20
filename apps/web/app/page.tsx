@@ -1,25 +1,25 @@
-const sports = ['Pro Football', 'College Football', "Men's Basketball", "Women's Basketball", 'Baseball', 'Soccer'];
+const sports = ['Pro Football', 'College Football', "Men's Basketball", "Women's Basketball", 'Baseball', "Men's Soccer", "Women's Soccer"];
 
 export default function HomePage() {
   return (
     <main>
       <section className="hero">
-        <p className="eyebrow">FANTASY ALL-SPORTS</p>
-        <h1>Build a franchise.<br />Own the season.</h1>
-        <p className="lede">One persistent fantasy identity across the sports you follow. Draft real athletes, compete through story-driven events, and build history that survives the final whistle.</p>
+        <p className="eyebrow">BIG EXEC FANTASY SPORTS</p>
+        <h1>Run the franchise.<br />Own the season.</h1>
+        <p className="lede">Big Exec is a multi-sport fantasy franchise platform built around real athletes, persistent teams, live competition, rivalry, legacy and the feeling that you are running your own front office.</p>
         <div className="actions">
-          <a className="primary" href="/play">Start with Pro Football</a>
-          <a className="secondary" href="#sports">Explore the universe</a>
+          <a className="primary" href="/play">Enter Pro Football</a>
+          <a className="secondary" href="#sports">Explore Big Exec</a>
         </div>
       </section>
 
       <section id="sports" className="panel">
-        <p className="eyebrow">THE UNIVERSE</p>
-        <h2>Football launches first. The franchise lives beyond it.</h2>
+        <p className="eyebrow">ONE BRAND. MULTIPLE SPORTS.</p>
+        <h2>Football launches first. Your Big Exec identity goes further.</h2>
         <div className="sportGrid">
           {sports.map((sport, index) => (
             <article key={sport} className="sportCard">
-              <span>{index === 0 ? 'LIVE BUILD' : 'COMING LATER'}</span>
+              <span>{index === 0 ? 'FIRST SPORT' : 'COMING LATER'}</span>
               <strong>{sport}</strong>
             </article>
           ))}
@@ -28,10 +28,10 @@ export default function HomePage() {
 
       <section className="panel split">
         <div>
-          <p className="eyebrow">NOT JUST A WEEKLY SCORE</p>
-          <h2>Rivalries. Revenge. Chaos. Judgment.</h2>
+          <p className="eyebrow">FANTASY SPORTS FOR THE FRONT OFFICE</p>
+          <h2>Rivalries. Revenge. Championships. Legacy.</h2>
         </div>
-        <p>Weekly matchups become events with context, while the scoring underneath stays deterministic and grounded in real statistics. AI tells the story; it never decides the result.</p>
+        <p>Big Exec keeps the scoring underneath deterministic and grounded in real statistics while turning each league into a persistent franchise universe. AI tells the story; it never decides the result.</p>
       </section>
     </main>
   );
