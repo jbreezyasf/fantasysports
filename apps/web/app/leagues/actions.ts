@@ -11,7 +11,7 @@ export async function createLeague(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
   const { data, error } = await supabase.rpc('create_pro_football_league', {
-    p_name: String(formData.get('league_name') ?? ''), p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#E9FF70'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0C0F')
+    p_name: String(formData.get('league_name') ?? ''), p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C')
   });
   if (error) redirect('/leagues/new?error=' + encodeURIComponent(error.message));
   redirect(`/leagues/${(data as { league_id: string }).league_id}`);
@@ -32,7 +32,7 @@ export async function createLeagueInvite(formData: FormData) {
     supabase.from('league_invites').select('expires_at').eq('id', invite.invite_id).maybeSingle(),
     supabase.from('league_members').select('id', { count:'exact', head:true }).eq('league_id', leagueId)
   ]);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://fantasysports-tawny.vercel.app';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bigexecfs.com';
   const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: inviteRecord?.expires_at ? new Date(inviteRecord.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
   const delivery = await sendTransactionalEmail({ to:email, subject:message.subject, html:message.html, idempotencyKey:`league-invite/${invite.invite_id}` });
   revalidatePath(`/leagues/${leagueId}`);
@@ -44,7 +44,7 @@ export async function acceptLeagueInvite(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   const token = String(formData.get('invite_token') ?? '');
   if (!user) redirect(`/login?message=${encodeURIComponent('Sign in or create an account to claim your league invite.')}&next=${encodeURIComponent(`/invite/${token}`)}`);
-  const { data, error } = await supabase.rpc('accept_league_invite', { p_invite_token: token, p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#E9FF70'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0C0F') });
+  const { data, error } = await supabase.rpc('accept_league_invite', { p_invite_token: token, p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C') });
   if (error) redirect(`/invite/${token}?error=` + encodeURIComponent(error.message));
   redirect(`/leagues/${(data as { league_id: string }).league_id}?joined=1`);
 }
