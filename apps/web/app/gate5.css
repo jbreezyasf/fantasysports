@@ -1,0 +1,34 @@
+/* Gate 5 — product-level visual fidelity and accessibility */
+:root{--be-surface:#101113;--be-surface-2:#151619;--be-line:#37342d;--be-gold:#d9b43b;--be-cyan:#1fd9d2;--be-ink:#f5f1e8;--be-muted:#aaa69d}
+body{min-height:100vh;background:radial-gradient(circle at 84% -8%,rgba(217,180,59,.17),transparent 28%),radial-gradient(circle at 12% 22%,rgba(31,217,210,.05),transparent 24%),#08090a}
+main{position:relative}
+a,button{transition:border-color .16s ease,background-color .16s ease,transform .16s ease,box-shadow .16s ease}
+a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--accent-soft);outline-offset:3px}
+.primary:hover,.secondary:hover,.miniAction:hover{transform:translateY(-1px);border-color:#8a7136}.primary:hover{box-shadow:0 12px 32px rgba(217,180,59,.18)}
+.panel{padding:clamp(38px,6vw,68px) 0}.panel>h1,.panel>h2{max-width:860px}.panel+.panel{border-top:0}
+.lede{color:#bbb6ad;font-size:clamp(.96rem,1.7vw,1.08rem)}
+
+/* Navigation behaves as product chrome rather than loose buttons */
+.leagueNav,.franchiseNav{position:sticky;top:0;z-index:20;display:flex;gap:0;overflow-x:auto;background:rgba(8,9,10,.92);backdrop-filter:blur(16px);border:1px solid #302d27;margin-bottom:12px}.leagueNav a,.franchiseNav a{flex:0 0 auto;padding:15px 19px;border-right:1px solid #302d27;font-size:.68rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.leagueNav a:hover,.franchiseNav a:hover{background:#171719;color:#fff}
+
+/* League HQ */
+.leagueShell{max-width:1240px}.leagueHero{min-height:360px;border-color:#49402f;box-shadow:0 24px 70px rgba(0,0,0,.25)}.leagueHeroContent{max-width:1000px}.leagueHero h1{font-size:clamp(3.2rem,8vw,7rem)}.leagueQuickGrid{gap:12px}.leagueStatCard{border-color:#39352f;background:linear-gradient(155deg,#151619,#101113);min-height:142px}.leagueStatCard.featured{background:radial-gradient(circle at 86% 12%,rgba(217,180,59,.13),transparent 35%),linear-gradient(145deg,#211a0e,#111214)}.leagueCommandPanel{border-color:#423b30;box-shadow:0 20px 60px rgba(0,0,0,.16)}.commandCard{position:relative;overflow:hidden;background:linear-gradient(145deg,#17181b,#101113);border-color:#38342d}.commandCard:after{content:'';position:absolute;inset:auto -15% -54% 35%;height:160px;border:1px solid rgba(217,180,59,.12);border-radius:50%}.commandCard>.primary,.commandCard>.secondary{display:inline-block;margin-top:18px}.franchiseCard{border-color:#3c3932;box-shadow:0 14px 36px rgba(0,0,0,.12)}.myFranchise{box-shadow:0 0 0 1px color-mix(in srgb,var(--team-primary) 25%,transparent),0 18px 48px rgba(0,0,0,.18)}
+
+/* Team management */
+.lineupGrid{width:100%;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.lineupSlot{min-height:160px;align-content:start;padding:18px;border-color:#3b3831;background:radial-gradient(circle at 100% 0,rgba(217,180,59,.07),transparent 35%),linear-gradient(145deg,#17181b,#101113)}.lineupSlot>span{display:inline-flex;width:max-content;border:1px solid #665426;padding:6px 8px;background:#17130c}.lineupSlot>strong{font-size:1.02rem;line-height:1.35}.slotChoices{margin-top:auto;padding-top:8px}.miniAction{min-height:42px;border-color:#3d3931}.playerList{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;border:0}.playerRow{min-height:90px;padding:15px 16px;border:1px solid #34312b;background:#121315}.playerRow strong{font-size:1rem}.playerRow span{color:#c0bbb1}
+
+/* Matchup as broadcast scoreboard */
+.matchupHero{position:relative;overflow:hidden;padding:clamp(44px,7vw,80px) clamp(18px,3vw,40px);border:1px solid #3c362b;background:radial-gradient(circle at 50% 110%,rgba(31,217,210,.09),transparent 35%),radial-gradient(circle at 82% 8%,rgba(217,180,59,.13),transparent 28%),#0d0e10}.scoreboard{max-width:960px;border-top:1px solid #3a352c;border-bottom:1px solid #3a352c;padding:22px 0}.scoreboard div{min-height:150px;display:grid;align-content:center}.scoreboard strong{font-size:clamp(3.2rem,9vw,7rem)}.scoreboard p{font-weight:800;text-transform:uppercase}.battleList{width:100%;display:grid;gap:8px;border:0}.battleRow{padding:16px;border:1px solid #302e29;background:#111214}.battleRow b{font-size:1.35rem}
+
+/* Standings / schedule */
+.standingsList{width:100%;border:1px solid #302d27;background:#101113}.standingRow{min-height:58px;padding:12px 16px}.standingRow:nth-child(1){background:linear-gradient(90deg,rgba(217,180,59,.12),transparent 45%)}.standingRow>b{font-size:1rem}.weekStack{width:100%}.weekCard{background:linear-gradient(145deg,#151619,#101113);border-color:#38342d}.scheduleGame{min-height:56px}.scheduleGame span{font-size:1rem}
+
+/* Draft/player-pool density */
+.draftShell .playerList,.draftRoom .playerList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.draftShell .playerRow,.draftRoom .playerRow{min-height:82px}.draftShell .playerRow button,.draftRoom .playerRow button{min-width:96px;min-height:44px}
+
+/* Accessible status treatment */
+.successNotice,.errorNotice{border:1px solid #35322d;border-left-width:4px;background:#151619;color:#f4f1ea;line-height:1.45}.errorNotice{border-left-color:#ff8f96}.successNotice{border-left-color:#9ddd91}
+
+@media(max-width:900px){.lineupGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.playerList{grid-template-columns:1fr}.commandGrid{grid-template-columns:1fr}.leagueHero{min-height:330px}}
+@media(max-width:620px){main{padding-left:14px;padding-right:14px}.panel{padding:38px 0}.primary,.secondary{min-height:46px;display:inline-flex;align-items:center;justify-content:center}.leagueHero{min-height:300px}.leagueHero h1{font-size:clamp(2.8rem,14vw,5rem)}.leagueMetaRow span{padding:8px 9px}.leagueQuickGrid{grid-template-columns:1fr}.lineupGrid{grid-template-columns:1fr}.lineupSlot{min-height:145px}.scoreboard{grid-template-columns:1fr 34px 1fr}.scoreboard strong{font-size:clamp(2.5rem,14vw,4.4rem)}.scoreboard p{font-size:.72rem}.battleRow{grid-template-columns:1fr 44px 1fr;padding:13px 10px}.battleRow strong{font-size:.78rem}.standingRow{grid-template-columns:28px 1fr auto}.leagueCommandPanel{padding:24px 16px}.franchiseGrid{grid-template-columns:1fr}.draftShell .playerList,.draftRoom .playerList{grid-template-columns:1fr}.leagueNav,.franchiseNav{margin-left:-14px;margin-right:-14px;border-left:0;border-right:0}.leagueNav a,.franchiseNav a{padding:14px 16px}}
+@media(prefers-reduced-motion:reduce){a,button{transition:none!important;scroll-behavior:auto!important}}
