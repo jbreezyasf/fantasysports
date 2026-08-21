@@ -8,6 +8,7 @@ import type { RecapRenderer, RenderPackage, RenderResult } from './types.js';
 
 const FPS = Number(process.env.RECAP_FPS || 24);
 const OUTPUT_ROOT = process.env.RECAP_OUTPUT_ROOT || '/var/lib/bigexec-recaps';
+const PUBLIC_BASE = process.env.RECAP_PUBLIC_BASE_URL?.replace(/\/$/, '');
 
 function dimensions(aspect: string) {
   return aspect === '9:16' ? { width: 720, height: 1280 } : { width: 1280, height: 720 };
@@ -61,10 +62,12 @@ export class SelfHostedRenderer implements RecapRenderer {
     const targetDir = join(OUTPUT_ROOT, input.render.recap_script_id);
     await mkdir(targetDir, { recursive: true });
     const suffix = input.render.aspect_ratio.replace(':', 'x');
-    const output = join(targetDir, `${input.render.id}-${suffix}.mp4`);
+    const fileName = `${input.render.id}-${suffix}.mp4`;
+    const output = join(targetDir, fileName);
     await run('ffmpeg', ['-y','-framerate',String(FPS),'-i',join(frames,'%06d.png'),'-c:v','libx264','-preset','medium','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',output]);
     const info = await stat(output);
     await rm(work, { recursive: true, force: true });
-    return { storageKey: output, bytes: info.size, durationMs };
+    const storageKey = PUBLIC_BASE ? `${PUBLIC_BASE}/renders/${input.render.recap_script_id}/${fileName}` : output;
+    return { storageKey, bytes: info.size, durationMs };
   }
 }
