@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { hostname } from 'node:os';
 import { SelfHostedRenderer } from './selfHosted.js';
 import { ManagedRenderer } from './managed.js';
+import { startRenderServer } from './server.js';
 import type { RenderPackage, RenderJob, RecapScene, RendererProvider } from './types.js';
 
 const url = process.env.SUPABASE_URL;
@@ -55,6 +56,7 @@ async function workOnce() {
 }
 
 async function main() {
+  startRenderServer();
   console.log(`[recap] Big Exec worker ${workerId} provider=${renderer.provider}`);
   for (;;) {
     const worked = await workOnce();
