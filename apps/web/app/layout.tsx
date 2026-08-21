@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import './brand.css';
+import './dashboard.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigexecfs.com'),
