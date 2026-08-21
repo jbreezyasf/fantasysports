@@ -3,6 +3,7 @@ import './globals.css';
 import './brand.css';
 import './dashboard.css';
 import './gate5.css';
+import './mobile-nav.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigexecfs.com'),
