@@ -8,6 +8,7 @@ export default async function LeagueLayout({children,params}:{children:React.Rea
       <a href={`/leagues/${leagueId}/locker-room`}>Locker Room</a>
       <a href={`/leagues/${leagueId}/schedule`}>Schedule</a>
       <a href={`/leagues/${leagueId}/trades`}>Trades</a>
+      <a href={`/leagues/${leagueId}/players`}>Players</a>
     </nav>
     {children}
     <BigExecMobileNav leagueId={leagueId}/>
