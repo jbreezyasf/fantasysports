@@ -38,8 +38,8 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
   }
 
   return <main>
-    <nav aria-label="Franchise navigation" style={{display:'flex',gap:8,flexWrap:'wrap',padding:'4px 0 18px'}}>
-      <a className="secondary" href="/dashboard">Home</a><a className="secondary" href={`/leagues/${franchise.league_id}`}>League HQ</a><a className="primary" href={`/franchises/${franchiseId}/team?week=${week}`}>Team</a><a className="secondary" href={`/franchises/${franchiseId}/stadium`}>My Stadium</a>
+    <nav className="franchiseNav" aria-label="Franchise navigation">
+      <a href="/dashboard">Home</a><a href={`/leagues/${franchise.league_id}`}>League HQ</a><a aria-current="page" href={`/franchises/${franchiseId}/team?week=${week}`}>Team</a><a href={`/franchises/${franchiseId}/stadium`}>My Stadium</a>
     </nav>
     <section className="leagueHero" style={{'--stadium-primary':primary,'--stadium-secondary':secondary,minHeight:560,background:`radial-gradient(circle at 50% 12%, ${primary}30, transparent 24%),linear-gradient(180deg,#07090c 0%,#0d1016 42%,#111 100%)`} as React.CSSProperties}>
       <div className="leagueHeroGlow" />
