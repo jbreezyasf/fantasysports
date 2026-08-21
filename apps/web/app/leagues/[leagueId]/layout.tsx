@@ -1,3 +1,5 @@
+import BigExecMobileNav from '../../components/BigExecMobileNav';
+
 export default async function LeagueLayout({children,params}:{children:React.ReactNode;params:Promise<{leagueId:string}>}) {
   const {leagueId}=await params;
   return <>
@@ -8,5 +10,6 @@ export default async function LeagueLayout({children,params}:{children:React.Rea
       <a href={`/leagues/${leagueId}/trades`}>Trades</a>
     </nav>
     {children}
+    <BigExecMobileNav leagueId={leagueId}/>
   </>;
 }
