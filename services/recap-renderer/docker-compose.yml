@@ -1,0 +1,20 @@
+services:
+  recap-renderer:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      RECAP_RENDER_PROVIDER: self_hosted
+      RECAP_PUBLIC_BASE_URL: ${RECAP_PUBLIC_BASE_URL}
+      RECAP_FPS: ${RECAP_FPS:-24}
+      RECAP_POLL_MS: ${RECAP_POLL_MS:-3000}
+      RECAP_HTTP_PORT: 8787
+      RECAP_OUTPUT_ROOT: /var/lib/bigexec-recaps
+    volumes:
+      - recap_media:/var/lib/bigexec-recaps
+
+volumes:
+  recap_media:
