@@ -5,14 +5,14 @@ on:
     paths:
       - 'services/recap-renderer/**'
       - '.github/workflows/recap-renderer.yml'
-
-concurrency:
-  group: recap-renderer-${{ github.ref }}
-  cancel-in-progress: true
   pull_request:
     paths:
       - 'services/recap-renderer/**'
       - '.github/workflows/recap-renderer.yml'
+
+concurrency:
+  group: recap-renderer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
