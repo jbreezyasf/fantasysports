@@ -18,7 +18,9 @@ const pollMs = Number(process.env.RECAP_POLL_MS || 3000);
 async function claim(): Promise<RenderJob | null> {
   const { data, error } = await supabase.rpc('claim_recap_render', { p_worker_id: workerId, p_provider: renderer.provider });
   if (error) throw error;
-  return (data as RenderJob | null) ?? null;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== 'object' || !('id' in row) || !row.id) return null;
+  return row as RenderJob;
 }
 
 async function hydrate(render: RenderJob): Promise<RenderPackage> {
@@ -48,7 +50,11 @@ async function workOnce() {
     if (error) throw error;
     console.log(`[recap] ready ${job.id} ${result.storageKey}`);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null
+        ? JSON.stringify(error)
+        : String(error);
     console.error(`[recap] failed ${job.id}: ${message}`);
     await supabase.rpc('fail_recap_render', { p_render_id: job.id, p_error: message });
   }
