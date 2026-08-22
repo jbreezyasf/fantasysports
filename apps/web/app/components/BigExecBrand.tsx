@@ -1,1 +1,7 @@
-m«ëˆ§½©buªàºg§µªi³üoö©§÷(šš'z{lü œ¶§vÛ1RÆ y¶¬{®vçºh¢ø¥zŠ.µø¥y¶ëy©­æ¤zw(uçhºÚn¶êbÚ%Šw¬¡ù^aéƒu×œ¡×yÊz)éºØazZ]ŠÊek+aŠÉ²Æ z(§¦ëb›­~)^uçÚº[_¢»-v)è¢ëiºÚ.¶›­~)^uçÚº[_¢»-v‹­
+import Image from 'next/image';
+
+export default function BigExecBrand({ compact=false }:{ compact?:boolean }) {
+  return <a className={`bigExecBrand ${compact?'compact':''}`} href="/" aria-label="Big Exec Fantasy Sports home">
+    <Image src="/brand/big-exec-approved-wordmark-v1.png" width={454} height={150} priority={!compact} alt="Big Exec Fantasy Sports â€” Run the franchise. Own the season." />
+  </a>;
+}
