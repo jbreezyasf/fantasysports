@@ -68,6 +68,22 @@ Closed August 20, 2026 with the user-approved zero-cost deterministic Postgame M
 
 ## Gate 5 — Fun Layer Works: IN PROGRESS
 
+Gate 5 remains split into four independently reviewed sub-gates. None should be
+marked PASS from implementation or a green build alone.
+
+- **5A — Visual fidelity: IN PROGRESS.** Dashboard, League HQ, Team HQ,
+  Matchup, Players, Locker Room, Trades, Schedule, Draft, Stadium and Recap must
+  be reviewed on production at mobile and desktop breakpoints.
+- **5B — Stadium/franchise progression: IN PROGRESS.** The achievement-driven
+  environment exists; production review must prove that a new and accomplished
+  franchise feel materially different.
+- **5C — Entertainment/arcade recaps: BLOCKED ON INFRASTRUCTURE PROOF.** The
+  deterministic storyboard and self-hosted PixiJS/Chromium/FFmpeg worker exist.
+  PASS requires successful 16:9 and 9:16 renders, R2 upload and production
+  playback from one finalized matchup.
+- **5D — Product polish: IN PROGRESS.** Responsive, keyboard, reduced-motion,
+  loading, empty, success and failure behavior must be reviewed end-to-end.
+
 Build and validate the persistent franchise-progression and entertainment layer without making gameplay pay-to-win:
 
 1. Stadium record for every franchise with starter futuristic environment.
@@ -78,3 +94,18 @@ Build and validate the persistent franchise-progression and entertainment layer 
 6. Deterministic recap script/scene pipeline from finalized matchup facts.
 7. First complete cartoon recap proof using a reusable arcade scene library, with no AI allowed to invent scores or winners.
 8. Share metadata/link pipeline for recap clips while keeping league privacy controls intact.
+
+### Beta blockers tracked outside the visual pass
+
+- Draft scheduling stores an absolute `timestamptz`, but the scheduling form
+  does not yet capture or display an explicit league/manager timezone.
+- No gameplay tables are currently registered in the `supabase_realtime`
+  publication. Realtime draft-room claims must not be made until publication,
+  subscriptions and reconnect behavior are tested.
+- Database autopick functions exist, but a real timer expiry → automatic pick →
+  next manager sequence has not been proven in production.
+- Production has recorded migration history, while this repository currently
+  has no committed `supabase/migrations` directory. Do not manufacture a
+  baseline: pull and reconcile the live schema before the next database change.
+- Supabase advisors report anonymously executable `SECURITY DEFINER` RPCs.
+  Review and revoke unintended `anon` execution before friend beta.
