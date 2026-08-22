@@ -23,7 +23,7 @@ Big Exec should keep self-hosted as the default while beta volume is low. At sca
 
 ## Deploy
 
-Copy `.env.example` to `.env`, set the Supabase service-role credentials and a public media origin such as `https://media.bigexecfs.com`, then run:
+Copy `.env.example` to `.env`, set the Supabase service-role credentials and a public media origin such as `https://media.bigexecfs.com`. For R2 storage, also set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET`, then run:
 
 ```bash
 docker compose up -d --build
@@ -39,4 +39,4 @@ The worker uses the Supabase service-role key and must never expose that key to 
 
 ## Beta storage
 
-Finished media can remain on the worker's persistent Docker volume during beta. Cloudflare R2 can later replace or mirror local storage without changing the render contract.
+Finished media remain on the worker's persistent Docker volume. When the four R2 variables are configured, the worker also uploads each MP4 to R2 and records its public `RECAP_PUBLIC_BASE_URL` URL in Supabase.
