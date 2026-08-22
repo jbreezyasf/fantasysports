@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { mkdtemp, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -9,6 +10,22 @@ import type { RecapRenderer, RenderPackage, RenderResult } from './types.js';
 const FPS = Number(process.env.RECAP_FPS || 24);
 const OUTPUT_ROOT = process.env.RECAP_OUTPUT_ROOT || '/var/lib/bigexec-recaps';
 const PUBLIC_BASE = process.env.RECAP_PUBLIC_BASE_URL?.replace(/\/$/, '');
+
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const R2_BUCKET = process.env.R2_BUCKET;
+
+const r2 = R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET
+  ? new S3Client({
+      region: 'auto',
+      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    })
+  : null;
 
 function dimensions(aspect: string) {
   return aspect === '9:16' ? { width: 720, height: 1280 } : { width: 1280, height: 720 };
@@ -20,6 +37,19 @@ async function run(command: string, args: string[]) {
     child.on('error', reject);
     child.on('exit', code => code === 0 ? resolvePromise() : reject(new Error(`${command} exited ${code}`)));
   });
+}
+
+async function publishRender(filePath: string, objectKey: string) {
+  if (!r2 || !R2_BUCKET) return null;
+  const body = await readFile(filePath);
+  await r2.send(new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: objectKey,
+    Body: body,
+    ContentType: 'video/mp4',
+    CacheControl: 'public, max-age=31536000, immutable',
+  }));
+  return PUBLIC_BASE ? `${PUBLIC_BASE}/${objectKey}` : objectKey;
 }
 
 export class SelfHostedRenderer implements RecapRenderer {
@@ -66,8 +96,12 @@ export class SelfHostedRenderer implements RecapRenderer {
     const output = join(targetDir, fileName);
     await run('ffmpeg', ['-y','-framerate',String(FPS),'-i',join(frames,'%06d.png'),'-c:v','libx264','-preset','medium','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',output]);
     const info = await stat(output);
+
+    const objectKey = `renders/${input.render.recap_script_id}/${fileName}`;
+    const r2StorageKey = await publishRender(output, objectKey);
+    const storageKey = r2StorageKey || (PUBLIC_BASE ? `${PUBLIC_BASE}/${objectKey}` : output);
+
     await rm(work, { recursive: true, force: true });
-    const storageKey = PUBLIC_BASE ? `${PUBLIC_BASE}/renders/${input.render.recap_script_id}/${fileName}` : output;
     return { storageKey, bytes: info.size, durationMs };
   }
 }
