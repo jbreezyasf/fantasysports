@@ -77,10 +77,11 @@ marked PASS from implementation or a green build alone.
 - **5B — Stadium/franchise progression: IN PROGRESS.** The achievement-driven
   environment exists; production review must prove that a new and accomplished
   franchise feel materially different.
-- **5C — Entertainment/arcade recaps: BLOCKED ON INFRASTRUCTURE PROOF.** The
-  deterministic storyboard and self-hosted PixiJS/Chromium/FFmpeg worker exist.
-  PASS requires successful 16:9 and 9:16 renders, R2 upload and production
-  playback from one finalized matchup.
+- **5C — Entertainment/arcade recaps: PRODUCTION PATH PROVEN; VISUAL REVIEW
+  REMAINS.** A finalized deterministic recap produced real 1280×720 and
+  720×1280 H.264 MP4s through Hostinger, uploaded both to R2, and served them
+  with byte-range support through `media.bigexecfs.com`. Final PASS still
+  requires human review of the rendered art direction and production player.
 - **5D — Product polish: IN PROGRESS.** Responsive, keyboard, reduced-motion,
   loading, empty, success and failure behavior must be reviewed end-to-end.
 

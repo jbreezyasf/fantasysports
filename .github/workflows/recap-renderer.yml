@@ -5,6 +5,10 @@ on:
     paths:
       - 'services/recap-renderer/**'
       - '.github/workflows/recap-renderer.yml'
+
+concurrency:
+  group: recap-renderer-${{ github.ref }}
+  cancel-in-progress: true
   pull_request:
     paths:
       - 'services/recap-renderer/**'
@@ -25,7 +29,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: services/recap-renderer/package.json
+          cache-dependency-path: services/recap-renderer/package-lock.json
       - run: npm ci
       - run: npm run build
       - name: Docker build

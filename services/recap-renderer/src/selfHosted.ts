@@ -7,7 +7,8 @@ import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import type { RecapRenderer, RenderPackage, RenderResult } from './types.js';
 
-const FPS = Number(process.env.RECAP_FPS || 24);
+const FPS = Math.max(1, Number(process.env.RECAP_FPS || 24) || 24);
+const CAPTURE_FPS = Math.max(1, Math.min(FPS, Number(process.env.RECAP_CAPTURE_FPS || 12) || 12));
 const OUTPUT_ROOT = process.env.RECAP_OUTPUT_ROOT || '/var/lib/bigexec-recaps';
 const PUBLIC_BASE = process.env.RECAP_PUBLIC_BASE_URL?.replace(/\/$/, '');
 
@@ -73,7 +74,7 @@ export class SelfHostedRenderer implements RecapRenderer {
     let durationMs = 0;
     try {
       for (const scene of input.scenes) {
-        const sceneFrames = Math.max(1, Math.round((scene.duration_ms / 1000) * FPS));
+        const sceneFrames = Math.max(1, Math.round((scene.duration_ms / 1000) * CAPTURE_FPS));
         durationMs += scene.duration_ms;
         for (let i = 0; i < sceneFrames; i++) {
           const progress = sceneFrames <= 1 ? 1 : i / (sceneFrames - 1);
@@ -94,7 +95,7 @@ export class SelfHostedRenderer implements RecapRenderer {
     const suffix = input.render.aspect_ratio.replace(':', 'x');
     const fileName = `${input.render.id}-${suffix}.mp4`;
     const output = join(targetDir, fileName);
-    await run('ffmpeg', ['-y','-framerate',String(FPS),'-i',join(frames,'%06d.png'),'-c:v','libx264','-preset','medium','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',output]);
+    await run('ffmpeg', ['-y','-framerate',String(CAPTURE_FPS),'-i',join(frames,'%06d.png'),'-r',String(FPS),'-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',output]);
     const info = await stat(output);
 
     const objectKey = `renders/${input.render.recap_script_id}/${fileName}`;
