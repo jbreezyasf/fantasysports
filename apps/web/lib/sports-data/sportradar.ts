@@ -31,16 +31,21 @@ export class SportradarNflClient {
 
   private async get<T>(path: string): Promise<T> {
     const elapsed = Date.now() - this.lastRequestAt;
-    if (elapsed < 1_050) await sleep(1_050 - elapsed);
-    this.lastRequestAt = Date.now();
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      headers: { accept: 'application/json', 'x-api-key': this.apiKey },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(15_000),
-    });
-    this.requests += 1;
-    if (!response.ok) throw new Error(`Sportradar ${response.status} while requesting ${path}.`);
-    return response.json() as Promise<T>;
+    if (elapsed < 1_250) await sleep(1_250 - elapsed);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      this.lastRequestAt = Date.now();
+      const response = await fetch(`${this.baseUrl}${path}`, {
+        headers: { accept: 'application/json', 'x-api-key': this.apiKey },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(15_000),
+      });
+      this.requests += 1;
+      if (response.ok) return response.json() as Promise<T>;
+      if (response.status !== 429 || attempt === 2) throw new Error(`Sportradar ${response.status} while requesting ${path}.`);
+      const retryAfter = Number(response.headers.get('retry-after'));
+      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1_000 : 2_000 * (attempt + 1));
+    }
+    throw new Error(`Sportradar request failed for ${path}.`);
   }
 
   async getDraftSnapshot(year: number): Promise<SportradarDraftSnapshot> {
