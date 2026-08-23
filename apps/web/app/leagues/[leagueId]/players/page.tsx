@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
+import { loadFantasyEligibleAthletes } from '../../../../lib/fantasy/athletePool';
 import { createClient } from '../../../../lib/supabase/server';
 import { claimFreeAgent } from './actions';
 
@@ -27,7 +28,7 @@ export default async function PlayersPage({params,searchParams}:{params:Promise<
   const rosterPromise=sfIds.length?supabase.from('roster_entries').select('id,season_franchise_id,athlete_id,real_team_id,athletes(display_name,position),real_teams(display_name,abbreviation)').in('season_franchise_id',sfIds).is('dropped_at',null):Promise.resolve({data:[] as Array<{id:string;season_franchise_id:string;athlete_id:string|null;real_team_id:string|null;athletes:Athlete|null;real_teams:Team|null}>,error:null});
   const [{data:rosters,error:rosterError},{data:athletes,error:athleteError},{data:teams,error:teamError}]=await Promise.all([
     rosterPromise,
-    supabase.from('athletes').select('id,display_name,position,real_teams(abbreviation)').eq('active',true).in('position',['QB','RB','WR','TE','K']).order('position').order('display_name').limit(600),
+    loadFantasyEligibleAthletes(supabase),
     competitionSeason?.competition_id?supabase.from('real_teams').select('id,display_name,abbreviation').eq('competition_id',competitionSeason.competition_id).order('abbreviation'):Promise.resolve({data:[],error:null})
   ]);
   const loadError=rosterError?.message||athleteError?.message||teamError?.message;
