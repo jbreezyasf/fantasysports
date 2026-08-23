@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
 import { acceptLeagueInvite } from '../../leagues/actions';
 import { signOutTo } from '../../auth/actions';
+import { FranchiseIdentityFields } from '../../components/FranchiseIdentityFields';
 
 export default async function InvitePage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ error?: string }> }) {
   const { token } = await params;
@@ -69,12 +70,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
         {query.error && <p className="errorNotice" role="alert">{query.error}</p>}
         <form className="authForm" action={acceptLeagueInvite}>
           <input type="hidden" name="invite_token" value={token} />
-          <label>Franchise name<input name="franchise_name" required placeholder="Atlanta Phantoms" /></label>
-          <label>Abbreviation<input name="abbreviation" maxLength={5} placeholder="ATL" /></label>
-          <div className="colorRow">
-            <label>Primary color<input name="primary_color" type="color" defaultValue="#D4AF37" /></label>
-            <label>Secondary color<input name="secondary_color" type="color" defaultValue="#0B0C0F" /></label>
-          </div>
+          <FranchiseIdentityFields namePlaceholder="Atlanta Phantoms" primary="#D4AF37" secondary="#0B0C0F" />
           <button className="primary" type="submit">Claim My Franchise</button>
         </form>
       </section>
