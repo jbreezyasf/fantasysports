@@ -1,9 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
+import { loadFantasyEligibleAthletes } from '../../../lib/fantasy/athletePool';
 import { startDraft } from '../actions';
 import { DraftPlayerPool } from './DraftPlayerPool';
-
-const FANTASY_ELIGIBLE_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
 
 export default async function DraftPage({ params, searchParams }: { params: Promise<{ draftId: string }>; searchParams: Promise<{ error?: string }> }) {
   const { draftId } = await params;
@@ -28,12 +27,12 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
   const current = picks?.find(p => p.pick_number === draft.current_pick);
   const currentFranchise = seasonFranchises?.find(sf => sf.id === current?.season_franchise_id);
   const [{ data: athletes, error: athleteError }, { data: realTeams, error: teamError }] = await Promise.all([
-    supabase.from('athletes').select('id,display_name,position,real_team_id,real_teams(display_name,abbreviation)').eq('active', true).in('position', ['QB', 'RB', 'WR', 'TE', 'K']).order('position').order('display_name').limit(500),
+    loadFantasyEligibleAthletes(supabase),
     competitionSeason?.competition_id ? supabase.from('real_teams').select('id,display_name,abbreviation').eq('competition_id', competitionSeason.competition_id).order('abbreviation').limit(64) : Promise.resolve({ data: [], error: null })
   ]);
   const draftedAthleteIds = new Set((picks ?? []).map(p => p.athlete_id).filter(Boolean));
   const draftedTeamIds = new Set((picks ?? []).map(p => p.real_team_id).filter(Boolean));
-  const availableAthletes = (athletes ?? []).filter(a => FANTASY_ELIGIBLE_POSITIONS.has(String(a.position ?? '').toUpperCase())).filter(a => !draftedAthleteIds.has(a.id));
+  const availableAthletes = (athletes ?? []).filter(a => !draftedAthleteIds.has(a.id));
   const availableDST = (realTeams ?? []).filter(team => !draftedTeamIds.has(team.id));
   const poolError = athleteError?.message || teamError?.message;
 
@@ -47,8 +46,8 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
       {draft.status === 'scheduled' && member?.role === 'commissioner' && <section className="panel"><form action={startDraft}><input type="hidden" name="draft_id" value={draftId}/><button className="primary" type="submit">Start Draft</button></form></section>}
       {draft.status === 'live' && currentFranchise && <section className="panel"><div className="inviteLinkBox"><span>ON THE CLOCK</span><strong>{Array.isArray(currentFranchise.franchises) ? currentFranchise.franchises[0]?.name : (currentFranchise.franchises as {name?:string}|null)?.name}</strong><p className="lede">Round {current?.round_number}, Pick {current?.round_pick}</p></div></section>}
       {draft.status === 'completed' && <p className="successNotice">Draft complete. Rosters are locked in for the next phase.</p>}
-      <section className="panel"><p className="eyebrow">DRAFT ORDER</p><div className="sportGrid">{(seasonFranchises ?? []).map(sf => { const franchise = Array.isArray(sf.franchises) ? sf.franchises[0] : sf.franchises as {name?:string;abbreviation?:string}|null; return <article className="sportCard" key={sf.id}><span>PICK {sf.draft_position}</span><strong>{franchise?.name ?? 'Franchise'}</strong><p className="lede">{franchise?.abbreviation ?? ''}</p></article>; })}</div></section>
-      {poolError?<section className="panel"><p className="errorNotice" role="alert">The draft pool could not be loaded. {poolError}</p></section>:<DraftPlayerPool draftId={draftId} status={draft.status} athletes={availableAthletes.map(athlete=>{const team=Array.isArray(athlete.real_teams)?athlete.real_teams[0]:athlete.real_teams as {abbreviation?:string}|null;return{id:athlete.id,displayName:athlete.display_name,position:athlete.position,team:team?.abbreviation??'FA'}})} defenses={availableDST.map(team=>({id:team.id,displayName:team.display_name,team:team.abbreviation??team.display_name}))}/>} 
+      <section className="panel"><p className="eyebrow">DRAFT ORDER</p><div className="sportGrid">{(seasonFranchises ?? []).map(sf => { const franchise = Array.isArray(sf.franchises) ? sf.franchises[0]?.name : (sf.franchises as {name?:string}|null)?.name; const abbreviation = Array.isArray(sf.franchises) ? sf.franchises[0]?.abbreviation : (sf.franchises as {abbreviation?:string}|null)?.abbreviation; return <article className="sportCard" key={sf.id}><span>PICK {sf.draft_position}</span><strong>{franchise ?? 'Franchise'}</strong><p className="lede">{abbreviation ?? ''}</p></article>; })}</div></section>
+      {poolError?<section className="panel"><p className="errorNotice" role="alert">The draft pool could not be loaded. {poolError}</p></section>:<DraftPlayerPool draftId={draftId} status={draft.status} athletes={availableAthletes.map(athlete=>{const team=Array.isArray(athlete.real_teams)?athlete.real_teams[0]:athlete.real_teams;return{id:athlete.id,displayName:athlete.display_name,position:athlete.position,team:team?.abbreviation??'FA'}})} defenses={availableDST.map(team=>({id:team.id,displayName:team.display_name,team:team.abbreviation??team.display_name}))}/>} 
     </main>
   );
 }
