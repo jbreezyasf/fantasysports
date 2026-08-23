@@ -77,7 +77,26 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
   .franchiseIdentity .eyebrow{color:#ffd866;text-shadow:0 2px 8px #000}
   .franchiseIdentity .leagueTagline{color:#fff;font-size:.9rem;line-height:1.45;text-shadow:0 2px 10px #000}
   .stadiumHeroAction{background:#070912;color:#fff}
-  .stadiumSceneImage{min-height:360px;aspect-ratio:16/10;background-color:#03050c;background-size:contain;background-repeat:no-repeat;background-position:center top}
-  .stadiumSceneImage:after{background:linear-gradient(0deg,rgba(3,5,12,.76),transparent 58%)}
-  .stadiumSceneImage .stadiumScoreboard{top:10%;width:72%;padding:14px;background:rgba(3,5,10,.76)}
+  .stadiumPage{width:100%;max-width:100%;overflow-x:clip;padding-bottom:calc(132px + env(safe-area-inset-bottom))}
+  .stadiumViewPanel{padding-top:32px}
+  .stadiumViewPanel>.lede{max-width:38rem;color:#d5d1c8;line-height:1.6}
+  .stadiumSceneImage{box-sizing:border-box;width:calc(100% + 28px);max-width:none;min-height:clamp(300px,108vw,410px);aspect-ratio:auto;background-color:#050711;background-size:contain;background-repeat:no-repeat;background-position:center 18%;box-shadow:inset 0 0 60px rgba(0,0,0,.35),0 18px 52px rgba(0,0,0,.42)}
+  .stadiumSceneImage:before{content:'';position:absolute;inset:0;z-index:0;background:linear-gradient(180deg,rgba(3,5,12,.1),rgba(3,5,12,.7)),url('/environments/big-exec-starter-stadium-v1.jpg') center/cover no-repeat;filter:blur(10px) saturate(1.2);transform:scale(1.08);opacity:.36;pointer-events:none}
+  .stadiumSceneImage:after{z-index:1;background:linear-gradient(0deg,rgba(3,5,12,.82) 0%,rgba(3,5,12,.16) 52%,rgba(3,5,12,.34) 100%)}
+  .stadiumSceneImage .stadiumColorWash{z-index:2;opacity:.6}
+  .stadiumSceneImage .stadiumScoreboard{box-sizing:border-box;left:50%;right:auto;top:8%;width:min(78%,310px);max-width:calc(100% - 32px);padding:11px 10px;transform:translateX(-50%);overflow:hidden;background:rgba(3,5,10,.86)}
+  .stadiumSceneImage .stadiumScoreboard strong{font-size:clamp(2.25rem,16vw,4rem);white-space:nowrap}
+  .stadiumSceneImage .stadiumScoreboard small{font-size:.52rem;line-height:1.35;overflow-wrap:anywhere}
+  .stadiumSceneImage .stadiumBannerRail{left:14px;right:14px;bottom:12px}
+  .stadiumSceneImage .stadiumBannerRail span{color:#fff;background:rgba(3,5,10,.92)}
+  .stadiumMapPanel{padding-bottom:24px}
+  .stadiumMapPanel .sectionTitleRow{align-items:flex-start;gap:12px}
+  .stadiumMapPanel .sectionTitleRow h2{font-size:clamp(2rem,11vw,3.2rem);line-height:.94}
+  .stadiumMapPanel .franchiseGrid{gap:12px}
+  .stadiumMapPanel .openFranchise{opacity:1;min-height:190px;border-style:solid;background:linear-gradient(145deg,#17181b,#0d0e10)}
+  .stadiumMapPanel .openFranchise:before{opacity:.58}
+  .stadiumMapPanel .openFranchise .franchiseCardTop span{color:#c1bcb2}
+  .stadiumMapPanel .openFranchise .franchiseCardTop b{color:#e5c660}
+  .stadiumMapPanel .openFranchise>strong{color:#f1ede5}
+  .stadiumMapPanel .openFranchise>p{color:#bdb8ae;font-size:.78rem;line-height:1.55}
 }
