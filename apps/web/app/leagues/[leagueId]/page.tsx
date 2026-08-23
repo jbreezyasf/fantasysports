@@ -3,6 +3,7 @@ import { createClient } from '../../../lib/supabase/server';
 import { createLeagueInvite, generateCircuitSchedule } from '../actions';
 import { initializeDraft } from '../../drafts/actions';
 import { FranchiseCrest } from '../../components/FranchiseCrest';
+import { SportIdentity } from '../../components/SportIdentity';
 
 export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_token?: string; invite_email?: string; invite_error?: string; joined?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
   const { leagueId } = await params;
@@ -18,7 +19,11 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null);
   const ownedIds = new Set((ownerships ?? []).map(item => item.franchise_id));
   const myFranchise = (franchises ?? []).find(item => ownedIds.has(item.id));
-  const { data: leagueSeason } = await supabase.from('league_seasons').select('id').eq('league_id', leagueId).maybeSingle();
+  const { data: leagueSeason } = await supabase.from('league_seasons').select('id,competition_seasons(competitions(code,display_name))').eq('league_id', leagueId).maybeSingle();
+  const competitionSeasonRelation = leagueSeason?.competition_seasons as unknown as { competitions?: { code?: string | null; display_name?: string | null } | { code?: string | null; display_name?: string | null }[] | null } | { competitions?: { code?: string | null; display_name?: string | null } | { code?: string | null; display_name?: string | null }[] | null }[] | null;
+  const competitionSeason = Array.isArray(competitionSeasonRelation) ? competitionSeasonRelation[0] : competitionSeasonRelation;
+  const competitionRelation = competitionSeason?.competitions;
+  const competition = Array.isArray(competitionRelation) ? competitionRelation[0] : competitionRelation;
 
   const [{ data: draft }, { count: circuitCount }, { data: seasonFranchises }, { data: standings }, { data: activeMatchup }] = leagueSeason ? await Promise.all([
     supabase.from('drafts').select('id,status,starts_at,pick_seconds').eq('league_season_id', leagueSeason.id).maybeSingle(),
@@ -55,7 +60,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
           <h1>{league.name}</h1>
           <p className="leagueTagline">Build the franchise. Run the room. Own the season.</p>
           <div className="leagueMetaRow">
-            <span>PRO FOOTBALL</span>
+            <SportIdentity code={competition?.code} displayName={competition?.display_name} compact />
             <span>HALF-PPR</span>
             <span>{memberCount}/{leagueCapacity} FRANCHISES</span>
             <span>{draft?.status === 'completed' ? 'DRAFT COMPLETE' : draftReady ? 'DRAFT READY' : `${Math.max(0, draftMinimum - memberCount)} TO DRAFT READY`}</span>
