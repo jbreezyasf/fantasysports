@@ -1,7 +1,7 @@
 const steps = [
   ['01', 'Create your league', 'Set the franchise count, roster configuration and commissioner controls.'],
   ['02', 'Name your franchise', 'Your identity, colors and history persist across seasons.'],
-  ['03', 'Draft your roster', 'Snake draft real athletes plus a team D/ST asset.'],
+  ['03', 'Draft your roster', 'Build your team in a fast, competitive snake draft.'],
   ['04', 'Enter the circuit', 'Set lineups, follow scoring, build rivalries and chase the postseason.']
 ];
 
