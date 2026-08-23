@@ -106,12 +106,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
   .stadiumMapPanel .openFranchise .franchiseCardTop b{color:#e5c660}
   .stadiumMapPanel .openFranchise>strong{color:#f1ede5}
   .stadiumMapPanel .openFranchise>p{color:#bdb8ae;font-size:.78rem;line-height:1.55}
-  .franchiseLogoPreview{grid-template-columns:82px minmax(0,1fr);gap:14px;padding:16px}.franchiseLogoPreview strong{font-size:1.35rem;overflow-wrap:anywhere}
+.franchiseLogoPreview{grid-template-columns:82px minmax(0,1fr);gap:14px;padding:16px}.franchiseLogoPreview strong{font-size:1.35rem;overflow-wrap:anywhere}
 }
-
 
 /* Sport identity follows a league from Front Office into League HQ. */
 .sportIdentity{--sport-tone:#d9b43b;display:inline-flex;align-items:center;gap:9px;width:max-content;color:#fff;font-size:.7rem;font-weight:950;letter-spacing:.09em;text-transform:uppercase}
 .sportIdentityBall{display:grid;place-items:center;width:32px;height:32px;border:1px solid color-mix(in srgb,var(--sport-tone) 72%,#fff);border-radius:50%;background:radial-gradient(circle at 35% 28%,color-mix(in srgb,var(--sport-tone) 48%,#fff),var(--sport-tone) 56%,#090a0d 59%);color:#fff;font-size:1rem;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--sport-tone) 52%,transparent))}
 .sportIdentity.compact{gap:7px;font-size:.59rem}.sportIdentity.compact .sportIdentityBall{width:25px;height:25px;font-size:.78rem}
 .leagueTileTop .sportIdentity{color:#d8d3c9}.leagueMetaRow .sportIdentity{padding:8px 11px;border:1px solid #403a30;background:#131416}
+
+/* Mobile-first free-agent add/drop transaction. */
+.freeAgentClaim{position:relative;justify-self:end}.freeAgentClaim summary{list-style:none;cursor:pointer;min-width:70px;min-height:44px;display:grid;place-items:center;border:1px solid #d9b43b;color:#f0d77c;font-size:.7rem;font-weight:950;letter-spacing:.09em}.freeAgentClaim summary::-webkit-details-marker{display:none}.freeAgentClaim[open] summary{background:#d9b43b;color:#08090a}.freeAgentClaim form{position:absolute;z-index:24;right:0;top:50px;width:min(310px,calc(100vw - 42px));display:grid;gap:10px;padding:14px;border:1px solid #6b592e;background:#0c0d10;box-shadow:0 18px 60px #000}.freeAgentClaim label{display:grid;gap:7px;color:#d8d3c9;font-size:.68rem;font-weight:800}.freeAgentClaim select{width:100%;min-height:48px;padding:10px;border:1px solid #454039;background:#17181b;color:#fff;font:inherit}.freeAgentClaim .primary{width:100%;margin:0}.rosteredStatus,.freeAgentUnavailable{color:#aaa69d;font-size:.68rem;letter-spacing:.08em}.freeAgentUnavailable{font-weight:900}
+@media(max-width:620px){.freeAgentClaim form{position:fixed;left:14px;right:14px;top:auto;bottom:calc(98px + env(safe-area-inset-bottom));width:auto}.freeAgentClaim form:before{content:'ADD FREE AGENT';color:#f0d77c;font-size:.65rem;font-weight:950;letter-spacing:.11em}}
