@@ -1,6 +1,18 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '../../lib/supabase/server';
 import { signOut } from '../auth/actions';
+import { SportIdentity } from '../components/SportIdentity';
+
+type CompetitionRef = { code?: string | null; display_name?: string | null };
+
+function leagueCompetition(league: Record<string, unknown>): CompetitionRef | null {
+  const seasons = Array.isArray(league.league_seasons) ? league.league_seasons : [];
+  const season = seasons[0] as { competition_seasons?: unknown } | undefined;
+  const competitionSeasons = Array.isArray(season?.competition_seasons) ? season.competition_seasons : [];
+  const competitionSeason = competitionSeasons[0] as { competitions?: CompetitionRef | CompetitionRef[] | null } | undefined;
+  const competitions = competitionSeason?.competitions;
+  return Array.isArray(competitions) ? competitions[0] ?? null : competitions ?? null;
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -8,7 +20,7 @@ export default async function DashboardPage() {
   if (!user) redirect('/login');
 
   const [leagueResult, profileResult, inviteResult, ownershipResult] = await Promise.all([
-    supabase.from('fantasy_leagues').select('id,name,created_at').order('created_at', { ascending: false }),
+    supabase.from('fantasy_leagues').select('id,name,created_at,league_seasons(competition_seasons(competitions(code,display_name)))').order('created_at', { ascending: false }),
     supabase.from('user_profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
     supabase.from('league_invites').select('id,invite_token,email,status,expires_at,fantasy_leagues(name)').eq('status','pending').order('created_at', { ascending:false }),
     supabase.from('franchise_owners').select('franchise_id').eq('user_id',user.id).is('ends_on',null).limit(1)
@@ -77,13 +89,16 @@ export default async function DashboardPage() {
       <section className="frontOfficeSection">
         <div className="sectionHeadingCompact"><div><p className="eyebrow">YOUR WORLD</p><h2>Your leagues.</h2></div><span>{leagueCount} ACTIVE</span></div>
         <div className="leagueTileGrid">
-          {(leagues ?? []).map((league, index) => (
-            <a className="leagueTile" key={league.id} href={`/leagues/${league.id}`}>
-              <div className="leagueTileTop"><span>PRO FOOTBALL</span><b>{index===0?'LATEST':'LEAGUE'}</b></div>
-              <div className="leagueTileMark">{String(index+1).padStart(2,'0')}</div>
-              <div><small>BIG EXEC FANTASY SPORTS</small><strong>{league.name}</strong><p>Enter League HQ →</p></div>
-            </a>
-          ))}
+          {(leagues ?? []).map((league, index) => {
+            const competition = leagueCompetition(league as unknown as Record<string, unknown>);
+            return (
+              <a className="leagueTile" key={league.id} href={`/leagues/${league.id}`}>
+                <div className="leagueTileTop"><SportIdentity code={competition?.code} displayName={competition?.display_name} compact/><b>{index===0?'LATEST':'LEAGUE'}</b></div>
+                <div className="leagueTileMark">{String(index+1).padStart(2,'0')}</div>
+                <div><small>BIG EXEC FANTASY SPORTS</small><strong>{league.name}</strong><p>Enter League HQ →</p></div>
+              </a>
+            );
+          })}
           {!dataError && !leagues?.length && (
             <article className="leagueTile emptyLeagueTile">
               <div className="leagueTileTop"><span>NO LEAGUES YET</span><b>START HERE</b></div>
