@@ -19,7 +19,7 @@ Closed August 20, 2026 after live two-account testing plus rollback-safe 10-fran
 - Real commissioner + invited manager flow proven.
 - Persistent franchises and league-specific roles proven.
 - Two-team test draft completed: 15 rounds, 30/30 picks, 30 roster entries.
-- Default draft pool supports QB/RB/WR/TE/K plus whole-team D/ST only.
+- Default football draft pool and roster rules are implemented and validated.
 - Valid nine-slot lineups, historical scoring, matchup finalization and standings mutation proven.
 - Manager ownership/RLS and commissioner-only finalization enforced in the database.
 - Rollback-safe 10-team structural simulation produced 150 snake-draft picks and all 45 unique Circuit matchups.
