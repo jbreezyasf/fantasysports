@@ -54,10 +54,14 @@ export class SportradarNflClient {
     const teams = teamPayload.teams ?? [];
     if (teams.length < 32) throw new Error(`Sportradar returned only ${teams.length} NFL teams.`);
     const rostered: SportradarDraftSnapshot['teams'] = [];
+    const seenAliases = new Set<string>();
     for (const team of teams) {
+      const alias = team.alias?.trim().toUpperCase() === 'JAC' ? 'JAX' : team.alias?.trim().toUpperCase();
+      if (!alias || seenAliases.has(alias)) continue;
       try {
         const payload = await this.get<{ players?: RadarPlayer[] }>(`/teams/${encodeURIComponent(team.id)}/full_roster.json`);
         rostered.push({ ...team, players: payload.players ?? [] });
+        seenAliases.add(alias);
       } catch (error) {
         if (error instanceof Error && error.message.includes('Sportradar 404')) continue;
         throw error;
