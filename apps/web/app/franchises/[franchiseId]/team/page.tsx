@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../../lib/supabase/server';
 import { setLineup } from '../../../team/actions';
+import { FranchiseCrest } from '../../../components/FranchiseCrest';
 
 const slots = [['QB',1,'QB'],['RB',1,'RB1'],['RB',2,'RB2'],['WR',1,'WR1'],['WR',2,'WR2'],['TE',1,'TE'],['FLEX',1,'FLEX'],['K',1,'K'],['DST',1,'D/ST']] as const;
 
@@ -44,7 +45,7 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
     <section className="leagueHero franchiseStadiumHero" style={{'--stadium-primary':primary,'--stadium-secondary':secondary} as React.CSSProperties}>
       <div className="stadiumColorWash" aria-hidden="true" />
       <div className="leagueTopline"><span className="backLink">WEEK {week} • TEAM HQ</span><span className="leagueRole">{stadium?.environment_key?.replaceAll('_',' ').toUpperCase() ?? 'HOME STADIUM'}</span></div>
-      <div className="leagueHeroContent franchiseIdentity"><div className="franchiseCrest" aria-hidden="true">{(franchise.abbreviation ?? 'BEX').slice(0,3).toUpperCase()}</div><div><p className="eyebrow">BIG EXEC • FRONT OFFICE</p><h1>{franchise.name}</h1><p className="leagueTagline">Set the starting nine inside your franchise home.</p><div className="leagueMetaRow"><span>{franchise.abbreviation ?? 'BEX'}</span><span>WEEK {week}</span><span>STARTER STADIUM</span></div></div></div>
+      <div className="leagueHeroContent franchiseIdentity"><FranchiseCrest className="franchiseCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={primary} secondary={secondary}/><div><p className="eyebrow">BIG EXEC • FRONT OFFICE</p><h1>{franchise.name}</h1><p className="leagueTagline">Set the starting nine inside your franchise home.</p><div className="leagueMetaRow"><span>{franchise.abbreviation ?? 'BEX'}</span><span>WEEK {week}</span><span>STARTER STADIUM</span></div></div></div>
       <a className="stadiumHeroAction" href={`/franchises/${franchiseId}/stadium`}>View stadium <span aria-hidden="true">→</span></a>
     </section>
     <section className="panel"><p className="eyebrow">LINEUP CONTROL</p><h2>Set your starters.</h2><p className="lede">Click a player option under a slot to promote them directly into the starting lineup. Each real player locks when their game begins once the current-season live schedule is connected.</p>{query.error && <p className="errorNotice" role="alert">{query.error}</p>}<div className="actions">{week > 1 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week-1}`}>← Week {week-1}</a>}{week < 18 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week+1}`}>Week {week+1} →</a>}<a className="secondary" href={`/franchises/${franchiseId}/stadium`}>View My Stadium</a></div></section>
