@@ -7,14 +7,11 @@ function requireEnv(name: 'NEXT_PUBLIC_SUPABASE_URL'|'NEXT_PUBLIC_SUPABASE_PUBLI
   return value;
 }
 
-const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-const supabasePublishableKey = requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
-
 export async function createClient() {
   const cookieStore = await cookies();
   return createServerClient(
-    supabaseUrl,
-    supabasePublishableKey,
+    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
+    requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'),
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
