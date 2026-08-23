@@ -1,8 +1,12 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://njjiqdqhmcbxblwhfade.supabase.co';
-const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_-ZgoAQmsSp2bNmrfhk11yw_BzLWKXBP';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+
+if (!supabaseUrl || !supabasePublishableKey) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be configured.');
+}
 
 export async function createClient() {
   const cookieStore = await cookies();
