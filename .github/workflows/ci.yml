@@ -8,6 +8,10 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_APP_URL: https://ci.bigexec.invalid
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_only_not_a_real_key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
