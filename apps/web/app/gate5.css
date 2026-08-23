@@ -108,3 +108,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
   .stadiumMapPanel .openFranchise>p{color:#bdb8ae;font-size:.78rem;line-height:1.55}
   .franchiseLogoPreview{grid-template-columns:82px minmax(0,1fr);gap:14px;padding:16px}.franchiseLogoPreview strong{font-size:1.35rem;overflow-wrap:anywhere}
 }
+
+
+/* Sport identity follows a league from Front Office into League HQ. */
+.sportIdentity{--sport-tone:#d9b43b;display:inline-flex;align-items:center;gap:9px;width:max-content;color:#fff;font-size:.7rem;font-weight:950;letter-spacing:.09em;text-transform:uppercase}
+.sportIdentityBall{display:grid;place-items:center;width:32px;height:32px;border:1px solid color-mix(in srgb,var(--sport-tone) 72%,#fff);border-radius:50%;background:radial-gradient(circle at 35% 28%,color-mix(in srgb,var(--sport-tone) 48%,#fff),var(--sport-tone) 56%,#090a0d 59%);color:#fff;font-size:1rem;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--sport-tone) 52%,transparent))}
+.sportIdentity.compact{gap:7px;font-size:.59rem}.sportIdentity.compact .sportIdentityBall{width:25px;height:25px;font-size:.78rem}
+.leagueTileTop .sportIdentity{color:#d8d3c9}.leagueMetaRow .sportIdentity{padding:8px 11px;border:1px solid #403a30;background:#131416}
