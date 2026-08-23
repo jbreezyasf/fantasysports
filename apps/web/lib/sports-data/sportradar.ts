@@ -20,9 +20,11 @@ export class SportradarNflClient {
   private requests = 0;
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
-    if (env.SPORTS_DATA_PROVIDER?.trim().toLowerCase() !== 'sportradar') throw new Error('SPORTS_DATA_PROVIDER must be sportradar.');
-    if (!env.SPORTS_DATA_API_KEY?.trim()) throw new Error('SPORTS_DATA_API_KEY is missing.');
-    this.apiKey = env.SPORTS_DATA_API_KEY.trim();
+    const apiKey = env.SPORTS_DATA_API_KEY?.trim() || env.NFL_API?.trim() || env.sportradar?.trim();
+    const provider = env.SPORTS_DATA_PROVIDER?.trim().toLowerCase() || (apiKey ? 'sportradar' : '');
+    if (provider !== 'sportradar') throw new Error('SPORTS_DATA_PROVIDER must be sportradar.');
+    if (!apiKey) throw new Error('A Sportradar NFL API key is missing.');
+    this.apiKey = apiKey;
     this.accessLevel = env.SPORTRADAR_ACCESS_LEVEL?.trim() || 'trial';
     this.baseUrl = (env.SPORTS_DATA_BASE_URL?.trim() || `https://api.sportradar.com/nfl/official/${this.accessLevel}/v7/en`).replace(/\/$/, '');
   }
