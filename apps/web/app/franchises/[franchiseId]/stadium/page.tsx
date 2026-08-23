@@ -23,11 +23,11 @@ export default async function StadiumPage({params}:{params:Promise<{franchiseId:
   const unlockedFeatures=(unlocked??[]).map(x=>Array.isArray(x.stadium_features)?x.stadium_features[0]:x.stadium_features).filter(Boolean);
   const lockedFeatures=(allFeatures??[]).filter(f=>!unlockedCodes.has(f.code));
 
-  return <main>
+  return <main className="stadiumPage">
     <nav className="franchiseNav" aria-label="Franchise navigation"><a href="/dashboard">Home</a><a href={`/leagues/${franchise.league_id}`}>League HQ</a><a href={`/franchises/${franchiseId}/team`}>Team</a><a aria-current="page" href={`/franchises/${franchiseId}/stadium`}>My Stadium</a></nav>
     <section className="leagueHero" style={{'--stadium-primary':primary,'--stadium-secondary':secondary} as React.CSSProperties}><div className="leagueHeroGlow"/><div className="leagueTopline"><a className="backLink" href={`/franchises/${franchiseId}/team`}>← TEAM HQ</a><span className="leagueRole">MY STADIUM</span></div><div className="leagueHeroContent"><p className="eyebrow">BIG EXEC • FRANCHISE LEGACY</p><h1>{franchise.name}</h1><p className="leagueTagline">{titleCount} Title{titleCount===1?'':'s'} • {rivalryCount} Rivalry Win{rivalryCount===1?'':'s'} • Est. {franchise.established_year}</p><div className="leagueMetaRow"><span>{stadium.environment_key.replaceAll('_',' ').toUpperCase()}</span><span>{unlockedFeatures.length} FEATURES UNLOCKED</span><span>ACCOMPLISHMENTS BUILD THE HOUSE</span></div></div></section>
 
-    <section className="panel"><p className="eyebrow">STADIUM VIEW</p><h2>{abbr} Neon Dome</h2><p className="lede">Your franchise history lives here. Wins, rivalries and championships permanently change the environment.</p>
+    <section className="panel stadiumViewPanel"><p className="eyebrow">STADIUM VIEW</p><h2>{abbr} Neon Dome</h2><p className="lede">Your franchise history lives here. Wins, rivalries and championships permanently change the environment.</p>
       <div className="stadiumScene stadiumSceneImage" style={{'--team-primary':primary,'--team-secondary':secondary} as React.CSSProperties}>
         <div className="stadiumColorWash" aria-hidden="true"/>
         <div className="stadiumScoreboard"><span>HOME OF</span><strong>{abbr}</strong><small>{franchise.name.toUpperCase()}</small></div>
@@ -38,7 +38,7 @@ export default async function StadiumPage({params}:{params:Promise<{franchiseId:
       </div>
     </section>
 
-    <section className="panel"><div className="sectionTitleRow"><div><p className="eyebrow">STADIUM MAP</p><h2>What your history changes.</h2></div><span className="sectionCounter">{unlockedFeatures.length}/{allFeatures?.length??0}</span></div><div className="franchiseGrid">
+    <section className="panel stadiumMapPanel"><div className="sectionTitleRow"><div><p className="eyebrow">STADIUM MAP</p><h2>What your history changes.</h2></div><span className="sectionCounter">{unlockedFeatures.length}/{allFeatures?.length??0}</span></div><div className="franchiseGrid">
       {unlockedFeatures.map((f,i)=><article className="franchiseCard myFranchise" key={`${f?.code}-${i}`} style={{'--team-primary':primary} as React.CSSProperties}><div className="franchiseCardTop"><span>{f?.zone?.toUpperCase()}</span><b>UNLOCKED</b></div><div className="franchiseMonogram">◆</div><strong>{f?.display_name??'Stadium Feature'}</strong><p>Visible because your franchise earned it.</p><em>PERMANENT LEGACY</em></article>)}
       {lockedFeatures.slice(0,Math.max(3,6-unlockedFeatures.length)).map(f=><article className="franchiseCard openFranchise" key={f.code}><div className="franchiseCardTop"><span>{f.zone?.toUpperCase()}</span><b>LOCKED</b></div><div className="franchiseMonogram">◇</div><strong>{f.display_name}</strong><p>Earn {f.achievement_code?.replaceAll('_',' ')} to build this part of the stadium.</p></article>)}
     </div></section>
