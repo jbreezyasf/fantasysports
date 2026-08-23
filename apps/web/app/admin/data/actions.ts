@@ -39,12 +39,22 @@ export async function syncSportradarDraftPool() {
   },{onConflict:'competition_id,season_year'});
   if (seasonError) throw new Error(seasonError.message);
 
-  const { data: existingAthletes, error: athleteReadError } = await admin.from('athletes').select('id,display_name,position,real_team_id').eq('competition_id',competition.id);
-  if (athleteReadError) throw new Error(athleteReadError.message);
-  const byIdentity = new Map((existingAthletes ?? []).map(a => [`${a.display_name.toLowerCase()}|${a.position}|${a.real_team_id ?? ''}`,a.id]));
-  const { data: providerRows, error: providerReadError } = await admin.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider','sportradar');
-  if (providerReadError) throw new Error(providerReadError.message);
-  const byProvider = new Map((providerRows ?? []).map(row => [row.provider_athlete_id,row.athlete_id]));
+  const existingAthletes: Array<{id:string;display_name:string;position:string;real_team_id:string|null}> = [];
+  const providerRows: Array<{athlete_id:string;provider_athlete_id:string}> = [];
+  for (let from=0;;from+=1000) {
+    const {data,error}=await admin.from('athletes').select('id,display_name,position,real_team_id').eq('competition_id',competition.id).range(from,from+999);
+    if(error) throw new Error(error.message);
+    existingAthletes.push(...(data??[]));
+    if((data?.length??0)<1000) break;
+  }
+  for (let from=0;;from+=1000) {
+    const {data,error}=await admin.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider','sportradar').range(from,from+999);
+    if(error) throw new Error(error.message);
+    providerRows.push(...(data??[]));
+    if((data?.length??0)<1000) break;
+  }
+  const byIdentity = new Map(existingAthletes.map(a => [`${a.display_name.toLowerCase()}|${a.position}|${a.real_team_id ?? ''}`,a.id]));
+  const byProvider = new Map(providerRows.map(row => [row.provider_athlete_id,row.athlete_id]));
   let inserted = 0, updated = 0, eligible = 0;
   const seenAthleteIds = new Set<string>();
   const athleteRows: Array<{id:string;competition_id:string;display_name:string;position:string;real_team_id:string;active:boolean;injury_status:string|null;updated_at:string}> = [];
@@ -91,7 +101,7 @@ export async function syncSportradarDraftPool() {
     const {error}=await admin.from('athlete_provider_ids').upsert(providerLinks.slice(index,index+200),{onConflict:'provider,provider_athlete_id'});
     if(error) throw new Error(error.message);
   }
-  const staleIds=(existingAthletes??[]).map(a=>a.id).filter(id=>!seenAthleteIds.has(id));
+  const staleIds=existingAthletes.map(a=>a.id).filter(id=>!seenAthleteIds.has(id));
   for(let index=0;index<staleIds.length;index+=200){
     const {error}=await admin.from('athletes').update({active:false,updated_at:new Date().toISOString()}).in('id',staleIds.slice(index,index+200));
     if(error) throw new Error(error.message);
