@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
-import { makeDraftPick, startDraft } from '../actions';
+import { startDraft } from '../actions';
+import { DraftPlayerPool } from './DraftPlayerPool';
 
 const FANTASY_ELIGIBLE_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
 
@@ -47,8 +48,7 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
       {draft.status === 'live' && currentFranchise && <section className="panel"><div className="inviteLinkBox"><span>ON THE CLOCK</span><strong>{Array.isArray(currentFranchise.franchises) ? currentFranchise.franchises[0]?.name : (currentFranchise.franchises as {name?:string}|null)?.name}</strong><p className="lede">Round {current?.round_number}, Pick {current?.round_pick}</p></div></section>}
       {draft.status === 'completed' && <p className="successNotice">Draft complete. Rosters are locked in for the next phase.</p>}
       <section className="panel"><p className="eyebrow">DRAFT ORDER</p><div className="sportGrid">{(seasonFranchises ?? []).map(sf => { const franchise = Array.isArray(sf.franchises) ? sf.franchises[0] : sf.franchises as {name?:string;abbreviation?:string}|null; return <article className="sportCard" key={sf.id}><span>PICK {sf.draft_position}</span><strong>{franchise?.name ?? 'Franchise'}</strong><p className="lede">{franchise?.abbreviation ?? ''}</p></article>; })}</div></section>
-      <section className="panel"><p className="eyebrow">PLAYER POOL</p><h2>Skill players & kickers.</h2><p className="lede">QB • RB • WR • TE • K</p>{poolError ? <p className="errorNotice" role="alert">The draft pool could not be loaded. {poolError}</p> : !availableAthletes.length ? <p className="errorNotice">No eligible offensive or kicker athletes remain in this draft.</p> : <div className="playerList">{availableAthletes.map(athlete => { const team = Array.isArray(athlete.real_teams) ? athlete.real_teams[0] : athlete.real_teams as {display_name?:string;abbreviation?:string}|null; return <form className="playerRow" action={makeDraftPick} key={athlete.id}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="athlete_id" value={athlete.id}/><div><span>{athlete.position} • {team?.abbreviation ?? 'FA'}</span><strong>{athlete.display_name}</strong></div><button className="secondary" type="submit" disabled={draft.status !== 'live'}>Draft</button></form>; })}</div>}</section>
-      <section className="panel"><p className="eyebrow">D/ST</p><h2>Available defenses.</h2>{!availableDST.length ? <p className="lede">No D/ST units remain available.</p> : <div className="playerList">{availableDST.map(team => <form className="playerRow" action={makeDraftPick} key={team.id}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="real_team_id" value={team.id}/><div><span>D/ST</span><strong>{team.abbreviation ?? team.display_name} D/ST</strong></div><button className="secondary" type="submit" disabled={draft.status !== 'live'}>Draft</button></form>)}</div>}</section>
+      {poolError?<section className="panel"><p className="errorNotice" role="alert">The draft pool could not be loaded. {poolError}</p></section>:<DraftPlayerPool draftId={draftId} status={draft.status} athletes={availableAthletes.map(athlete=>{const team=Array.isArray(athlete.real_teams)?athlete.real_teams[0]:athlete.real_teams as {abbreviation?:string}|null;return{id:athlete.id,displayName:athlete.display_name,position:athlete.position,team:team?.abbreviation??'FA'}})} defenses={availableDST.map(team=>({id:team.id,displayName:team.display_name,team:team.abbreviation??team.display_name}))}/>} 
     </main>
   );
 }
