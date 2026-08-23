@@ -28,7 +28,7 @@ Never prefix provider secrets with `NEXT_PUBLIC_`, paste them into chat, or comm
 1. Confirm the provider's IDs and licensing terms, including whether derived fantasy scores may be displayed.
 2. Implement mapping into the normalized provider contract without changing Big Exec scoring or D/ST rules.
 3. Import teams and athletes into a staging path and record provider IDs separately from canonical IDs.
-4. Import one historical week and compare all offensive, kicker, and whole-team D/ST calculations with Gate 1 validation.
+4. Import one historical week and compare every scoring category with Gate 1 validation.
 5. Prove scheduled → in-progress → final game-state transitions and correction handling.
 6. Add rate-limit backoff, bounded retries, idempotent upserts, source timestamps, and structured sync results.
 7. Enable production schedules only after staging reconciliation reports zero unexplained scoring differences.
