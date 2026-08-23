@@ -1,17 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-
-function requireEnv(name: 'NEXT_PUBLIC_SUPABASE_URL'|'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} must be configured.`);
-  return value;
-}
+import { getPublicSupabaseConfig } from './publicConfig';
 
 export async function createClient() {
   const cookieStore = await cookies();
+  const { url, publishableKey } = getPublicSupabaseConfig();
   return createServerClient(
-    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
-    requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'),
+    url,
+    publishableKey,
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
