@@ -17,7 +17,7 @@ export type FootballScoreBreakdown = Record<string, number>;
 export function scoreHalfPprFootball(stats: FootballStatLine) {
   const breakdown: FootballScoreBreakdown = {
     passing_yards: (stats.passYards ?? 0) / 25,
-    passing_td: (stats.passTd ?? 0) * 4,
+    passing_td: (stats.passTd ?? 0) * 6,
     interceptions: (stats.interceptions ?? 0) * -2,
     rushing_yards: (stats.rushYards ?? 0) / 10,
     rushing_td: (stats.rushTd ?? 0) * 6,

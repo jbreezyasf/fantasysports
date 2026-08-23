@@ -1,14 +1,17 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://njjiqdqhmcbxblwhfade.supabase.co';
-const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_-ZgoAQmsSp2bNmrfhk11yw_BzLWKXBP';
+function requireEnv(name: 'NEXT_PUBLIC_SUPABASE_URL'|'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} must be configured.`);
+  return value;
+}
 
 export async function createClient() {
   const cookieStore = await cookies();
   return createServerClient(
-    supabaseUrl,
-    supabasePublishableKey,
+    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
+    requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'),
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },

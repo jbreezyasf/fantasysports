@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { scoreHalfPprFootball, scoreStandardDst } from './scoring';
 
 describe('Half-PPR football scoring', () => {
-  it('scores a mixed offensive stat line deterministically', () => {
+  it('scores a mixed offensive stat line deterministically with six-point touchdowns', () => {
     const result = scoreHalfPprFootball({
       passYards: 250,
       passTd: 2,
@@ -14,7 +14,10 @@ describe('Half-PPR football scoring', () => {
       receivingTd: 1,
       fumblesLost: 1
     });
-    expect(result.points).toBe(35);
+    expect(result.points).toBe(39);
+    expect(result.breakdown.passing_td).toBe(12);
+    expect(result.breakdown.rushing_td).toBe(6);
+    expect(result.breakdown.receiving_td).toBe(6);
   });
 });
 

@@ -8,16 +8,17 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_APP_URL: https://ci.bigexec.invalid
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_only_not_a_real_key
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.15.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
