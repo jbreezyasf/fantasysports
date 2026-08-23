@@ -50,6 +50,7 @@ export async function syncSportradarDraftPool() {
   const athleteRows: Array<{id:string;competition_id:string;display_name:string;position:string;real_team_id:string;active:boolean;injury_status:string|null;updated_at:string}> = [];
   const newRows: Array<{radarId:string;competition_id:string;display_name:string;position:string;real_team_id:string;active:boolean;injury_status:string|null}> = [];
   const providerLinks: Array<{athlete_id:string;provider:string;provider_athlete_id:string}> = [];
+  const seenSnapshotIdentities = new Set<string>();
 
   for (const team of snapshot.teams) {
     const realTeamId = teamIds.get(normalizeNflAlias(team.alias));
@@ -58,8 +59,11 @@ export async function syncSportradarDraftPool() {
       const displayName = (player.name ?? player.full_name ?? '').trim();
       const position = (player.position ?? '').trim().toUpperCase();
       if (!displayName || !position || !player.id) continue;
+      const identity = `${displayName.toLowerCase()}|${position}|${realTeamId}`;
+      if (seenSnapshotIdentities.has(identity)) continue;
+      seenSnapshotIdentities.add(identity);
       const active = ACTIVE_ROSTER_STATUSES.has((player.status ?? 'ACT').toUpperCase());
-      const knownId = byProvider.get(player.id) ?? byIdentity.get(`${displayName.toLowerCase()}|${position}|${realTeamId}`);
+      const knownId = byProvider.get(player.id) ?? byIdentity.get(identity);
       if (knownId) {
         athleteRows.push({id:knownId,competition_id:competition.id,display_name:displayName,position,real_team_id:realTeamId,active,injury_status:player.status ?? null,updated_at:new Date().toISOString()});
         providerLinks.push({athlete_id:knownId,provider:'sportradar',provider_athlete_id:player.id});
