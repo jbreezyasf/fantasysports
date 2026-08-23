@@ -7,6 +7,7 @@ import { SportradarNflClient } from '../../../lib/sports-data/sportradar';
 
 const ACTIVE_ROSTER_STATUSES = new Set(['ACT','EXE','IR','IRD','NON','PUP','SUS']);
 const DRAFT_POSITIONS = new Set(['QB','RB','WR','TE','K']);
+const normalizeNflAlias = (alias?: string) => alias?.trim().toUpperCase() === 'JAC' ? 'JAX' : alias?.trim().toUpperCase();
 
 async function commissionerUser() {
   const supabase = await createClient();
@@ -27,7 +28,7 @@ export async function syncSportradarDraftPool() {
   const { data: dbTeams, error: teamsError } = await admin.from('real_teams').select('id,abbreviation').eq('competition_id',competition.id);
   if (teamsError) throw new Error(teamsError.message);
   const teamIds = new Map((dbTeams ?? []).map(team => [team.abbreviation?.toUpperCase(), team.id]));
-  const missingTeams = snapshot.teams.filter(team => !teamIds.has(team.alias?.toUpperCase())).map(team => team.alias ?? team.name ?? team.id);
+  const missingTeams = snapshot.teams.filter(team => !teamIds.has(normalizeNflAlias(team.alias))).map(team => team.alias ?? team.name ?? team.id);
   if (missingTeams.length) throw new Error(`Unmapped NFL teams: ${missingTeams.join(', ')}`);
 
   const { error: seasonError } = await admin.from('competition_seasons').upsert({
@@ -51,7 +52,7 @@ export async function syncSportradarDraftPool() {
   const providerLinks: Array<{athlete_id:string;provider:string;provider_athlete_id:string}> = [];
 
   for (const team of snapshot.teams) {
-    const realTeamId = teamIds.get(team.alias?.toUpperCase());
+    const realTeamId = teamIds.get(normalizeNflAlias(team.alias));
     if (!realTeamId) continue;
     for (const player of team.players) {
       const displayName = (player.name ?? player.full_name ?? '').trim();
