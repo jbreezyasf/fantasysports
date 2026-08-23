@@ -1,5 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../../lib/supabase/server';
+import Image from 'next/image';
+import { FranchiseCrest } from '../../../components/FranchiseCrest';
 
 export default async function StadiumPage({params}:{params:Promise<{franchiseId:string}>}) {
   const {franchiseId}=await params; const supabase=await createClient(); const {data:{user}}=await supabase.auth.getUser(); if(!user) redirect('/login');
@@ -29,8 +31,9 @@ export default async function StadiumPage({params}:{params:Promise<{franchiseId:
 
     <section className="panel stadiumViewPanel"><p className="eyebrow">STADIUM VIEW</p><h2>{abbr} Neon Dome</h2><p className="lede">Your franchise history lives here. Wins, rivalries and championships permanently change the environment.</p>
       <div className="stadiumScene stadiumSceneImage" style={{'--team-primary':primary,'--team-secondary':secondary} as React.CSSProperties}>
+        <Image className="starterStadiumImage" src="/environments/big-exec-starter-stadium-v1.jpg" alt={`${franchise.name} starter stadium illuminated at night`} fill priority sizes="(max-width: 720px) 100vw, 1180px"/>
         <div className="stadiumColorWash" aria-hidden="true"/>
-        <div className="stadiumScoreboard"><span>HOME OF</span><strong>{abbr}</strong><small>{franchise.name.toUpperCase()}</small></div>
+        <div className="stadiumScoreboard"><span>HOME OF</span><FranchiseCrest className="stadiumScoreboardCrest" name={franchise.name} abbreviation={abbr} primary={primary} secondary={secondary}/><strong>{abbr}</strong><small>{franchise.name.toUpperCase()}</small></div>
         <div className="stadiumField" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/><i/><i/></div>
         <div className="stadiumBannerRail" aria-label="Unlocked stadium features">{unlockedFeatures.slice(0,6).map((f,i)=><span key={`${f?.code}-${i}`}>{f?.display_name?.toUpperCase()}</span>)}{!unlockedFeatures.length&&<span>STARTER STADIUM</span>}</div>
         {titleCount>0&&<div className="stadiumBanner championshipBanner">CHAMPION × {titleCount}</div>}
