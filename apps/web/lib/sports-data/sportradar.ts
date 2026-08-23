@@ -55,9 +55,15 @@ export class SportradarNflClient {
     if (teams.length < 32) throw new Error(`Sportradar returned only ${teams.length} NFL teams.`);
     const rostered: SportradarDraftSnapshot['teams'] = [];
     for (const team of teams) {
-      const payload = await this.get<{ players?: RadarPlayer[] }>(`/teams/${encodeURIComponent(team.id)}/full_roster.json`);
-      rostered.push({ ...team, players: payload.players ?? [] });
+      try {
+        const payload = await this.get<{ players?: RadarPlayer[] }>(`/teams/${encodeURIComponent(team.id)}/full_roster.json`);
+        rostered.push({ ...team, players: payload.players ?? [] });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('Sportradar 404')) continue;
+        throw error;
+      }
     }
+    if (rostered.length < 32) throw new Error(`Sportradar returned rosters for only ${rostered.length} NFL teams.`);
     const regular = (seasonPayload.seasons ?? []).find(s => s.year === year && (typeof s.type === 'string' ? s.type : s.type?.code) === 'REG');
     return {
       teams: rostered,
