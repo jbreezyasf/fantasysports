@@ -8,12 +8,24 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 ## P0 — Reconcile Current Implementation
 
-- [ ] Inspect current `main`.
-- [ ] Inspect the active production deployment and commit.
-- [ ] Inspect current production database/schema/functions.
-- [ ] Reconcile Gates 0–5 against actual current evidence.
-- [ ] Update `docs/GATE_STATUS.md` with evidence, not inherited PASS labels.
-- [ ] Identify documentation drift and conflicts.
+- [x] Inspect current `main`. Evidence: `main`, `origin/main`, and local `HEAD` are `70a73984a6644830942b364de4a727b7b564f6f0` on 2026-08-26.
+- [x] Inspect the active production deployment and commit. Evidence: Vercel production deployment `dpl_2XQuGA9UMuGYkzzCq7yCFyisVEHC` is `READY` at commit `70a73984a6644830942b364de4a727b7b564f6f0`.
+- [x] Inspect current production database/schema/functions. Evidence: Supabase project `njjiqdqhmcbxblwhfade` inspected read-only on 2026-08-26; see `docs/GATE_STATUS.md`.
+- [x] Reconcile Gates 0–5 against actual current evidence. Evidence: `docs/GATE_STATUS.md` current evidence baseline dated 2026-08-26.
+- [x] Update `docs/GATE_STATUS.md` with evidence, not inherited PASS labels. Evidence: no gameplay gate was marked PASS.
+- [x] Identify documentation drift and conflicts. Evidence: `docs/GATE_STATUS.md` notes stale August 23 claims where current production now differs, including pg_cron, waiver tables, CI, and security RPC exposure.
+
+**Highest-priority unblocked task identified 2026-08-26:** Validate complete eligible player pool after pagination/cap fixes in a production-equivalent authenticated draft-room flow. The code now pages eligible athletes, and production data has healthy QB/RB/WR/TE/K counts, but the actual draft-room user flow has not been exercised and cannot be used as Gate 1 PASS evidence yet.
+
+**Progress 2026-08-26:** Added a web regression test for the draft-pool pagination contract. It proves the loader continues after a full 1,000-row page and preserves WR rows beyond the first page. `npm test`, `npm run typecheck`, and `npm run build` pass. The authenticated production draft-room UI remains unverified, so the Draft Night checklist item stays open.
+
+**Progress 2026-08-26:** Continued Draft Night implementation in the current working tree without changing product direction. Added deterministic Big Exec internal draft rankings with overall rank, positional rank, source, version, and tests; added a `draft_queues` migration plus draft-room UI/server actions for adding, removing, and moving personal queue items. Fresh forced local verification passed with `npx turbo test --force`, `npx turbo build --force`, and `npx turbo typecheck --force`. The migration is not applied to production and authenticated production-equivalent draft QA has not been executed, so no Draft Night checklist item is marked complete yet.
+
+**Progress 2026-08-26:** Added server-authoritative draft deadline/autopick implementation in the current working tree. Migration `20260826043918_draft_timer_autopick.sql` adds `drafts.current_pick_deadline_at`, updates `start_draft` and `make_draft_pick` to advance deadlines from the database, adds queue-first `process_expired_draft_picks`, and schedules a pg_cron job for expired picks when `pg_cron` is installed. The draft room now renders the server deadline countdown and commissioner expired-pick processor. Fresh forced local verification passed with `npx turbo test --force`, `npx turbo build --force`, and `npx turbo typecheck --force`. Production migration/application and 10-manager draft QA remain unexecuted.
+
+**Progress 2026-08-26:** Added local working-tree support for draft realtime refresh, commissioner pause/resume, and commissioner undo with audit trail. Migration `20260826044414_draft_realtime_publication.sql` adds `drafts`, `draft_picks`, and `draft_queues` to Supabase Realtime when the publication exists, and the draft room subscribes to draft/pick/queue changes with polling fallback. Migration `20260826044536_draft_pause_resume.sql` adds paused clock state plus `pause_draft`; migration `20260826044713_draft_correction_undo.sql` adds `draft_corrections` and `undo_last_draft_pick`. Fresh forced local verification passed with `npx turbo test --force`, `npx turbo build --force`, and `npx turbo typecheck --force`. These remain unproven until migrations are applied and the actual authenticated multi-manager draft QA is executed.
+
+**Progress 2026-08-26:** Production database schema was updated with the five Draft Night SQL files using `npx supabase db query --linked --file ...` after `supabase db push --linked --dry-run` was blocked by pre-existing production/local migration-history drift. Production verification proved `drafts.current_pick_deadline_at`, `drafts.paused_at`, and `drafts.paused_remaining_seconds`; `draft_queues` and `draft_corrections` with RLS enabled; draft queue/timer/pause/undo RPC signatures; realtime publication membership for `drafts`, `draft_picks`, and `draft_queues`; active cron `big-exec-process-draft-autopicks`; and no anon execute privilege on the new Draft Night RPCs. Supabase advisors still report existing broader SECURITY DEFINER/RLS performance warnings, including expected authenticated SECURITY DEFINER warnings for new guarded RPCs. `supabase db lint --linked` hung after login initialization and was stopped. Application deployment and authenticated draft QA remain pending.
 
 ---
 

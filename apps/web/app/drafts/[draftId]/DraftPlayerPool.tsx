@@ -1,25 +1,52 @@
 'use client';
 
 import { useDeferredValue, useState } from 'react';
-import { makeDraftPick } from '../actions';
+import { addDraftQueueItem, makeDraftPick, moveDraftQueueItem, removeDraftQueueItem } from '../actions';
 
-type Athlete={id:string;displayName:string;position:string;team:string};
-type Defense={id:string;displayName:string;team:string};
+type RankedAsset={overallRank:number;positionRank:number;rankingScore:number|null;rankingSource:string;rankingVersion:string};
+type Athlete={id:string;displayName:string;position:string;team:string}&RankedAsset;
+type Defense={id:string;displayName:string;team:string}&RankedAsset;
+type QueuedAsset=(Athlete|Defense)&{position:string;queueItemId:string;queueRank:number;assetType:'athlete'|'defense'};
 type Position='ALL'|'QB'|'RB'|'WR'|'TE'|'FLEX'|'K'|'D/ST';
 const positions:Position[]=['ALL','QB','RB','WR','TE','FLEX','K','D/ST'];
 const rosterGuide=[['QB','1 starter'],['RB','2 starters'],['WR','2 starters'],['TE','1 starter'],['FLEX','RB / WR / TE'],['K','1 starter'],['D/ST','1 starter']];
 
-export function DraftPlayerPool({draftId,status,athletes,defenses}:{draftId:string;status:string;athletes:Athlete[];defenses:Defense[]}){
+function formatRankingVersion(value:string){
+  const parsed=new Date(value);
+  if(Number.isNaN(parsed.getTime()))return value;
+  return parsed.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+}
+
+function formatScore(value:number|null){
+  return value===null?'NO SCORE':`${value.toFixed(1)} PTS`;
+}
+
+export function DraftPlayerPool({draftId,status,athletes,defenses,queuedAssets,rankingSource,rankingVersion}:{draftId:string;status:string;athletes:Athlete[];defenses:Defense[];queuedAssets:QueuedAsset[];rankingSource:string;rankingVersion:string}){
   const [position,setPosition]=useState<Position>('ALL');
   const [search,setSearch]=useState('');
   const deferredSearch=useDeferredValue(search.trim().toLowerCase());
+  const queuedAthleteIds=new Set(queuedAssets.filter(asset=>asset.assetType==='athlete').map(asset=>asset.id));
+  const queuedDefenseIds=new Set(queuedAssets.filter(asset=>asset.assetType==='defense').map(asset=>asset.id));
   const athleteMatches=athletes.filter(player=>(position==='ALL'||position==='FLEX'?position==='ALL'||['RB','WR','TE'].includes(player.position):player.position===position)&&(!deferredSearch||`${player.displayName} ${player.team}`.toLowerCase().includes(deferredSearch)));
   const defenseMatches=(position==='ALL'||position==='D/ST')?defenses.filter(team=>!deferredSearch||`${team.displayName} ${team.team} defense`.toLowerCase().includes(deferredSearch)):[];
   const resultCount=athleteMatches.length+defenseMatches.length;
   const countFor=(value:Position)=>value==='D/ST'?defenses.length:value==='ALL'?athletes.length+defenses.length:value==='FLEX'?athletes.filter(player=>['RB','WR','TE'].includes(player.position)).length:athletes.filter(player=>player.position===value).length;
 
   return <section className="panel draftPlayerFinder" aria-labelledby="draft-player-heading">
-    <div className="draftFinderHeading"><div><p className="eyebrow">PLAYER FINDER</p><h2 id="draft-player-heading">Build your roster.</h2><p className="lede">New to fantasy? Choose the position you need. Know exactly who you want? Search their name or team.</p></div><span className="sectionCounter" aria-live="polite">{resultCount} AVAILABLE</span></div>
+    <div className="draftFinderHeading"><div><p className="eyebrow">PLAYER FINDER</p><h2 id="draft-player-heading">Build your roster.</h2><p className="lede">Ranked by {rankingSource} • Updated {formatRankingVersion(rankingVersion)}</p></div><span className="sectionCounter" aria-live="polite">{resultCount} AVAILABLE</span></div>
+    <div className="draftQueuePanel" aria-labelledby="draft-queue-heading">
+      <div className="draftResultHeader"><strong id="draft-queue-heading">MY QUEUE</strong><span>{queuedAssets.length} SAVED</span></div>
+      <div className="draftQueueList">
+        {queuedAssets.map((asset,index)=><article className="draftQueueItem" key={asset.queueItemId}>
+          <span>{asset.queueRank}</span>
+          <div><strong>{asset.displayName}</strong><small>{asset.position} {asset.positionRank} • #{asset.overallRank} • {formatScore(asset.rankingScore)}</small></div>
+          <form action={moveDraftQueueItem}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="queue_item_id" value={asset.queueItemId}/><input type="hidden" name="direction" value="up"/><button type="submit" disabled={index===0} aria-label={`Move ${asset.displayName} up`}>Up</button></form>
+          <form action={moveDraftQueueItem}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="queue_item_id" value={asset.queueItemId}/><input type="hidden" name="direction" value="down"/><button type="submit" disabled={index===queuedAssets.length-1} aria-label={`Move ${asset.displayName} down`}>Down</button></form>
+          <form action={removeDraftQueueItem}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="queue_item_id" value={asset.queueItemId}/><button type="submit" aria-label={`Remove ${asset.displayName} from queue`}>X</button></form>
+        </article>)}
+        {!queuedAssets.length&&<p className="draftQueueEmpty">No players queued yet.</p>}
+      </div>
+    </div>
     <details className="draftRosterGuide"><summary>What positions do I need?</summary><div>{rosterGuide.map(([label,description])=><span key={label}><b>{label}</b><small>{description}</small></span>)}</div><p>Your FLEX can be another running back, wide receiver, or tight end. Bench selections add depth after your starters.</p></details>
     <div className="draftFinderControls">
       <label className="draftSearch"><span className="srOnly">Search available players</span><input type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search player or team" autoComplete="off"/><b aria-hidden="true">⌕</b></label>
@@ -27,8 +54,8 @@ export function DraftPlayerPool({draftId,status,athletes,defenses}:{draftId:stri
     </div>
     <div className="draftResultHeader"><strong>{position==='ALL'?'ALL PLAYERS':position}</strong><span>{deferredSearch?`MATCHING “${search.trim()}”`:'AVAILABLE NOW'}</span></div>
     <div className="draftPlayerResults">
-      {athleteMatches.map(player=><form className="draftCandidate" action={makeDraftPick} key={player.id}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="athlete_id" value={player.id}/><span className="draftPositionBadge">{player.position}</span><div><strong>{player.displayName}</strong><small>{player.team||'FA'} • AVAILABLE</small></div><button className="draftPickButton" type="submit" disabled={status!=='live'} aria-label={`Draft ${player.displayName}`}>Draft</button></form>)}
-      {defenseMatches.map(team=><form className="draftCandidate" action={makeDraftPick} key={team.id}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="real_team_id" value={team.id}/><span className="draftPositionBadge">D/ST</span><div><strong>{team.team||team.displayName} D/ST</strong><small>DEFENSE • AVAILABLE</small></div><button className="draftPickButton" type="submit" disabled={status!=='live'} aria-label={`Draft ${team.team||team.displayName} defense`}>Draft</button></form>)}
+      {athleteMatches.map(player=><article className="draftCandidate" key={player.id}><span className="draftPositionBadge">#{player.overallRank}</span><div><strong>{player.displayName}</strong><small>{player.position} {player.positionRank} • {player.team||'FA'} • {formatScore(player.rankingScore)}</small></div><form action={addDraftQueueItem}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="athlete_id" value={player.id}/><button className="draftQueueButton" type="submit" disabled={queuedAthleteIds.has(player.id)} aria-label={`Queue ${player.displayName}`}>{queuedAthleteIds.has(player.id)?'Queued':'Queue'}</button></form><form action={makeDraftPick}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="athlete_id" value={player.id}/><button className="draftPickButton" type="submit" disabled={status!=='live'} aria-label={`Draft ${player.displayName}`}>Draft</button></form></article>)}
+      {defenseMatches.map(team=><article className="draftCandidate" key={team.id}><span className="draftPositionBadge">#{team.overallRank}</span><div><strong>{team.team||team.displayName} D/ST</strong><small>D/ST {team.positionRank} • DEFENSE • {formatScore(team.rankingScore)}</small></div><form action={addDraftQueueItem}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="real_team_id" value={team.id}/><button className="draftQueueButton" type="submit" disabled={queuedDefenseIds.has(team.id)} aria-label={`Queue ${team.team||team.displayName} defense`}>{queuedDefenseIds.has(team.id)?'Queued':'Queue'}</button></form><form action={makeDraftPick}><input type="hidden" name="draft_id" value={draftId}/><input type="hidden" name="real_team_id" value={team.id}/><button className="draftPickButton" type="submit" disabled={status!=='live'} aria-label={`Draft ${team.team||team.displayName} defense`}>Draft</button></form></article>)}
       {!resultCount&&<div className="draftEmpty" role="status"><strong>No available players match.</strong><p>Try another name or choose a different position.</p><button type="button" onClick={()=>{setSearch('');setPosition('ALL')}}>Clear filters</button></div>}
     </div>
   </section>;
