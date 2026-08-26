@@ -27,6 +27,8 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Progress 2026-08-26:** Production database schema was updated with the five Draft Night SQL files using `npx supabase db query --linked --file ...` after `supabase db push --linked --dry-run` was blocked by pre-existing production/local migration-history drift. Production verification proved `drafts.current_pick_deadline_at`, `drafts.paused_at`, and `drafts.paused_remaining_seconds`; `draft_queues` and `draft_corrections` with RLS enabled; draft queue/timer/pause/undo RPC signatures; realtime publication membership for `drafts`, `draft_picks`, and `draft_queues`; active cron `big-exec-process-draft-autopicks`; and no anon execute privilege on the new Draft Night RPCs. Supabase advisors still report existing broader SECURITY DEFINER/RLS performance warnings, including expected authenticated SECURITY DEFINER warnings for new guarded RPCs. `supabase db lint --linked` hung after login initialization and was stopped. Application deployment and authenticated draft QA remain pending.
 
+**Progress 2026-08-26:** Application commit `ce1ca0edc1788b2fd290d7e8f7a53c58b592ea0a` was pushed to `origin/main` after local HTTPS push was retried without an invalid `GITHUB_TOKEN`. Vercel production deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` reached `READY`, is aliased to `www.bigexecfs.com` and `bigexecfs.com`, and the live homepage HTML references that deployment id. GitHub commit status reports Vercel success. Vercel production runtime error/fatal log query for that deployment over the last 30 minutes returned no logs. Authenticated draft QA remains pending.
+
 ---
 
 ## P0 — Draft Night

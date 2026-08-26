@@ -15,6 +15,9 @@
 - **PROVEN:** Local `main` and `origin/main` are both `70a73984a6644830942b364de4a727b7b564f6f0`.
 - **PROVEN:** Active Vercel production deployment for project `fantasysports` is `dpl_2XQuGA9UMuGYkzzCq7yCFyisVEHC`, target `production`, state `READY`, commit `70a73984a6644830942b364de4a727b7b564f6f0`.
 - **PROVEN:** `https://bigexecfs.com` redirects to `https://www.bigexecfs.com/`; the served HTML references deployment `dpl_2XQuGA9UMuGYkzzCq7yCFyisVEHC`.
+- **PROVEN:** Later on 2026-08-26, commit `ce1ca0edc1788b2fd290d7e8f7a53c58b592ea0a` was pushed to `origin/main`; Vercel production deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` reached `READY`, is aliased to `www.bigexecfs.com` and `bigexecfs.com`, and live homepage HTML references that deployment id.
+- **PROVEN:** GitHub combined commit status for `ce1ca0edc1788b2fd290d7e8f7a53c58b592ea0a` reports Vercel success.
+- **PROVEN:** Vercel production runtime error/fatal log query for deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` over the last 30 minutes returned no logs.
 - **PROVEN:** Production database project is Supabase `njjiqdqhmcbxblwhfade`, status `ACTIVE_HEALTHY`, Postgres `17.6.1.155`.
 
 **Repository / CI inspected**
@@ -77,6 +80,7 @@
 ### Evidence log
 
 - **PROVEN:** Current deployed commit, local `main`, and `origin/main` all match `70a73984a6644830942b364de4a727b7b564f6f0`.
+- **PROVEN:** Later on 2026-08-26, `origin/main` advanced to commit `ce1ca0edc1788b2fd290d7e8f7a53c58b592ea0a`; Vercel production deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` reached `READY` and the live homepage references that deployment id.
 - **PROVEN:** GitHub CI and Recap Renderer CI completed successfully for the production commit.
 - **PROVEN:** Local `npm test`, `npm run typecheck`, and `npm run build` passed after dependency install.
 - **PROVEN:** After the draft-pool regression test was added, local `npm test`, `npm run typecheck`, and `npm run build` passed again on 2026-08-26.
@@ -129,6 +133,8 @@
 - **PROVEN:** Production verification after SQL application shows `add_draft_queue_item`, `remove_draft_queue_item`, `move_draft_queue_item`, `process_expired_draft_picks`, `pause_draft`, `undo_last_draft_pick`, `make_draft_pick`, and `start_draft` function signatures exist.
 - **PROVEN:** Production verification after SQL application shows `drafts`, `draft_picks`, and `draft_queues` are in `supabase_realtime`.
 - **PROVEN:** Production verification after SQL application shows active cron `big-exec-process-draft-autopicks` runs `select public.process_expired_draft_picks();` every minute.
+- **PROVEN:** Vercel production deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` for commit `ce1ca0edc1788b2fd290d7e8f7a53c58b592ea0a` reached `READY` and live homepage HTML references that deployment id.
+- **PROVEN:** Vercel production runtime error/fatal log query for deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` over the last 30 minutes returned no logs.
 - **PROVEN:** Production has two completed drafts, both with 30 made picks and 10 WR picks.
 - **PROVEN:** Earlier read-only inspection found no `draft_queues` table, no production draft/autopick function, and no draft realtime publication entries; those observations are superseded by the later 2026-08-26 production SQL application and verification above.
 - **UNVERIFIED:** The updated production Draft Night database behavior has not yet been exercised by authenticated users in an actual draft room.
