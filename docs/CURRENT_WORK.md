@@ -4,6 +4,8 @@
 
 The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the execution queue, not a place to change product strategy.
 
+**P0 execution rule:** User-facing functionality and UX/UI advance together. Use `docs/UX_UI_PAGE_SPEC.md` as the canonical page-by-page design requirement. A functional flow is not beta-ready until the associated mobile/desktop UX is also completed and reviewed.
+
 ---
 
 ## P0 — Reconcile Current Implementation
@@ -28,6 +30,102 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 **Progress 2026-08-26:** Production database schema was updated with the five Draft Night SQL files using `npx supabase db query --linked --file ...` after `supabase db push --linked --dry-run` was blocked by pre-existing production/local migration-history drift. Production verification proved `drafts.current_pick_deadline_at`, `drafts.paused_at`, and `drafts.paused_remaining_seconds`; `draft_queues` and `draft_corrections` with RLS enabled; draft queue/timer/pause/undo RPC signatures; realtime publication membership for `drafts`, `draft_picks`, and `draft_queues`; active cron `big-exec-process-draft-autopicks`; and no anon execute privilege on the new Draft Night RPCs. Supabase advisors still report existing broader SECURITY DEFINER/RLS performance warnings, including expected authenticated SECURITY DEFINER warnings for new guarded RPCs. `supabase db lint --linked` hung after login initialization and was stopped. Application deployment and authenticated draft QA remain pending.
 
 **Progress 2026-08-26:** Application commit `ce1ca0edc1788b2fd290d7e8f7a53c58b592ea0a` was pushed to `origin/main` after local HTTPS push was retried without an invalid `GITHUB_TOKEN`. Vercel production deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` reached `READY`, is aliased to `www.bigexecfs.com` and `bigexecfs.com`, and the live homepage HTML references that deployment id. GitHub commit status reports Vercel success. Vercel production runtime error/fatal log query for that deployment over the last 30 minutes returned no logs. Authenticated draft QA remains pending.
+
+---
+
+## P0 — UX/UI & Product Polish
+
+**Canonical spec:** `docs/UX_UI_PAGE_SPEC.md`
+
+UX/UI is not deferred until after backend completion. Each gameplay flow must be functionally validated and visually completed before its gate can pass.
+
+### P0-A — Global shell and navigation
+
+- [ ] Replace conflicting authenticated primary navigation patterns with the canonical left-side product navigation.
+- [ ] Desktop persistent left rail: Front Office, Matchup, Locker Room, League, Stadium.
+- [ ] Mobile top-left trigger opening the same left-side navigation drawer/sheet.
+- [ ] Keep primary navigation order consistent on every authenticated page.
+- [ ] Place profile/settings controls outside the main five destinations.
+- [ ] Verify active-route state, keyboard/focus behavior, responsive width, loading state, and mobile touch targets.
+
+### P0-B — Front Office / Home
+
+- [ ] Top-left: Team/Franchise Name, Manager Name, Record.
+- [ ] Top-right: League Name.
+- [ ] Build four primary cards: Draft Room/Free Agency, Locker Room, Trade Room, League News.
+- [ ] Draft Room card reflects unscheduled/scheduled/live states.
+- [ ] Draft Room card automatically becomes Free Agency after draft completion.
+- [ ] Free Agency card exposes useful waiver/free-agent status without dumping the entire player pool onto Home.
+- [ ] Locker Room card previews relevant social activity.
+- [ ] Trade Room card previews incoming/outgoing negotiation state and trade deadline.
+- [ ] League News card previews deterministic standings/trade/performance/rivalry/award/recap updates.
+
+### P0-C — Draft Room UX/UI
+
+- [ ] Complete authenticated 10-manager functional QA using the managed QA accounts; verify the accounts/roles before relying on them as evidence.
+- [ ] Current manager / round / pick / server timer hierarchy.
+- [ ] Rankings presentation.
+- [ ] Personal queue UX.
+- [ ] Roster-needs guidance.
+- [ ] Pick confirmation and drafted-player history/feed.
+- [ ] Pause/resume/correction controls separated for commissioner.
+- [ ] Reconnect/recovery state.
+- [ ] Mobile Draft Room usability.
+
+### P0-D — Team management UX/UI
+
+- [ ] Roster page.
+- [ ] Lineup page and individual kickoff-lock clarity.
+- [ ] Free Agency page: AVAILABLE / WAIVERS / ROSTERED states.
+- [ ] Waiver claim/drop-player workflow.
+- [ ] Trade Room landing page.
+- [ ] Side-by-side trade creation flow.
+- [ ] Private negotiation room and trade lifecycle states.
+- [ ] Post-deadline closed-trading state and trade-history access.
+
+### P0-E — Matchup / Game Day UX/UI
+
+- [ ] Broadcast-style score hierarchy.
+- [ ] Franchise identity for both sides.
+- [ ] Starter/player scoring contributions.
+- [ ] Players remaining and real-game status.
+- [ ] Upcoming/live/final states.
+- [ ] Recap entry point once available.
+- [ ] Mobile + desktop live-state QA.
+
+### P0-F — League UX/UI
+
+- [ ] Standings.
+- [ ] Schedule.
+- [ ] Power / All-Play presentation where supported.
+- [ ] Playoff picture/bracket.
+- [ ] History & Legacy entry point.
+- [ ] Commissioner-authorized settings entry point.
+- [ ] Avoid spreadsheet-first presentation while keeping competitive truth clear.
+
+### P0-G — Locker Room, News, Stadium & Legacy
+
+- [ ] Locker Room distinguishes human messages from deterministic league events.
+- [ ] League News page: top story, standings movers, biggest performances, transactions, rivalry watch, weekly awards, playoff picture, recaps.
+- [ ] Stadium remains a persistent primary left-nav destination.
+- [ ] Stadium includes Owner's Office and legacy/award inspection.
+- [ ] Create original Big Exec Champions Trophy design; do not imitate the Lombardi Trophy or recognizable NFL awards.
+- [ ] Winning franchise's Champions Trophy appears in the Owner's Office and persists historically.
+- [ ] Original Big Exec banners/monuments/statues only.
+- [ ] History & Legacy connects championships/rivalries/recaps/stadium progression.
+- [ ] Recap V2 passes its separate truth, technical, and creative acceptance gates.
+
+### P0-H — Cross-product polish
+
+- [ ] Loading states.
+- [ ] Empty states.
+- [ ] Success/confirmation states.
+- [ ] Disabled/locked states.
+- [ ] Error/failure/retry states.
+- [ ] Keyboard/focus/accessibility basics.
+- [ ] Reduced motion.
+- [ ] Responsive mobile/desktop review.
+- [ ] Original-IP review across trophies, awards, uniforms, logos, and media.
 
 ---
 
