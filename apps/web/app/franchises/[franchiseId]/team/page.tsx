@@ -2,10 +2,11 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../../lib/supabase/server';
 import { setLineup } from '../../../team/actions';
 import { FranchiseCrest } from '../../../components/FranchiseCrest';
+import { requestRosterIntegrityReview } from './actions';
 
 const slots = [['QB',1,'QB'],['RB',1,'RB1'],['RB',2,'RB2'],['WR',1,'WR1'],['WR',2,'WR2'],['TE',1,'TE'],['FLEX',1,'FLEX'],['K',1,'K'],['DST',1,'D/ST']] as const;
 
-export default async function TeamPage({ params, searchParams }: { params: Promise<{ franchiseId: string }>; searchParams: Promise<{ week?: string; error?: string }> }) {
+export default async function TeamPage({ params, searchParams }: { params: Promise<{ franchiseId: string }>; searchParams: Promise<{ week?: string; error?: string; integrity_status?: string; integrity_error?: string }> }) {
   const { franchiseId } = await params;
   const query = await searchParams;
   const week = Math.max(1, Math.min(18, Number(query.week ?? 1)));
@@ -14,19 +15,25 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
   if (!user) redirect('/login');
   const { data: franchise } = await supabase.from('franchises').select('id,name,abbreviation,league_id,primary_color,secondary_color').eq('id', franchiseId).maybeSingle();
   if (!franchise) notFound();
-  const { data: seasonFranchise } = await supabase.from('season_franchises').select('id,league_season_id').eq('franchise_id', franchiseId).maybeSingle();
+  const { data: currentLeagueSeason } = await supabase.from('league_seasons').select('id,trade_deadline_at,roster_integrity_mode,roster_integrity_bulk_drop_limit,roster_integrity_bulk_window_hours').eq('league_id', franchise.league_id).eq('is_current', true).maybeSingle();
+  if (!currentLeagueSeason) notFound();
+  const { data: seasonFranchise } = await supabase.from('season_franchises').select('id,league_season_id,roster_locked_at,roster_lock_reason').eq('franchise_id', franchiseId).eq('league_season_id', currentLeagueSeason.id).maybeSingle();
   if (!seasonFranchise) notFound();
   const { data: ownership } = await supabase.from('franchise_owners').select('user_id').eq('franchise_id', franchiseId).eq('user_id', user.id).is('ends_on', null).maybeSingle();
   if (!ownership) redirect(`/leagues/${franchise.league_id}`);
-  const [{ data: roster }, { data: lineup }, { data: stadium }] = await Promise.all([
+  const [{ data: roster }, { data: lineup }, { data: stadium }, { data: pendingReviews }] = await Promise.all([
     supabase.from('roster_entries').select('id,athlete_id,real_team_id,athletes(display_name,position,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('season_franchise_id', seasonFranchise.id).is('dropped_at', null).order('added_at'),
     supabase.from('lineups').select('slot,slot_index,athlete_id,real_team_id').eq('season_franchise_id', seasonFranchise.id).eq('week', week),
-    supabase.from('stadiums').select('id,environment_key').eq('franchise_id', franchiseId).maybeSingle()
+    supabase.from('stadiums').select('id,environment_key').eq('franchise_id', franchiseId).maybeSingle(),
+    supabase.from('roster_integrity_reviews').select('id,roster_entry_id,status,reason_code,reason_detail,requested_at').eq('season_franchise_id', seasonFranchise.id).eq('status','pending')
   ]);
   const lineupMap = new Map((lineup ?? []).map(item => [`${item.slot}:${item.slot_index}`, item]));
   const starterAssetIds = new Set((lineup ?? []).flatMap(item => [item.athlete_id, item.real_team_id]).filter(Boolean));
+  const pendingReviewEntryIds = new Set((pendingReviews ?? []).map(item=>item.roster_entry_id));
   const primary = franchise.primary_color ?? '#d9b43b';
   const secondary = franchise.secondary_color ?? '#f5f1e8';
+  const deadlinePassed = currentLeagueSeason.trade_deadline_at ? Date.now() >= new Date(currentLeagueSeason.trade_deadline_at).getTime() : false;
+  const integrityActive = deadlinePassed && currentLeagueSeason.roster_integrity_mode !== 'open';
 
   function labelForAsset(asset: NonNullable<typeof roster>[number]) {
     if (asset.athlete_id && asset.athletes) {
@@ -50,6 +57,21 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
     </section>
     <section className="panel"><p className="eyebrow">LINEUP CONTROL</p><h2>Set your starters.</h2><p className="lede">Click a player option under a slot to promote them directly into the starting lineup. Each real player locks when their game begins once the current-season live schedule is connected.</p>{query.error && <p className="errorNotice" role="alert">{query.error}</p>}<div className="actions">{week > 1 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week-1}`}>← Week {week-1}</a>}{week < 18 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week+1}`}>Week {week+1} →</a>}<a className="secondary" href={`/franchises/${franchiseId}/stadium`}>View My Stadium</a></div></section>
     <section className="panel"><p className="eyebrow">STARTERS</p><div className="lineupGrid">{slots.map(([slot,slotIndex,label]) => { const current = lineupMap.get(`${slot}:${slotIndex}`); const currentRoster = roster?.find(r => (current?.athlete_id && r.athlete_id===current.athlete_id) || (current?.real_team_id && r.real_team_id===current.real_team_id)); const eligible = (roster ?? []).filter(r => { if (r.real_team_id) return slot==='DST'; const athlete = Array.isArray(r.athletes) ? r.athletes[0] : r.athletes as {position?:string}|null; const pos = athlete?.position; if (slot==='FLEX') return ['RB','WR','TE'].includes(pos ?? ''); return pos===slot; }); return <article className="lineupSlot" key={`${slot}-${slotIndex}`}><span>{label}</span><strong>{currentRoster ? labelForAsset(currentRoster) : 'EMPTY'}</strong>{!!eligible.length && <div className="slotChoices">{eligible.slice(0,12).map(asset => <form action={setLineup} key={asset.id}><input type="hidden" name="season_franchise_id" value={seasonFranchise.id}/><input type="hidden" name="franchise_id" value={franchiseId}/><input type="hidden" name="week" value={week}/><input type="hidden" name="slot" value={slot}/><input type="hidden" name="slot_index" value={slotIndex}/>{asset.athlete_id && <input type="hidden" name="athlete_id" value={asset.athlete_id}/>} {asset.real_team_id && <input type="hidden" name="real_team_id" value={asset.real_team_id}/>}<button className="miniAction" type="submit">{labelForAsset(asset)}</button></form>)}</div>}</article>; })}</div></section>
+
+    {deadlinePassed && <section className="panel">
+      <p className="eyebrow">ROSTER INTEGRITY</p><h2>{integrityActive?'Post-deadline protection is active.':'Open-roster mode is active.'}</h2>
+      <p className="lede">A bad record never locks your roster. You can still use Free Agency and Waivers while competing. Big Exec only protects against standalone releases, protected/core-player dumps, bulk-drop behavior, and explicit season-complete roster locks.</p>
+      {seasonFranchise.roster_locked_at&&<p className="errorNotice">This franchise is roster-locked: {seasonFranchise.roster_lock_reason??'season competition complete'}.</p>}
+      {query.integrity_status==='requested'&&<p className="successNotice">Commissioner review requested. If approved, you will receive a one-time 24-hour override for that roster asset.</p>}
+      {query.integrity_error&&<p className="errorNotice" role="alert">{query.integrity_error}</p>}
+      {integrityActive&&<div className="playerList">
+        {(roster??[]).map(asset=>{
+          const pending=pendingReviewEntryIds.has(asset.id);
+          return <article className="playerRow" key={`integrity-${asset.id}`}><div><span>{pending?'REVIEW PENDING':'ONE-TIME EXCEPTION'}</span><strong>{labelForAsset(asset)}</strong><small>Request this only when a legitimate post-deadline move is blocked by Roster Integrity.</small></div>{pending?<span className="commandBadge">PENDING</span>:<form className="inlineForm" action={requestRosterIntegrityReview}><input type="hidden" name="franchise_id" value={franchiseId}/><input type="hidden" name="roster_entry_id" value={asset.id}/><input type="hidden" name="week" value={week}/><input name="manager_note" placeholder="Why is this drop legitimate?" aria-label={`Reason to release ${labelForAsset(asset)}`}/><button className="secondary" type="submit">Request Commissioner Review</button></form>}</article>;
+        })}
+      </div>}
+    </section>}
+
     <section className="panel"><p className="eyebrow">BENCH / ROSTER</p><div className="playerList">{(roster ?? []).filter(asset => !starterAssetIds.has(asset.athlete_id ?? asset.real_team_id)).map(asset => <div className="playerRow" key={asset.id}><div><span>AVAILABLE TO START</span><strong>{labelForAsset(asset)}</strong></div></div>)}{!roster?.length && <p className="errorNotice">No roster yet. Players appear here as soon as the draft is completed.</p>}</div></section>
   </main>;
 }
