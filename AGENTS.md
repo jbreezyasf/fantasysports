@@ -10,12 +10,13 @@ Before planning, diagnosing, or modifying the product, read:
 2. `docs/OPERATING_GUARDRAILS.md`
 3. `docs/GATE_STATUS.md`
 4. `docs/CURRENT_WORK.md`
+5. `docs/UX_UI_PAGE_SPEC.md`
 
 For recap-renderer work, also read:
 
-5. `docs/recap/RECAP_V2_PRD.md`
-6. `docs/recap/RECAP_V2_DEVELOPER_TASKS.md`
-7. `docs/recap/RECAP_V2_SPRINT_PLAN.md`
+6. `docs/recap/RECAP_V2_PRD.md`
+7. `docs/recap/RECAP_V2_DEVELOPER_TASKS.md`
+8. `docs/recap/RECAP_V2_SPRINT_PLAN.md`
 
 ## Source-of-truth hierarchy
 
@@ -52,11 +53,29 @@ Draft → Team ownership → Lineup management → Free agency / waivers → Tra
 
 Historical import and companion functionality are secondary capabilities. They must not replace the standalone Season 1 product.
 
+## UX/UI is P0
+
+UX/UI is a first-class P0 product requirement, not end-of-project polish.
+
+For manager-facing and commissioner-facing product flows, work should proceed as:
+
+> implement/validate functionality → complete the associated UX/UI from `docs/UX_UI_PAGE_SPEC.md` → test mobile + desktop → then advance the gate.
+
+Do not mark a user-facing gate PASS if the flow is functionally correct but confusing, visually unfinished, inaccessible, or inconsistent with the canonical Big Exec product shell.
+
+All authenticated product pages must follow the canonical left-navigation and page hierarchy defined in `docs/UX_UI_PAGE_SPEC.md` unless that document is explicitly changed.
+
 ## Fantasy truth
 
 Fantasy Core owns authoritative rosters, lineups, statistics, scores, standings, playoff qualification, championships, and official awards.
 
 AI may explain and dramatize deterministic results. AI must not determine or invent official fantasy outcomes.
+
+## Original visual IP
+
+Use original Big Exec visual assets. Do not create NFL/team-logo lookalikes, copied uniforms, recognizable professional-player likenesses, or trophies/awards that imitate recognizable NFL awards such as the Lombardi Trophy.
+
+The Big Exec Champions Trophy and other awards must use original Big Exec geometry and design language as specified in `docs/UX_UI_PAGE_SPEC.md`.
 
 ## Gate rules
 
