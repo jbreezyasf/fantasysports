@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '../../lib/supabase/server';
+import { createAdminClient } from '../../lib/supabase/admin';
 
 function safeNext(value: FormDataEntryValue | null) {
   const next = String(value ?? '');
@@ -33,9 +34,36 @@ function friendlyAuthError(message: string, mode: 'signin' | 'signup') {
   return mode === 'signup' ? 'We could not create your account. Please check the information and try again.' : 'We could not sign you in. Please check your information and try again.';
 }
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+async function existingAccountForEmail(email: string) {
+  if (!email) return false;
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .schema('auth')
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .limit(1);
+
+    if (error) {
+      console.error('Existing account lookup failed', error.message);
+      return false;
+    }
+
+    return (data?.length ?? 0) > 0;
+  } catch (error) {
+    console.error('Existing account lookup unavailable', error);
+    return false;
+  }
+}
+
 export async function signIn(formData: FormData) {
   const supabase = await createClient();
-  const email = String(formData.get('email') ?? '');
+  const email = normalizeEmail(String(formData.get('email') ?? ''));
   const password = String(formData.get('password') ?? '');
   const next = safeNext(formData.get('next'));
   const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -45,11 +73,14 @@ export async function signIn(formData: FormData) {
 
 export async function signUp(formData: FormData) {
   const supabase = await createClient();
-  const email = String(formData.get('email') ?? '');
+  const email = normalizeEmail(String(formData.get('email') ?? ''));
   const password = String(formData.get('password') ?? '');
   const displayName = String(formData.get('display_name') ?? '');
   const next = safeNext(formData.get('next'));
-  const { error } = await supabase.auth.signUp({
+  if (await existingAccountForEmail(email)) {
+    redirect('/login?error=' + encodeURIComponent('A Big Exec account already exists for this email. Please sign in.') + '&next=' + encodeURIComponent(next));
+  }
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -57,6 +88,9 @@ export async function signUp(formData: FormData) {
       emailRedirectTo: `${appUrl()}/auth/confirm?next=${encodeURIComponent(next)}`
     }
   });
+  if (!error && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    redirect('/login?error=' + encodeURIComponent('A Big Exec account already exists for this email. Please sign in.') + '&next=' + encodeURIComponent(next));
+  }
   if (error) redirect('/login?mode=signup&error=' + encodeURIComponent(friendlyAuthError(error.message, 'signup')) + '&next=' + encodeURIComponent(next));
   redirect('/login?message=' + encodeURIComponent('Check your email to confirm your account, then sign in to continue.') + '&next=' + encodeURIComponent(next));
 }
