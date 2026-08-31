@@ -222,6 +222,29 @@ Current objectives:
 
 ---
 
+## P1 — Assistant GM MVP
+
+Current implementation work is tracked in draft PR #6 (`feature/assistant-gm-mvp`). Product/build contract: `docs/product/ASSISTANT_GM_MVP_SPEC.md`.
+
+**Status 2026-08-31:** BUILT on feature branch / PREVIEW BUILD READY / authenticated manager-flow QA still required. This status does not advance a gameplay gate.
+
+**Evidence:** Vercel preview deployment `dpl_7dmrxNsv4K8kBB3ShospDtofyxo1` for commit `1ff1d3ab232433d16f59b75f94c52e3408ccf47b` reached `READY` after the production build compiled, passed Next.js type validation, generated static pages, and completed deployment.
+
+- [x] Define the owner/GM → Assistant GM product role and authority boundary.
+- [x] Add deterministic roster-needs / available-target / drop-review decision engine with unit tests.
+- [x] Add server-side authenticated league/franchise context loading and current roster/availability truth.
+- [x] Add private per-manager Assistant GM route plus `/assistant-gm` convenience route.
+- [x] Add browser-local per-manager ON/OFF and private conversation persistence for MVP testing.
+- [x] Add deterministic fallback behavior so the feature remains usable without an AI model call.
+- [x] Add optional OpenAI personality layer that receives server-derived context and cannot execute transactions.
+- [ ] Exercise authenticated preview with a real manager/franchise session.
+- [ ] Verify non-member league access denial with an authenticated non-member actor.
+- [ ] Verify mobile and desktop Assistant GM experience.
+- [ ] Verify preview `OPENAI_API_KEY` behavior if generative personality testing is enabled.
+- [ ] Evaluate interaction signal before adding persistent Supabase memory/settings or a paid fantasy-intelligence vendor.
+
+---
+
 # Working Rule
 
 When one item is completed, update this file in the same PR/commit with the evidence or link to the evidence. Do not check a box simply because code was written.
