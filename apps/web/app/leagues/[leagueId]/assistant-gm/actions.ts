@@ -1,6 +1,10 @@
 'use server';
 
-import { buildDeterministicAssistantGMBrief, loadAssistantGMContext } from '../../../../lib/assistant-gm/context';
+import {
+  buildDeterministicAssistantGMBrief,
+  loadAssistantGMContext,
+  type AssistantGMLoadedContext,
+} from '../../../../lib/assistant-gm/context';
 
 export type AssistantGMChatMessage = {
   role: 'owner' | 'assistant';
@@ -27,7 +31,7 @@ function cleanHistory(history: AssistantGMChatMessage[]) {
     .filter(item => item.content.length > 0);
 }
 
-function deterministicReply(question: string, context: Awaited<ReturnType<typeof loadAssistantGMContext>> extends { ok: true; context: infer T } ? T : never) {
+function deterministicReply(question: string, context: AssistantGMLoadedContext) {
   const q = question.toLowerCase();
   const top = context.decision.topTargets[0];
   const drop = context.decision.dropCandidates[0];
@@ -57,7 +61,7 @@ function deterministicReply(question: string, context: Awaited<ReturnType<typeof
     return `My first look is ${top.name}, ${top.position}${top.team ? `, ${top.team}` : ''}. ${top.reason} That is the Big Exec board talking — not a pretend injury report or projection model. Put him on the short list and then make me defend it.`;
   }
 
-  return `I have the franchise context, Boss, but there is not enough current ranking evidence for me to name a pickup without bluffing. Ask me for the front-office brief and I will tell you exactly what the roster data does support.`;
+  return 'I have the franchise context, Boss, but there is not enough current ranking evidence for me to name a pickup without bluffing. Ask me for the front-office brief and I will tell you exactly what the roster data does support.';
 }
 
 function extractResponseText(payload: unknown) {
