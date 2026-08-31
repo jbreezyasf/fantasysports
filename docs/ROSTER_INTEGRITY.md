@@ -153,9 +153,9 @@ Authenticated local-app Playwright visual QA was executed on 2026-08-31 using th
 
 Evidence package:
 
-- `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T00-29-49/EVIDENCE.md`
-- `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T00-29-49/REVIEW_INDEX.md`
-- `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T00-29-49/SUMMARY.md`
+- `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T05-39-47/EVIDENCE.md`
+- `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T05-39-47/REVIEW_INDEX.md`
+- `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T05-39-47/SUMMARY.md`
 
 ### PROVEN — authenticated visual paths
 
@@ -164,6 +164,7 @@ Evidence package:
 - Commissioner saw the pending review queue with franchise, asset, reason, manager note, approve, and reject controls.
 - Commissioner approval created a one-time 24-hour override; Manager09 retried the add/drop successfully through Free Agency.
 - Manager06 completed three post-deadline replacement drops in the 24-hour QA window; the next replacement was blocked with the Roster Integrity bulk-drop-limit message.
+- Manager01 submitted a pending waiver claim from the authenticated Free Agency waiver-wire section; the UI showed successful submission and the database recorded pending claim `1f16971a-c934-4d47-95b8-2bc9f5d6cb33`.
 - Commissioner explicitly locked Manager08's roster; the lock appeared in settings and Manager08's add/drop was blocked with the roster-lock message.
 - All nine regular manager browser contexts were redirected/denied from commissioner-only Roster Integrity settings.
 - Final cleanup verified Automatic mode, 3-drop threshold, 24-hour window, core protection ON, eliminated lock enforcement ON, no locked QA franchises, no pending reviews, no active overrides, no QA audit rows, no open waiver holds, and no temporary visual roster entries.
@@ -171,6 +172,5 @@ Evidence package:
 ### UNVERIFIED / BLOCKED — visual coverage
 
 - Standalone release visual QA remains blocked because there is no current manager-facing standalone release UI.
-- Waiver hold/claim visual QA remains blocked because the inspected Free Agency page does not render waiver claim UI.
 - Core/high-value asset visual proof remains blocked because the current QA season does not have authoritative season-to-date scoring ranks.
 - Direct Supabase JS anon/authenticated RPC permission tests in the visual runner were blocked because local Supabase URL/anon environment variables were unavailable. Earlier database privilege evidence remains recorded above, but this browser run did not independently repeat those RPC actor-class checks.

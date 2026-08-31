@@ -104,6 +104,8 @@ async function runVisualChecks(browser, fixtureState) {
   await managerReviewFlow(browser, fixtureState, manager09);
   console.log('RI visual QA: bulk replacement flow');
   await bulkReplacementFlow(browser, fixtureState, manager06);
+  console.log('RI visual QA: waiver visual flow');
+  await waiverVisualFlow(browser, fixtureState, fixtureState.actors.find((actor) => actor.label === 'Manager01'));
   console.log('RI visual QA: finished roster lock flow');
   await finishedRosterLockFlow(browser, fixtureState, commissioner, manager08);
 }
@@ -147,6 +149,7 @@ async function captureSettings(browser, fixtureState, actorLabel, evidenceId, fi
 async function updateSettingsViaUi(browser, fixtureState, mode) {
   const pageInfo = await openActorPage(browser, 'Commissioner', { width: 1440, height: 900 });
   await pageInfo.page.goto(`${appUrl}/leagues/${fixtureState.league_id}/settings/roster-integrity`, { waitUntil: 'networkidle' });
+  await waitForSettingsForm(pageInfo.page);
   await pageInfo.page.locator('select[name="mode"]').selectOption(mode);
   await pageInfo.page.locator('input[name="bulk_drop_limit"]').fill('3');
   await pageInfo.page.locator('input[name="bulk_window_hours"]').fill('24');
@@ -158,6 +161,22 @@ async function updateSettingsViaUi(browser, fixtureState, mode) {
   ]);
   currentModeValue = mode;
   await pageInfo.context.close();
+}
+
+async function waitForSettingsForm(page) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await page.locator('select[name="mode"]').waitFor({ timeout: 15_000 });
+      return;
+    } catch (error) {
+      if (attempt === 0) {
+        await page.reload({ waitUntil: 'networkidle' });
+        continue;
+      }
+      const body = await page.locator('body').innerText({ timeout: 2_000 }).catch(() => '');
+      throw new Error(`Roster Integrity settings form was not available. url=${page.url()} body=${body.slice(0, 500)}`);
+    }
+  }
 }
 
 async function managerReviewFlow(browser, fixtureState, manager) {
@@ -314,6 +333,81 @@ async function finishedRosterLockFlow(browser, fixtureState, commissioner, manag
   await setRosterLock(manager.season_franchise_id, false);
 }
 
+async function waiverVisualFlow(browser, fixtureState, actor) {
+  if (!actor) throw new Error('Missing waiver QA actor.');
+  let hold = await openWaiverHoldForClaim(fixtureState.current_season_id, actor.season_franchise_id);
+  if (!hold) {
+    const sourceActor = fixtureState.actors.find((candidate) => candidate.label !== actor.label && candidate.label !== 'Commissioner');
+    if (sourceActor) {
+      const sourceDrop = await activeRosterEntry(sourceActor.season_franchise_id);
+      const seeded = await performFreeAgentAdd(browser, fixtureState, sourceActor, sourceDrop.id, null, null, 'Seeded a QA waiver hold through a normal replacement transaction.');
+      if (!seeded.ok) summary.dbAssertionFailures.push(`Unable to seed waiver hold for visual QA: ${seeded.message}`);
+      hold = await openWaiverHoldForClaim(fixtureState.current_season_id, actor.season_franchise_id);
+    }
+  }
+  const drop = await activeRosterEntry(actor.season_franchise_id);
+  const pageInfo = await openActorPage(browser, actor.label, { width: 1440, height: 900 });
+  const route = `/leagues/${fixtureState.league_id}/players?position=ALL`;
+  const before = await dbState(fixtureState.current_season_id);
+  await pageInfo.page.goto(`${appUrl}${route}`, { waitUntil: 'networkidle' });
+  if (!hold) {
+    await capture({
+      id: 'RI-WAIVER-001',
+      actor: actor.label,
+      franchise: actor.franchise,
+      mode: await currentMode(fixtureState.current_season_id),
+      page: pageInfo.page,
+      pageName: 'Waiver Behavior',
+      route,
+      viewport: '1440x900 desktop',
+      action: 'Manager attempted to inspect and claim an open waiver hold.',
+      expected: 'At least one QA waiver hold should be visible for authenticated visual QA.',
+      actual: 'No open waiver hold was available after deterministic seeding.',
+      result: 'BLOCKED',
+      filename: 'RI-WAIVER-001-waiver-claim-unavailable-desktop.png',
+      before,
+      after: await dbState(fixtureState.current_season_id),
+      ids: 'waiver_hold_id=None',
+      cleanup: 'Pending final QA reset.',
+      consoleErrors: pageInfo.consoleErrors,
+      networkFailures: pageInfo.networkFailures,
+    });
+    await pageInfo.context.close();
+    return;
+  }
+  const row = pageInfo.page.locator(`input[name="waiver_hold_id"][value="${hold.id}"]`).locator('xpath=ancestor::details[1]');
+  await row.locator('summary').click();
+  await row.locator('select[name="drop_roster_entry_id"]').selectOption(drop.id);
+  await Promise.all([
+    pageInfo.page.waitForURL(/waiver_status=claimed|waiver_error=/, { timeout: 30_000 }),
+    row.getByRole('button', { name: /submit waiver claim/i }).click(),
+  ]);
+  const body = await pageInfo.page.locator('body').innerText().catch(() => '');
+  const claim = await pendingWaiverClaim(hold.id, actor.season_franchise_id);
+  await capture({
+    id: 'RI-WAIVER-001',
+    actor: actor.label,
+    franchise: actor.franchise,
+    mode: await currentMode(fixtureState.current_season_id),
+    page: pageInfo.page,
+    pageName: 'Waiver Behavior',
+    route,
+    viewport: '1440x900 desktop',
+    action: 'Manager submitted a waiver claim through the Free Agency waiver section.',
+    expected: 'Waiver wire is visible; manager can select a drop asset and submit a pending claim.',
+    actual: `waiver_status=${pageInfo.page.url().includes('waiver_status=claimed')}; visibleStatus=${body.includes('Waiver claim submitted')}; pending_claim_id=${claim?.id || 'none'}.`,
+    result: pageInfo.page.url().includes('waiver_status=claimed') && Boolean(claim?.id) ? 'PASS' : 'FAIL',
+    filename: 'RI-WAIVER-001-waiver-claim-submitted-desktop.png',
+    before,
+    after: await dbState(fixtureState.current_season_id),
+    ids: `waiver_hold_id=${hold.id}, waiver_claim_id=${claim?.id || 'none'}, drop_roster_entry_id=${drop.id}`,
+    cleanup: 'Pending final QA reset.',
+    consoleErrors: pageInfo.consoleErrors,
+    networkFailures: pageInfo.networkFailures,
+  });
+  await pageInfo.context.close();
+}
+
 async function runPermissionChecks(browser, fixtureState) {
   const managers = fixtureState.actors.filter((actor) => actor.label !== 'Commissioner');
   const denied = [];
@@ -382,7 +476,6 @@ async function runPermissionChecks(browser, fixtureState) {
 async function runDbOnlyChecks(fixtureState) {
   blockDb('RI-MGR-001', 'Standalone release has no current manager-facing release UI. Backend trigger can be tested, but visual PASS is intentionally not claimed.');
   blockDb('RI-MGR-002', 'Standalone release has no current mobile manager-facing release UI. Backend trigger can be tested, but visual PASS is intentionally not claimed.');
-  blockDb('RI-WAIVER-001', 'Waiver hold/claim UI is not currently rendered on the inspected Free Agency page, so visual waiver evidence is blocked.');
   blockDb('RI-CORE-001', 'Current QA season has no authoritative season-to-date fantasy scoring ranks for protected core-asset visual proof.');
 
   const entry = await activeRosterEntry(fixtureState.actors.find((actor) => actor.label === 'Manager07').season_franchise_id);
@@ -415,7 +508,7 @@ async function performFreeAgentAdd(browser, fixtureState, actor, dropRosterEntry
   const route = `/leagues/${fixtureState.league_id}/players?position=ALL&q=${encodeURIComponent(freeAgent.display_name)}`;
   const before = await dbState(fixtureState.current_season_id);
   await pageInfo.page.goto(`${appUrl}${route}`, { waitUntil: 'networkidle' });
-  const details = pageInfo.page.locator('details.freeAgentClaim').first();
+  const details = pageInfo.page.locator('details.freeAgentClaim').filter({ hasText: 'Confirm Add' }).first();
   if (!(await details.count())) {
     await pageInfo.context.close();
     return { ok: false, message: 'No visible free-agent ADD control.' };
@@ -423,7 +516,7 @@ async function performFreeAgentAdd(browser, fixtureState, actor, dropRosterEntry
   await details.locator('summary').click();
   await details.locator('select[name="drop_roster_entry_id"]').selectOption(dropRosterEntryId);
   await Promise.all([
-    pageInfo.page.waitForURL(/transaction_status=added|transaction_error=/, { timeout: 30_000 }),
+    pageInfo.page.waitForURL(/transaction_status=added|transaction_error=/, { timeout: 30_000, waitUntil: 'domcontentloaded' }),
     details.getByRole('button', { name: /confirm add/i }).click(),
   ]);
   const url = pageInfo.page.url();
@@ -652,6 +745,29 @@ async function setRosterLock(seasonFranchiseId, locked) {
 
 async function activeRosterEntry(seasonFranchiseId) {
   return await sqlJson(`select jsonb_build_object('id',re.id,'label',coalesce(a.display_name,'D/ST')) as result from public.roster_entries re left join public.athletes a on a.id=re.athlete_id where re.season_franchise_id='${seasonFranchiseId}'::uuid and re.dropped_at is null order by re.added_at, re.id limit 1;`, 'result');
+}
+
+async function openWaiverHoldForClaim(seasonId, claimantSeasonFranchiseId) {
+  return await sqlJson(`
+select jsonb_build_object('id',wh.id,'source_season_franchise_id',wh.source_season_franchise_id) as result
+from public.waiver_holds wh
+where wh.league_season_id='${seasonId}'::uuid
+  and wh.status='open'
+  and (wh.source_season_franchise_id is null or wh.source_season_franchise_id<>'${claimantSeasonFranchiseId}'::uuid)
+order by wh.starts_at desc, wh.id
+limit 1;
+`, 'result');
+}
+
+async function pendingWaiverClaim(holdId, seasonFranchiseId) {
+  return await sqlJson(`
+select jsonb_build_object('id',wc.id,'status',wc.status) as result
+from public.waiver_claims wc
+where wc.waiver_hold_id='${holdId}'::uuid
+  and wc.season_franchise_id='${seasonFranchiseId}'::uuid
+order by wc.created_at desc
+limit 1;
+`, 'result');
 }
 
 async function availableFreeAgent(seasonId) {
