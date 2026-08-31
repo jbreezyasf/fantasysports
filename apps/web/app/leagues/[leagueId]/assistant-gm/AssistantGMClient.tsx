@@ -72,9 +72,14 @@ export default function AssistantGMClient(props: Props) {
     setBusy(true);
     try {
       const result = await askAssistantGM({ leagueId: props.leagueId, question: clean, history: recent });
-      setMessages(current => [...current, { role: 'assistant', content: result.message }].slice(-30));
+      const assistantMessage: AssistantGMChatMessage = { role: 'assistant', content: result.message };
+      setMessages(current => [...current, assistantMessage].slice(-30));
     } catch {
-      setMessages(current => [...current, { role: 'assistant', content: 'Boss, the office line just went dead. Try that again. I am blaming technology, not the roster.' }].slice(-30));
+      const errorMessage: AssistantGMChatMessage = {
+        role: 'assistant',
+        content: 'Boss, the office line just went dead. Try that again. I am blaming technology, not the roster.',
+      };
+      setMessages(current => [...current, errorMessage].slice(-30));
     } finally {
       setBusy(false);
     }
