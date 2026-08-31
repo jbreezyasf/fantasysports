@@ -10,3 +10,6 @@ coverage/
 *.log
 *.tsbuildinfo
 supabase/.temp/
+qa-artifacts/
+.auth/
+test-results/

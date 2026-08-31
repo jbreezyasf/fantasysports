@@ -16,7 +16,7 @@ export default async function PlayersPage({params,searchParams}:{params:Promise<
   const [{data:league},{data:member},{data:season},{data:ownerships}]=await Promise.all([
     supabase.from('fantasy_leagues').select('name').eq('id',leagueId).maybeSingle(),
     supabase.from('league_members').select('role').eq('league_id',leagueId).eq('user_id',user.id).maybeSingle(),
-    supabase.from('league_seasons').select('id,competition_season_id,roster_config').eq('league_id',leagueId).maybeSingle(),
+    supabase.from('league_seasons').select('id,competition_season_id,roster_config').eq('league_id',leagueId).eq('is_current',true).maybeSingle(),
     supabase.from('franchise_owners').select('franchise_id').eq('user_id',user.id).is('ends_on',null)
   ]);
   if(!league||!member||!season)notFound();

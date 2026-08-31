@@ -31,6 +31,12 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Progress 2026-08-26:** Application commit `ce1ca0edc1788b2fd290d7e8f7a53c58b592ea0a` was pushed to `origin/main` after local HTTPS push was retried without an invalid `GITHUB_TOKEN`. Vercel production deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` reached `READY`, is aliased to `www.bigexecfs.com` and `bigexecfs.com`, and the live homepage HTML references that deployment id. GitHub commit status reports Vercel success. Vercel production runtime error/fatal log query for that deployment over the last 30 minutes returned no logs. Authenticated draft QA remains pending.
 
+**Progress 2026-08-31:** Roster Integrity migration filename reconciliation was verified as a rename-only repository-history change. Production Supabase migration history contains `20260830225835_roster_integrity_mode`, `20260830230104_roster_integrity_rpc_privileges`, and `20260830230309_commissioner_review_mode_behavior`; the cleanup branch now points at commit `c803e209b1d7ec02e5fe3a05209bd36a82f17fda`, whose diff is three 100% filename renames with identical SQL content. SQL reapplied: NO. Local validation for the reconciliation branch passed `npm test --workspace @fantasy-all-sports/web`, `npm run build`, and `npm run typecheck` after build regenerated `.next/types`.
+
+**Progress 2026-08-31:** The deterministic 10-manager QA reset now resets Roster Integrity settings/state for the QA league only: Automatic mode, 3-drop threshold, 24-hour window, core protection ON, eliminated lock enforcement ON, no stale QA review requests, no stale overrides, no QA audit rows, and no locked QA franchises. `npm run qa:auth:save` saved isolated local Playwright storage states for all ten QA actors using the ignored local `QA_AUTH_PASSWORD`; no credentials or auth state were committed.
+
+**Progress 2026-08-31:** Added focused Roster Integrity visual QA harness `npm run qa:roster-integrity:visual` and fixed a current-season bug in the Free Agency page where `/leagues/<id>/players` used `maybeSingle()` across all league seasons and 404ed for multi-season QA leagues. Latest evidence run: `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T00-29-49/` with 20 checks, 15 PASS, 0 FAIL, 5 BLOCKED/UNVERIFIED, and 15 screenshots. PROVEN in authenticated Playwright/local-app QA: commissioner settings for Automatic/Commissioner Review/Open modes on desktop/mobile; manager review request desktop/mobile; commissioner pending queue and approval; manager retry after one-time override; bulk-drop fourth replacement block; explicit finished-roster lock and manager block; regular-manager redirect/denial for commissioner settings across all nine manager contexts. Remaining gaps are not closed: no standalone release UI to test visually, no waiver hold/claim UI on the inspected Free Agency page, no current QA score ranks for visual core-asset proof, and direct anon/authenticated Supabase JS RPC permission tests were blocked by missing local Supabase URL/anon env vars.
+
 ---
 
 ## P0 — UX/UI & Product Polish
@@ -78,6 +84,7 @@ UX/UI is not deferred until after backend completion. Each gameplay flow must be
 - [ ] Lineup page and individual kickoff-lock clarity.
 - [ ] Free Agency page: AVAILABLE / WAIVERS / ROSTERED states.
 - [ ] Waiver claim/drop-player workflow.
+- [x] Fix Free Agency page current-season lookup for multi-season leagues. Evidence: authenticated Roster Integrity visual QA found `/leagues/<id>/players` 404ing because the page queried all league seasons with `maybeSingle()`; the page now filters `league_seasons.is_current = true`.
 - [ ] Trade Room landing page.
 - [ ] Side-by-side trade creation flow.
 - [ ] Private negotiation room and trade lifecycle states.
@@ -152,6 +159,7 @@ UX/UI is not deferred until after backend completion. Each gameplay flow must be
 - [ ] Validate free agency.
 - [ ] Validate inverse-standings waiver system.
 - [ ] Validate post-deadline waiver/free-agent behavior.
+- [x] Validate Roster Integrity post-deadline Automatic add/drop abuse controls through authenticated browser QA where UI exists. Evidence: `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T00-29-49/`; Gate 2 remains open because waiver UI, standalone release UI, lineup/kickoff locks, and full trade lifecycle are not fully proven.
 - [ ] Validate trade deadline at UI + authoritative server/database boundary.
 - [ ] Complete/validate trade-state lifecycle.
 
