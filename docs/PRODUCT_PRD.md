@@ -30,7 +30,10 @@ Codex/developers must read all files below before making material product decisi
 4. `docs/product/PRD_04_ANALYTICS_AND_RELEASE.md` — Sections 47–53
 5. `docs/UX_UI_PAGE_SPEC.md` — canonical P0 product shell, navigation, page hierarchy, Front Office cards, Trade Room, Stadium/Owner's Office, League News, original award/trophy rules, and page-by-page visual acceptance
 
-The four split PRD files plus `docs/UX_UI_PAGE_SPEC.md` together form the current canonical Big Exec product specification. Do not treat this index alone as the complete specification.
+6. `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_PRD.md` — approved $99 league-season offer, Standard versus Pro+ boundary, accessibility protection, entitlement, voice, cost-control, safety, and release requirements
+7. `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_TASKS.md` — Codex execution backlog for the approved feature
+
+The four split PRD files, `docs/UX_UI_PAGE_SPEC.md`, and approved feature PRDs listed here together form the current canonical Big Exec product specification. Do not treat this index alone as the complete specification.
 
 ---
 
@@ -70,3 +73,10 @@ Stadium remains a persistent navigation destination rather than consuming a Fron
 Big Exec must use original trophy/award designs. No product surface may imitate recognizable NFL awards or trophies, including the Lombardi Trophy silhouette.
 
 The original **Big Exec Champions Trophy** lives in the winning franchise's Owner's Office within the Stadium experience and persists as franchise legacy across seasons.
+
+
+---
+
+## Approved Monetization Decision — Executive League
+
+The initial paid offer is **Big Exec Executive League Season Pass — $99 one-time per league, sport, and season**. It includes **Assistant GM Pro+** for every manager in the covered league. Assistant GM Pro+ is not a separate Stripe product at launch. Core gameplay and accessibility voice capabilities remain available without the Executive entitlement. See `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_PRD.md`.
