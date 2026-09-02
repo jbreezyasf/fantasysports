@@ -745,3 +745,10 @@ Done requires:
 9. production-equivalent 10-manager QA succeeds;
 10. evidence is recorded before any release gate is marked PASS.
 
+
+
+---
+
+## Structured Voice Knowledge Base
+
+Stable Assistant GM answers are maintained under `docs/assistant-gm/knowledge-base/`. Every implementation must read `00_READ_THIS_FIRST.md`, use `01_ROUTING_INDEX.md`, and retrieve only the matching FAQ topic. Current roster, matchup, draft, deadline, injury, availability, transaction, entitlement, and standings facts must come from authorized live state rather than static FAQ text. Source and review ownership is recorded in `SOURCE_AND_REVIEW_REGISTER.md`.
