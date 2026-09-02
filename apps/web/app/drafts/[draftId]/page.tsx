@@ -6,8 +6,14 @@ import { pauseDraft, processExpiredDraftPick, startDraft, undoLastDraftPick } fr
 import DraftClock from './DraftClock';
 import { DraftPlayerPool } from './DraftPlayerPool';
 import DraftRoomLive from './DraftRoomLive';
+import { draftStateAnnouncement, onClockAnnouncement } from './draftAccessibility';
 
-export default async function DraftPage({ params, searchParams }: { params: Promise<{ draftId: string }>; searchParams: Promise<{ error?: string }> }) {
+type FranchiseRef={name?:string;abbreviation?:string};
+type AthleteRef={display_name?:string;position?:string};
+type TeamRef={display_name?:string;abbreviation?:string};
+function firstRef<T>(value:T|T[]|null|undefined):T|null{return !value?null:Array.isArray(value)?value[0]??null:value;}
+
+export default async function DraftPage({ params, searchParams }: { params: Promise<{ draftId: string }>; searchParams: Promise<{ error?: string; draft_status?: string; draft_asset?: string }> }) {
   const { draftId } = await params;
   const query = await searchParams;
   const supabase = await createClient();
@@ -24,7 +30,7 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
     supabase.from('competition_seasons').select('competition_id').eq('id', leagueSeason.competition_season_id).maybeSingle()
   ]);
   const [{ data: picks }, { data: seasonFranchises }, { data: ownerships }] = await Promise.all([
-    supabase.from('draft_picks').select('id,pick_number,round_number,round_pick,season_franchise_id,athlete_id,real_team_id,picked_at').eq('draft_id', draftId).order('pick_number').limit(250),
+    supabase.from('draft_picks').select('id,pick_number,round_number,round_pick,season_franchise_id,athlete_id,real_team_id,picked_at,athletes(display_name,position),real_teams(display_name,abbreviation)').eq('draft_id', draftId).order('pick_number').limit(250),
     supabase.from('season_franchises').select('id,draft_position,franchise_id,franchises(name,abbreviation)').eq('league_season_id', draft.league_season_id).order('draft_position'),
     supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null)
   ]);
@@ -71,6 +77,13 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
     }),
   ].sort((a, b) => a.queueRank - b.queueRank);
   const poolError = athleteError?.message || teamError?.message || queueError?.message;
+  const currentManager=firstRef(currentFranchise?.franchises as FranchiseRef|FranchiseRef[]|null);
+  const managerOnClock=currentManager?.name??currentManager?.abbreviation??null;
+  const userNextPick=mySeasonFranchise?(picks??[]).find(p=>p.pick_number>=draft.current_pick&&p.season_franchise_id===mySeasonFranchise.id&&!p.picked_at)?.pick_number:null;
+  const recentPicks=(picks??[]).filter(p=>p.picked_at).slice(-8).reverse();
+  const pickAssetLabel=(pick:typeof recentPicks[number])=>{if(pick.athlete_id){const athlete=firstRef(pick.athletes as AthleteRef|AthleteRef[]|null);return `${athlete?.display_name??'Athlete'}${athlete?.position?` • ${athlete.position}`:''}`;}const team=firstRef(pick.real_teams as TeamRef|TeamRef[]|null);return `${team?.abbreviation??team?.display_name??'Team'} D/ST`;};
+  const userOnClock=current?.season_franchise_id===mySeasonFranchise?.id;
+  const remainingSeconds=draft.current_pick_deadline_at?Math.max(0,Math.ceil((new Date(draft.current_pick_deadline_at).getTime()-Date.now())/1000)):null;
 
   return (
     <main className="draftRoom">
@@ -80,11 +93,15 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
         <div className="leagueHeroContent"><p className="eyebrow">{league?.name ?? 'BIG EXEC LEAGUE'}</p><h1>{draft.status === 'live' ? `Pick ${draft.current_pick}` : 'Draft night.'}</h1><p className="leagueTagline">Snake draft • {draft.rounds} rounds • {draft.pick_seconds}s per pick</p><div className="leagueMetaRow"><span>{draft.status.toUpperCase()}</span><span>QB / RB / WR / TE / K</span><span>TEAM D/ST</span></div></div>
       </section>
       {query.error && <p className="errorNotice" role="alert">{query.error}</p>}
+      {query.draft_status==='picked'&&<p className="successNotice" role="status">Draft pick confirmed: {query.draft_asset??'selected player'}.</p>}
+      {query.draft_status==='queued'&&<p className="successNotice" role="status">Added to draft queue: {query.draft_asset??'selected player'}.</p>}
+      <section className="panel" aria-labelledby="draft-state-heading"><p className="eyebrow">DRAFT STATE</p><h2 id="draft-state-heading" className="srOnly">Current draft state</h2><p className="successNotice" role="status">{draftStateAnnouncement({status:draft.status,currentRound:current?.round_number,currentPick:draft.current_pick,roundPick:current?.round_pick,managerOnClock,userNextPick})}</p>{userOnClock&&<p className="successNotice" role="status">{onClockAnnouncement(current?.round_number,current?.round_pick,remainingSeconds)}</p>}</section>
       {draft.status === 'scheduled' && member?.role === 'commissioner' && <section className="panel"><form action={startDraft}><input type="hidden" name="draft_id" value={draftId}/><button className="primary" type="submit">Start Draft</button></form></section>}
       {draft.status === 'paused' && member?.role === 'commissioner' && <section className="panel"><div className="draftCommissionerTools"><form action={startDraft}><input type="hidden" name="draft_id" value={draftId}/><button className="primary" type="submit">Resume Draft</button></form><form action={undoLastDraftPick}><input type="hidden" name="draft_id" value={draftId}/><button className="secondary" type="submit">Undo Last Pick</button></form></div></section>}
       {draft.status === 'paused' && <p className="successNotice">Draft paused. The commissioner can resume when ready.</p>}
-      {draft.status === 'live' && currentFranchise && <section className="panel"><div className="inviteLinkBox"><span>ON THE CLOCK</span><strong>{Array.isArray(currentFranchise.franchises) ? currentFranchise.franchises[0]?.name : (currentFranchise.franchises as {name?:string}|null)?.name}</strong><p className="lede">Round {current?.round_number}, Pick {current?.round_pick}</p><DraftClock deadlineAt={draft.current_pick_deadline_at}/>{member?.role === 'commissioner' && <div className="draftCommissionerTools"><form action={pauseDraft}><input type="hidden" name="draft_id" value={draftId}/><button className="secondary" type="submit">Pause Draft</button></form><form action={processExpiredDraftPick}><input type="hidden" name="draft_id" value={draftId}/><button className="secondary" type="submit">Process Expired Pick</button></form><form action={undoLastDraftPick}><input type="hidden" name="draft_id" value={draftId}/><button className="secondary" type="submit">Undo Last Pick</button></form></div>}</div></section>}
+      {draft.status === 'live' && currentFranchise && <section className="panel"><div className="inviteLinkBox"><span>ON THE CLOCK</span><strong>{managerOnClock}</strong><p className="lede">Round {current?.round_number}, Pick {current?.round_pick}</p><DraftClock deadlineAt={draft.current_pick_deadline_at} announcementPrefix={userOnClock?`You are on the clock. Round ${current?.round_number??'unknown'}, Pick ${current?.round_pick??'unknown'}.`:undefined} announceThresholds={userOnClock}/>{member?.role === 'commissioner' && <div className="draftCommissionerTools"><form action={pauseDraft}><input type="hidden" name="draft_id" value={draftId}/><button className="secondary" type="submit">Pause Draft</button></form><form action={processExpiredDraftPick}><input type="hidden" name="draft_id" value={draftId}/><button className="secondary" type="submit">Process Expired Pick</button></form><form action={undoLastDraftPick}><input type="hidden" name="draft_id" value={draftId}/><button className="secondary" type="submit">Undo Last Pick</button></form></div>}</div></section>}
       {draft.status === 'completed' && <p className="successNotice">Draft complete. Rosters are locked in for the next phase.</p>}
+      <section className="panel" aria-labelledby="recent-picks-heading"><p className="eyebrow">RECENT PICKS</p><h2 id="recent-picks-heading">Last selections.</h2><div className="playerList">{recentPicks.map(pick=>{const sf=(seasonFranchises??[]).find(sf=>sf.id===pick.season_franchise_id);const franchise=firstRef(sf?.franchises as FranchiseRef|FranchiseRef[]|null);return <article className="playerRow" aria-label={`Pick ${pick.pick_number}, round ${pick.round_number}, ${franchise?.name??'Franchise'} selected ${pickAssetLabel(pick)}`} key={pick.id}><div><span>ROUND {pick.round_number} • PICK {pick.round_pick}</span><strong>{pickAssetLabel(pick)}</strong><small>{franchise?.name??'Franchise'}</small></div></article>})}{!recentPicks.length&&<p className="lede">No picks have been made yet.</p>}</div></section>
       <section className="panel"><p className="eyebrow">DRAFT ORDER</p><div className="sportGrid">{(seasonFranchises ?? []).map(sf => { const franchise = Array.isArray(sf.franchises) ? sf.franchises[0]?.name : (sf.franchises as {name?:string}|null)?.name; const abbreviation = Array.isArray(sf.franchises) ? sf.franchises[0]?.abbreviation : (sf.franchises as {abbreviation?:string}|null)?.abbreviation; return <article className="sportCard" key={sf.id}><span>PICK {sf.draft_position}</span><strong>{franchise ?? 'Franchise'}</strong><p className="lede">{abbreviation ?? ''}</p></article>; })}</div></section>
       {poolError?<section className="panel"><p className="errorNotice" role="alert">The draft pool could not be loaded. {poolError}</p></section>:<DraftPlayerPool draftId={draftId} status={draft.status} athletes={rankedPool.athletes} defenses={rankedPool.defenses} queuedAssets={queuedAssets} rankingSource={rankedPool.source} rankingVersion={rankedPool.version}/>}
     </main>

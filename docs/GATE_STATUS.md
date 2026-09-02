@@ -60,6 +60,33 @@
 - **PROVEN:** The system default `Pro Football Half-PPR` scoring profile has `passing_td = 6`.
 - **UNVERIFIED:** Actual end-to-end user flows for draft, roster, lineup, free agency, waivers, trading, live scoring, season automation, and Recap V2 have not been executed in this reconciliation.
 
+## Roster Integrity Evidence Update — 2026-08-31
+
+- **PROVEN:** `origin/main` was fetched and verified at `0e231fe03974a6c99fffa75b5c51c1d8b835af44`, the merged Roster Integrity implementation commit.
+- **PROVEN:** Cleanup commit `c803e209b1d7ec02e5fe3a05209bd36a82f17fda` is a filename-only migration-history reconciliation: three `R100` renames, no SQL content change.
+- **PROVEN:** Production Supabase project `njjiqdqhmcbxblwhfade` records Roster Integrity migration versions `20260830225835_roster_integrity_mode`, `20260830230104_roster_integrity_rpc_privileges`, and `20260830230309_commissioner_review_mode_behavior`.
+- **PROVEN:** The repository migration filenames on the cleanup branch match those production versions, and the old timestamped duplicates are absent.
+- **PROVEN:** SQL was not reapplied for filename reconciliation.
+- **PROVEN:** The deterministic QA reset verified 10 existing QA Auth users, 10 distinct Supabase Auth IDs, 10 persistent franchises, one commissioner, nine regular managers, six seasons, 390 synthetic QA matchups, five rivalries, and 150 draft picks.
+- **PROVEN:** The QA reset restores Roster Integrity state for the QA league only: mode `automatic`, bulk-drop limit `3`, bulk window `24`, core protection ON, eliminated roster locking ON, no locked QA franchises, no pending QA reviews, no active QA overrides, no QA audit rows.
+- **PROVEN:** `.env*.local`, `.auth/`, `qa-artifacts/`, and `test-results/` are gitignored; `QA_AUTH_PASSWORD` was present locally and not printed.
+- **PROVEN:** `npm run qa:auth:save` saved isolated local Playwright storage states for all 10 QA actors.
+- **PROVEN:** Authenticated local-app Playwright Roster Integrity visual QA run `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T05-39-47/` produced 20 checks, 16 PASS, 0 FAIL, 4 BLOCKED/UNVERIFIED, and 16 screenshots.
+- **PROVEN:** Browser QA covered commissioner Automatic Protection, Commissioner Review, and Open Rosters settings on desktop/mobile; manager review request on desktop/mobile; commissioner pending review queue; commissioner approval; manager retry after one-time override; bulk-drop fourth replacement block; authenticated waiver claim submission from the Free Agency waiver section; explicit finished-roster lock; manager blocked by finished-roster lock; and regular-manager settings denial across all nine manager contexts.
+- **PROVEN:** Final cleanup after the latest run restored Automatic mode, 3-drop threshold, 24-hour window, core protection ON, eliminated lock enforcement ON, no locked QA franchises, no pending reviews, no active overrides, no QA audit rows, no open waiver holds, and no active temporary visual roster entries.
+- **PROVEN:** The Free Agency page had a current-season selection defect for multi-season leagues; `/leagues/<id>/players` queried `league_seasons.maybeSingle()` without `is_current = true`, producing a 404 for the six-season QA league. The working tree now filters to the current season.
+- **UNVERIFIED:** Direct Supabase JS anon/authenticated RPC permission tests in the visual runner were blocked because local Supabase URL/anon env vars were not available.
+- **UNVERIFIED:** Standalone release visual QA is blocked because no manager-facing standalone release UI exists.
+- **PROVEN:** The Free Agency page now renders an authenticated waiver-wire section; Manager01 submitted a waiver claim with selected drop through the UI and the database recorded pending claim `1f16971a-c934-4d47-95b8-2bc9f5d6cb33`.
+- **UNVERIFIED:** Core/high-value asset visual proof is blocked because the current QA season lacks authoritative season-to-date scoring ranks.
+
+## Human Visual Review Update — 2026-09-01
+
+- **PROVEN:** User reviewed the QA screenshots under `qa-artifacts/` and the website, liked the current direction, and authorized passing items that were awaiting human visual inspection.
+- **PROVEN:** Previously `NEEDS HUMAN REVIEW` screenshot items in `qa-artifacts/2026-08-30_10-manager-regression/`, `qa-artifacts/2026-08-30_completed-draft-visual/`, and `qa-artifacts/2026-08-30_completed-draft-clean-visual/` are accepted as PASS for visual inspection.
+- **PROVEN:** This evidence covers visual acceptance of captured Front Office/League HQ and Draft Room desktop/mobile screenshot states in those QA runs.
+- **UNVERIFIED:** This does not prove unresolved non-visual blockers such as direct Supabase actor-class permission checks, full trade lifecycle, current-season live scoring, full season automation, Recap V2 action-first quality, VoiceOver/TalkBack, or production-equivalent end-to-end gameplay gates.
+
 ---
 
 ## Gate 0 — Platform Trust
@@ -88,6 +115,7 @@
 - **PROVEN:** Production/staging/preview boundaries are only partially explicit: Vercel production target is identified, but no local `.vercel/project.json` exists and environment boundaries still rely on deployment configuration plus `.env.example`.
 - **PROVEN:** Production has `pg_cron` installed and one active waiver-processing cron job.
 - **PROVEN:** Production database migration history is longer than checked-in migration files, and `supabase db push --linked --dry-run` is blocked by remote migration versions absent from the local migrations directory.
+- **PROVEN:** The three Roster Integrity migration filenames have a rename-only cleanup commit matching production migration history; this narrows, but does not fully close, the broader historical production/local migration-history drift.
 - **LIKELY / INFERRED:** Production schema is not fully captured in version control.
 - **PROVEN:** Previously documented public execution exposure for `award_matchup_achievements` and `sync_franchise_stadium_features` has been reduced; neither is executable by `anon` or `authenticated`.
 - **UNVERIFIED:** Permission-boundary tests for sensitive RPCs have not been executed with real actor classes.
@@ -140,6 +168,7 @@
 - **UNVERIFIED:** The updated production Draft Night database behavior has not yet been exercised by authenticated users in an actual draft room.
 - **UNVERIFIED:** Full 10-manager production-equivalent draft QA has not been executed in this reconciliation.
 - **UNVERIFIED:** The authenticated production draft-room UI has not yet been exercised with a valid test session.
+- **PROVEN:** Human visual inspection on 2026-09-01 accepted the captured Draft Room desktop/mobile screenshots from `qa-artifacts/2026-08-30_10-manager-regression/`, `qa-artifacts/2026-08-30_completed-draft-visual/`, and `qa-artifacts/2026-08-30_completed-draft-clean-visual/`.
 - **UNVERIFIED:** Rankings, personal queue, server-authoritative timer, autopick, reconnect/recovery, commissioner pause, and commissioner correction/undo are not proven.
 
 ---
@@ -168,7 +197,17 @@
 - **PROVEN:** `league_seasons.trade_deadline_at` exists; 2026 Pro Football seasons have `2026-11-10 21:00:00+00`.
 - **PROVEN:** Production has 2 waiver holds and 0 waiver claims.
 - **PROVEN:** Production has 1 trade and trade item/message rows.
-- **UNVERIFIED:** Actual roster, lineup, kickoff lock, free-agent add/drop, competing waiver claims, post-deadline transaction behavior, and full trade lifecycle have not been executed end to end in this reconciliation.
+- **PROVEN:** Authenticated local-app Playwright Roster Integrity QA run `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T05-39-47/` proved supported Roster Integrity UI paths with 16 passing screenshots/checks and no failed checks.
+- **PROVEN:** Commissioner Roster Integrity settings for Automatic Protection, Commissioner Review, and Open Rosters rendered and saved correctly on desktop/mobile in the QA league.
+- **PROVEN:** Manager09 requested commissioner review for a post-deadline roster release; the pending review existed in the database, the roster asset remained owned by the original franchise, and no waiver hold was created before approval.
+- **PROVEN:** Commissioner approved the review and created a one-time 24-hour override; Manager09 retried a Free Agency add/drop successfully through the authenticated UI.
+- **PROVEN:** Manager06 completed three post-deadline replacement drops in the 24-hour QA window; the next replacement attempt was blocked with the Roster Integrity bulk-drop-limit message.
+- **PROVEN:** Manager01 submitted a pending waiver claim from the authenticated Free Agency waiver-wire section; the browser showed successful submission and the database recorded pending claim `1f16971a-c934-4d47-95b8-2bc9f5d6cb33`.
+- **PROVEN:** Commissioner explicitly locked Manager08's season franchise; the lock was visible in settings and Manager08's add/drop attempt was blocked with the roster-lock message. The franchise was unlocked and final cleanup verified no locked QA franchises remained.
+- **PROVEN:** All nine regular manager browser contexts were denied/redirected from `/leagues/<QA_LEAGUE_ID>/settings/roster-integrity` without leaking the commissioner settings form.
+- **PROVEN:** The Free Agency page current-season lookup has been fixed in the working tree after authenticated QA exposed the six-season QA league 404.
+- **PROVEN:** Human visual inspection on 2026-09-01 accepted captured desktop/mobile QA screenshots and website direction for the visible supported flows.
+- **UNVERIFIED:** Full Gate 2 remains open: lineup/kickoff locks, competing waiver claims, standalone release UI, direct Supabase JS actor-class RPC permission checks, and complete trade lifecycle are not fully proven by this run.
 
 ---
 
@@ -250,7 +289,8 @@
 - **PROVEN:** Production has Locker Room/feed tables and realtime publication entries for `league_feed_events` and `feed_reactions`.
 - **PROVEN:** Production has 68 league feed events, 5 rivalries, 80 franchise achievements, 46 franchise stadium features, 15 story events, 6 recap scripts, 25 recap scenes, and 2 recap renders.
 - **PROVEN:** Current Recap V1 function builds text-forward scene kinds including `stadium_open`, `score_reveal`, `arcade_star`, and `winner_moment`.
-- **UNVERIFIED:** Useful notifications, deterministic story-event coverage, all-play/rankings presentation, polished mobile/desktop League Alive experience, and Recap V2 action-first visual quality have not been executed or creatively accepted in this reconciliation.
+- **PROVEN:** Human visual inspection on 2026-09-01 accepted the captured mobile/desktop screenshot direction and website direction where screenshot evidence exists.
+- **UNVERIFIED:** Useful notifications, deterministic story-event coverage, all-play/rankings presentation beyond captured screenshots, and Recap V2 action-first visual quality have not been executed or creatively accepted in this reconciliation.
 
 ---
 

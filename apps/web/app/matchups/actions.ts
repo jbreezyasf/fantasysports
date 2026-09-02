@@ -10,7 +10,7 @@ export async function refreshMatchup(formData: FormData) {
   const { error } = await supabase.rpc('recompute_matchup', { p_matchup_id: matchupId, p_finalize: false });
   if (error) redirect(`/matchups/${matchupId}?error=${encodeURIComponent(error.message)}`);
   revalidatePath(`/matchups/${matchupId}`);
-  redirect(`/matchups/${matchupId}`);
+  redirect(`/matchups/${matchupId}?score_status=refreshed`);
 }
 
 export async function finalizeMatchup(formData: FormData) {

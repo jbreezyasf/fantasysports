@@ -13,7 +13,7 @@ export async function postLockerMessage(formData: FormData) {
   const { error } = await supabase.rpc('post_locker_room_message',{ p_league_id:leagueId,p_body:body });
   if (error) redirect(`/leagues/${leagueId}/locker-room?error=${encodeURIComponent(error.message)}`);
   revalidatePath(`/leagues/${leagueId}/locker-room`);
-  redirect(`/leagues/${leagueId}/locker-room`);
+  redirect(`/leagues/${leagueId}/locker-room?message_status=sent`);
 }
 
 export async function toggleReaction(formData: FormData) {

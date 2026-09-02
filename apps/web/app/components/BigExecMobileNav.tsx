@@ -1,4 +1,5 @@
 import { createClient } from '../../lib/supabase/server';
+import BigExecMobileNavClient, { type BigExecMobileNavItem } from './BigExecMobileNavClient';
 
 export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
   const supabase=await createClient();
@@ -20,12 +21,12 @@ export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
       matchupId=matchups?.[0]?.id;
     }
   }
-  const item=(label:string,icon:string,href?:string)=>href?<a href={href}><b aria-hidden="true">{icon}</b><small>{label}</small></a>:<span aria-disabled="true"><b aria-hidden="true">{icon}</b><small>{label}</small></span>;
-  return <nav className="mobileGameNav" aria-label="Big Exec primary navigation">
-    {item('Home','⌂','/dashboard')}
-    {item('Team','J',franchiseId?`/franchises/${franchiseId}/team`:undefined)}
-    {item('Matchup','VS',matchupId?`/matchups/${matchupId}`:undefined)}
-    {item('League','▦',`/leagues/${leagueId}`)}
-    {item('Players','⌕',`/leagues/${leagueId}/players`)}
-  </nav>;
+  const items: BigExecMobileNavItem[] = [
+    { label: 'Home', icon: '⌂', href: '/dashboard', match: 'exact' },
+    { label: 'Team', icon: 'J', href: franchiseId ? `/franchises/${franchiseId}/team` : undefined, match: 'prefix', unavailableLabel: 'Team unavailable until you own a franchise' },
+    { label: 'Matchup', icon: 'VS', href: matchupId ? `/matchups/${matchupId}` : undefined, match: 'prefix', unavailableLabel: 'Matchup unavailable until your franchise has a scheduled matchup' },
+    { label: 'League', icon: '▦', href: `/leagues/${leagueId}`, match: 'exact' },
+    { label: 'Players', icon: '⌕', href: `/leagues/${leagueId}/players`, match: 'prefix' }
+  ];
+  return <BigExecMobileNavClient items={items} />;
 }

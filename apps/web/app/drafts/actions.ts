@@ -42,6 +42,7 @@ export async function makeDraftPick(formData: FormData) {
   const draftId = String(formData.get('draft_id') ?? '');
   const athleteId = String(formData.get('athlete_id') ?? '');
   const realTeamId = String(formData.get('real_team_id') ?? '');
+  const assetLabel = String(formData.get('asset_label') ?? 'Selected player');
   const { error } = await supabase.rpc('make_draft_pick', {
     p_draft_id: draftId,
     p_athlete_id: athleteId || null,
@@ -50,7 +51,7 @@ export async function makeDraftPick(formData: FormData) {
   });
   if (error) redirect(`/drafts/${draftId}?error=${encodeURIComponent(error.message)}`);
   revalidatePath(`/drafts/${draftId}`);
-  redirect(`/drafts/${draftId}`);
+  redirect(`/drafts/${draftId}?draft_status=picked&draft_asset=${encodeURIComponent(assetLabel)}`);
 }
 
 export async function addDraftQueueItem(formData: FormData) {
@@ -58,6 +59,7 @@ export async function addDraftQueueItem(formData: FormData) {
   const draftId = String(formData.get('draft_id') ?? '');
   const athleteId = String(formData.get('athlete_id') ?? '');
   const realTeamId = String(formData.get('real_team_id') ?? '');
+  const assetLabel = String(formData.get('asset_label') ?? 'Selected player');
   const { error } = await supabase.rpc('add_draft_queue_item', {
     p_draft_id: draftId,
     p_athlete_id: athleteId || null,
@@ -65,7 +67,7 @@ export async function addDraftQueueItem(formData: FormData) {
   });
   if (error) redirect(`/drafts/${draftId}?error=${encodeURIComponent(error.message)}`);
   revalidatePath(`/drafts/${draftId}`);
-  redirect(`/drafts/${draftId}`);
+  redirect(`/drafts/${draftId}?draft_status=queued&draft_asset=${encodeURIComponent(assetLabel)}`);
 }
 
 export async function removeDraftQueueItem(formData: FormData) {

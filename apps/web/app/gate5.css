@@ -6,6 +6,9 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 main{position:relative;isolation:isolate}
 a,button{transition:border-color .16s ease,background-color .16s ease,transform .16s ease,box-shadow .16s ease}
 a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--accent-soft);outline-offset:3px}
+.skipLink{position:fixed;left:14px;top:10px;z-index:2000;transform:translateY(-160%);padding:12px 14px;border:2px solid #f0d77c;background:#050608;color:#f7f4ed;font-size:.78rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 12px 34px rgba(0,0,0,.5)}.skipLink:focus,.skipLink:focus-visible{transform:translateY(0);outline:3px solid #fff;outline-offset:3px}#main-content:focus{outline:none}
+.statusBadge{display:inline-flex;align-items:center;width:max-content;max-width:100%;border:1px solid var(--be-line);padding:7px 9px;background:#101113;color:var(--be-ink);font-size:.63rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.statusBadge.is-selected,.statusBadge.is-active,.statusBadge.is-live,.statusBadge.is-available{border-color:var(--be-gold);color:#f0d77c}.statusBadge.is-pending{border-color:#7a6d38;color:#f3d66e}.statusBadge.is-locked,.statusBadge.is-inactive{border-color:#7b3333;color:#ffb7b7}.statusBadge.is-rostered,.statusBadge.is-final{border-color:#4c493f;color:#d8d2c7}
+.askGmControl{display:flex;align-items:center;gap:8px;min-height:44px;padding:5px 6px;border:1px solid #3f3a33;background:#111214}.askGmStatus{display:inline-flex;align-items:center;gap:7px;color:#d8d3c9;font-size:.64rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}.askGmDot{width:8px;height:8px;border-radius:50%;background:#8f8a80}.askGmControl[data-state=listening] .askGmDot{background:#6cea75;box-shadow:0 0 12px rgba(108,234,117,.7)}.askGmControl[data-state=processing] .askGmDot{background:#f0d77c}.askGmControl[data-state=speaking] .askGmDot{background:#8fa9ff}.askGmControl[data-state=error] .askGmDot{background:#ff6f61}.askGmActions{display:flex;gap:6px}.askGmButton{min-height:34px;padding:8px 10px;font-size:.62rem}.askGmTranscript,.askGmResponse,.askGmError{max-width:220px;margin:0;color:#f5f1e8;font-size:.72rem;overflow-wrap:anywhere}.askGmResponse{color:#cfd9ff}.askGmError{color:#ffb7b7}.askGmTypedFallback input{width:min(220px,28vw);min-height:34px;padding:7px 9px;border:1px solid #3a3731;background:#0b0c0e;color:#f5f1e8;font:inherit;font-size:.72rem}
 .primary:hover,.secondary:hover,.miniAction:hover{transform:translateY(-1px);border-color:#8a7136}.primary:hover{box-shadow:0 12px 32px rgba(217,180,59,.18)}
 .panel{padding:clamp(38px,6vw,68px) 0}.panel>h1,.panel>h2{max-width:860px}.panel+.panel{border-top:0}
 .lede{color:#bbb6ad;font-size:clamp(.96rem,1.7vw,1.08rem)}
@@ -119,3 +122,48 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 /* Mobile-first free-agent add/drop transaction. */
 .freeAgentClaim{position:relative;justify-self:end}.freeAgentClaim summary{list-style:none;cursor:pointer;min-width:70px;min-height:44px;display:grid;place-items:center;border:1px solid #d9b43b;color:#f0d77c;font-size:.7rem;font-weight:950;letter-spacing:.09em}.freeAgentClaim summary::-webkit-details-marker{display:none}.freeAgentClaim[open] summary{background:#d9b43b;color:#08090a}.freeAgentClaim form{position:absolute;z-index:24;right:0;top:50px;width:min(310px,calc(100vw - 42px));display:grid;gap:10px;padding:14px;border:1px solid #6b592e;background:#0c0d10;box-shadow:0 18px 60px #000}.freeAgentClaim label{display:grid;gap:7px;color:#d8d3c9;font-size:.68rem;font-weight:800}.freeAgentClaim select{width:100%;min-height:48px;padding:10px;border:1px solid #454039;background:#17181b;color:#fff;font:inherit}.freeAgentClaim .primary{width:100%;margin:0}.rosteredStatus,.freeAgentUnavailable{color:#aaa69d;font-size:.68rem;letter-spacing:.08em}.freeAgentUnavailable{font-weight:900}
 @media(max-width:620px){.freeAgentClaim form{position:fixed;left:14px;right:14px;top:auto;bottom:calc(98px + env(safe-area-inset-bottom));width:auto}.freeAgentClaim form:before{content:'ADD FREE AGENT';color:#f0d77c;font-size:.65rem;font-weight:950;letter-spacing:.11em}}
+
+/* BE-A11Y-014: large-text reflow for core fantasy workflows. */
+.primary,.secondary,.miniAction,.draftPickButton,.draftQueueButton,.freeAgentClaim summary,.statusBadge,.lockerReaction,.askGmButton{white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+.actions,.draftCommissionerTools,.slotChoices{min-width:0;flex-wrap:wrap}
+.actions>*{min-width:0}
+.playerRow,.lineupSlot,.draftCandidate,.draftQueueItem,.battleRow,.standingRow,.scheduleGame,.weekCard,.commandCard,.franchiseCard,.leagueStatCard,.lockerEntryBody{min-width:0;overflow-wrap:anywhere}
+.playerRow>*,.lineupSlot>*,.draftCandidate>*,.draftQueueItem>*,.battleRow>*,.standingRow>*,.scheduleGame>*{min-width:0}
+.playerRow strong,.draftCandidate strong,.draftQueueItem strong,.standingRow span,.standingRow strong,.scheduleGame strong,.battleRow strong{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.lineupSlot{grid-template-columns:54px minmax(0,1fr) minmax(0,2fr)}
+.lineupSlot>span{width:auto;max-width:100%;overflow-wrap:anywhere;text-align:center}
+.slotChoices{display:flex;gap:8px}
+.slotChoices form{min-width:0}
+.slotChoices .miniAction{max-width:100%;text-align:left}
+.draftQueueItem{grid-template-columns:36px minmax(0,1fr) minmax(44px,auto) minmax(44px,auto) minmax(38px,auto)}
+.draftQueueItem button{min-width:44px;height:auto;min-height:36px;padding:7px 8px}
+.draftCandidate{grid-template-columns:48px minmax(0,1fr) minmax(64px,auto) minmax(64px,auto)}
+.draftPickReview{display:grid;gap:8px}.draftPickReview summary{list-style:none;cursor:pointer;min-width:76px;min-height:44px;display:grid;place-items:center;border:1px solid #80692f;background:transparent;color:#f0d77c;font-weight:900;text-transform:uppercase}.draftPickReview summary::-webkit-details-marker{display:none}.draftPickReview[open] summary{background:#d9b43b;color:#08090a}.draftPickReview .draftPickButton{width:100%}
+.freeAgentClaim{max-width:100%}
+.lockerReplyAction{min-height:30px;display:inline-grid;place-items:center;padding:4px 9px;border:1px solid #4b566e;border-radius:999px;color:#c6d6ff;font-size:.7rem;font-weight:900}
+.lockerComposer{align-items:start}
+.playerSearchForm{grid-template-columns:minmax(0,1fr) auto auto;align-items:end}.availableOnlyToggle{min-height:48px;display:inline-flex!important;align-items:center;gap:8px;padding:10px 12px;border:1px solid #3a3731;background:#121315;color:#f5f1e8}.availableOnlyToggle input{width:auto}.playerResultActions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;flex-wrap:wrap}.playerDetailDisclosure{position:relative}.playerDetailDisclosure summary{list-style:none;cursor:pointer;min-width:66px;min-height:44px;display:grid;place-items:center;border:1px solid #4b566e;color:#c6d6ff;font-size:.7rem;font-weight:950;letter-spacing:.09em}.playerDetailDisclosure summary::-webkit-details-marker{display:none}.playerDetailDisclosure[open] summary{background:#c6d6ff;color:#08090a}.playerDetailsList{position:absolute;z-index:24;right:0;top:50px;width:min(320px,calc(100vw - 42px));display:grid;gap:1px;margin:0;border:1px solid #4b566e;background:#30384b;box-shadow:0 18px 60px #000}.playerDetailsList.staticDetails{position:static;width:100%;box-shadow:none}.playerDetailsList div{display:grid;grid-template-columns:minmax(90px,auto) minmax(0,1fr);gap:10px;padding:9px 10px;background:#0c0d10}.playerDetailsList dt{color:#aaa69d;font-size:.62rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.playerDetailsList dd{margin:0;color:#f5f1e8;overflow-wrap:anywhere}.waiverReview{display:grid;gap:10px;justify-self:stretch;min-width:min(360px,100%)}.waiverReview .primary,.waiverReview .secondary{width:100%;text-align:center}
+.inviteManagerComposer{display:grid;gap:12px;margin-top:18px}.inviteManagerComposer>label{color:#d8d3c9;font-size:.72rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.inviteReviewList{display:grid;gap:1px;border:1px solid #3a3731;background:#302d27}.inviteReviewRow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:9px 10px;background:#101113}.inviteReviewRow span{overflow-wrap:anywhere}.inviteReviewRow strong{color:#ffb7b7;font-size:.68rem;text-transform:uppercase}.inviteReviewRow.isInvalid{border-left:3px solid #ff8f96}
+@media(max-width:780px){
+  .lineupSlot,.draftCandidate,.draftQueueItem,.playerRow{grid-template-columns:1fr}
+  .lineupSlot>span,.draftPositionBadge{justify-self:start}
+  .slotChoices,.draftCandidate,.draftQueueItem{gap:10px}
+  .slotChoices form,.slotChoices .miniAction,.draftCandidate button,.draftQueueItem button,.freeAgentClaim,.freeAgentClaim summary{width:100%}
+  .battleRow,.scheduleGame{grid-template-columns:minmax(0,1fr);text-align:left}
+  .battleRow>div:last-child,.scheduleGame>div:last-child{text-align:left;direction:ltr}
+  .battleRow em,.scheduleGame em{justify-self:start;text-align:left}
+  .standingRow{grid-template-columns:minmax(2rem,auto) minmax(0,1fr);align-items:start}
+  .standingRow small,.standingRow>span:not(:first-child){grid-column:2}
+  .lockerComposer{grid-template-columns:1fr}
+  .lockerComposer .primary{width:100%}
+  .playerSearchForm,.playerResultActions{grid-template-columns:1fr}
+  .playerSearchForm{display:grid}
+  .playerResultActions{justify-content:stretch}
+  .playerResultActions>*,.playerDetailDisclosure,.playerDetailDisclosure summary{width:100%}
+  .inviteReviewRow{grid-template-columns:1fr}
+}
+@media(max-width:420px){
+  .actions,.arenaMatchupHero .actions{display:grid;grid-template-columns:1fr}
+  .actions a,.actions button,.actions form,.arenaMatchupHero .actions>*{width:100%}
+  .leagueMetaRow,.draftPositionRail{flex-wrap:wrap;overflow-x:visible}
+}
