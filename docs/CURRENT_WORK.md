@@ -37,6 +37,22 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Progress 2026-08-31:** Added focused Roster Integrity visual QA harness `npm run qa:roster-integrity:visual` and fixed a current-season bug in the Free Agency page where `/leagues/<id>/players` used `maybeSingle()` across all league seasons and 404ed for multi-season QA leagues. Follow-up UI work added a Free Agency waiver-wire section with authenticated waiver claim/withdraw controls. Latest evidence run: `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T05-39-47/` with 20 checks, 16 PASS, 0 FAIL, 4 BLOCKED/UNVERIFIED, and 16 screenshots. PROVEN in authenticated Playwright/local-app QA: commissioner settings for Automatic/Commissioner Review/Open modes on desktop/mobile; manager review request desktop/mobile; commissioner pending queue and approval; manager retry after one-time override; bulk-drop fourth replacement block; authenticated waiver claim submission from the Free Agency waiver section; explicit finished-roster lock and manager block; regular-manager redirect/denial for commissioner settings across all nine manager contexts. Final cleanup verified Automatic mode, 3-drop threshold, 24-hour window, core protection ON, eliminated lock enforcement ON, no locked QA franchises, no pending reviews, no active overrides, no QA audit rows, no open waiver holds, and no temporary visual roster entries. Remaining gaps are not closed: no standalone release UI to test visually, no current QA score ranks for visual core-asset proof, and direct anon/authenticated Supabase JS RPC permission tests were blocked by missing local Supabase URL/anon env vars.
 
+**Progress 2026-08-31:** Started the Accessibility + Voice Assistant GM beta backlog. Completed BE-A11Y-000 audit-only repository inventory in `docs/accessibility/repo-inventory.md`, mapping actual Next.js/Supabase/Turborepo architecture, core fantasy feature locations, current AI/postgame-talk implementation, tests, CI, accessibility support, and backlog architecture conflicts. Completed BE-A11Y-001 audit-only static accessibility baseline in `docs/accessibility/baseline-audit.md`, identifying shared failures across skip/focus management, status announcements, realtime updates, timer announcements, repeated generic controls, structured data semantics, consequential-action confirmation, navigation mismatch, and missing automated a11y coverage. No production code was changed.
+
+**Progress 2026-08-31:** Completed BE-A11Y-002 QA documentation in `docs/accessibility/test-matrix.md`. The matrix maps iOS VoiceOver, iOS Screen Curtain, iOS Larger Text/Reduce Motion, Android TalkBack/font-display scaling/reduced animations, desktop keyboard, and browser accessibility-tree coverage to the actual current Big Exec routes and components. All matrix items are marked Not Run because this task defined the permanent QA plan but did not execute device assistive-technology sessions.
+
+**Progress 2026-08-31:** Completed the first BE-A11Y-010 shared accessibility primitive pass. Added `apps/web/app/components/accessibility.tsx` with `SkipLink`, `MainContent`, `VisuallyHidden`, `StatusMessage`, `LiveRegion`, `IconButton`, and `A11yNote`; added `apps/web/app/components/accessibility.test.tsx`; wired the global skip link/main-content target into league, franchise, draft, and matchup layouts; added focused skip-link CSS in `apps/web/app/gate5.css`; documented remaining primitive gaps in `docs/accessibility/accessible-primitives.md`. Verification passed: `npm test --workspace @fantasy-all-sports/web`, `npm run typecheck --workspace @fantasy-all-sports/web`, and `npm run build --workspace @fantasy-all-sports/web`.
+
+**Progress 2026-08-31:** Completed BE-A11Y-011 focus-management foundation. Added `apps/web/app/components/focusManagement.ts` with reusable focus-target filtering, first-focus, modal focus/restore, item-removal focus, and route-main focus helpers; added `apps/web/app/components/focusManagement.test.ts`; documented the framework in `docs/accessibility/focus-management.md`. Verification passed: `npm test --workspace @fantasy-all-sports/web`, `npm run typecheck --workspace @fantasy-all-sports/web`, and `npm run build --workspace @fantasy-all-sports/web`.
+
+**Progress 2026-08-31:** Completed BE-A11Y-012 live announcement foundation. Added `apps/web/app/components/announcementQueue.ts`, `apps/web/app/components/ScreenReaderAnnouncer.tsx`, and `apps/web/app/components/announcementQueue.test.ts`; mounted the single screen-reader announcer in `apps/web/app/layout.tsx`; documented priority/throttling behavior in `docs/accessibility/live-announcements.md`. Verification passed: `npm test --workspace @fantasy-all-sports/web`, `npm run build --workspace @fantasy-all-sports/web`, then serial `npm run typecheck --workspace @fantasy-all-sports/web`. A parallel typecheck/build attempt reproduced the known `.next/types` race and was superseded by the serial pass.
+
+**Progress 2026-08-31:** Completed BE-A11Y-013 initial color/status/icon semantics pass. Added shared `StatusBadge` support and tests; added state-aware status styling; patched the Players page so position filters expose selected state, ADD/CLAIM disclosures include asset-specific accessible names, pending waiver/no-franchise/rostered states use semantic status badges, and withdrawal controls name the target claim. Verification passed: `npm test --workspace @fantasy-all-sports/web`, `npm run build --workspace @fantasy-all-sports/web`, and serial `npm run typecheck --workspace @fantasy-all-sports/web`.
+
+**Progress 2026-09-01:** User reviewed QA screenshots under `qa-artifacts/` and the website, liked the current direction, and authorized passing items awaiting human visual inspection. Updated `docs/GATE_STATUS.md` and affected QA artifact summaries/review notes to mark screenshot visual-review items PASS where evidence existed. This does not close non-visual blockers such as direct RPC actor-class permission checks, full trade lifecycle, current-season live scoring, full season automation, Recap V2 action-first quality, or VoiceOver/TalkBack device testing.
+
+**Progress 2026-09-01:** Implemented Operations Portal Phase 1 from the reviewed planning package as a separate `/ops` internal surface. Added explicit staff access control, read-only support search, user detail, league visibility, data-health, and audit views; added `ops_staff_roles` and `ops_audit_events` migration; documented rollout in `docs/ops-portal-phase1.md`. Verification passed: `npm test --workspace @fantasy-all-sports/web` (36 files, 169 tests), serial `npm run typecheck --workspace @fantasy-all-sports/web`, `npm run build --workspace @fantasy-all-sports/web`, and unauthenticated `GET /ops` smoke check redirecting to `/login?next=/ops`. Remaining before beta use: apply migration, configure owner ops env allowlist or staff role, and verify signed-in staff/non-staff behavior.
+
 ---
 
 ## P0 — UX/UI & Product Polish
@@ -131,7 +147,7 @@ UX/UI is not deferred until after backend completion. Each gameplay flow must be
 - [ ] Error/failure/retry states.
 - [ ] Keyboard/focus/accessibility basics.
 - [ ] Reduced motion.
-- [ ] Responsive mobile/desktop review.
+- [x] Screenshot-covered responsive mobile/desktop visual review. Evidence: user accepted QA screenshots and website direction on 2026-09-01; see `docs/GATE_STATUS.md`.
 - [ ] Original-IP review across trophies, awards, uniforms, logos, and media.
 
 ---
@@ -233,3 +249,324 @@ Current objectives:
 # Working Rule
 
 When one item is completed, update this file in the same PR/commit with the evidence or link to the evidence. Do not check a box simply because code was written.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-014
+
+- [x] Implement large-text responsive CSS safeguards for core fantasy surfaces. Evidence: `apps/web/app/gate5.css`.
+- [x] Document covered surfaces, implementation notes, and remaining device verification. Evidence: `docs/accessibility/text-scaling-responsive.md`.
+- [ ] Record real-device large-text results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-015
+
+- [x] Verify current repository has no essential drag/drop interactions in `apps/` or `packages/`. Evidence: `rg -n "drag|draggable|onDrag|onDrop|DnD|dnd|sortable|pointerdown|pointermove|DataTransfer|react-dnd|@dnd-kit" apps packages -g '!node_modules' -g '!*.next/*'` returned no matches.
+- [x] Document the non-drag canonical interaction pattern and actual existing form/button/select locations. Evidence: `docs/accessibility/non-drag-interactions.md`.
+- [ ] Re-check this pattern if future sighted drag UI is introduced.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-020
+
+- [x] Add current-section semantics and meaningful labels to desktop and mobile league navigation. Evidence: `apps/web/app/components/BigExecAppHeader.tsx`, `apps/web/app/components/BigExecMobileNav.tsx`, `apps/web/app/components/BigExecMobileNavClient.tsx`.
+- [x] Bring recap pages into the shared skip-link/main-content authenticated shell. Evidence: `apps/web/app/recaps/[recapId]/layout.tsx`.
+- [x] Add mobile navigation regression coverage. Evidence: `apps/web/app/components/BigExecMobileNavClient.test.tsx`.
+- [x] Document navigation architecture, covered destinations, and remaining device checks. Evidence: `docs/accessibility/league-navigation.md`.
+- [ ] Record real-device navigation results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-021
+
+- [x] Add accessible starter-slot, bench-player, and move-button semantics to the team page. Evidence: `apps/web/app/franchises/[franchiseId]/team/page.tsx`.
+- [x] Add lineup move success confirmation using the existing canonical `setLineup` server action. Evidence: `apps/web/app/team/actions.ts`.
+- [x] Add automated coverage for lineup/roster accessibility copy and move-control labels. Evidence: `apps/web/app/franchises/[franchiseId]/team/lineupAccessibility.test.ts`.
+- [x] Document current implementation and canonical-service constraint. Evidence: `docs/accessibility/roster-lineup.md`.
+- [ ] Verify production definition of `set_lineup_slot` before implementing direct empty-slot benching.
+- [ ] Record real-device roster/lineup results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-022
+
+- [x] Add FLEX and available-only filters to player search. Evidence: `apps/web/app/leagues/[leagueId]/players/page.tsx`.
+- [x] Add result-count/sort-order announcement and coherent result labels. Evidence: `apps/web/app/leagues/[leagueId]/players/playerSearchAccessibility.ts`.
+- [x] Add explicit player/D/ST detail disclosures and preserve canonical add/claim actions. Evidence: `apps/web/app/leagues/[leagueId]/players/page.tsx`.
+- [x] Extend fantasy athlete pool reads to include optional injury status. Evidence: `apps/web/lib/fantasy/athletePoolCore.ts`.
+- [x] Add automated coverage for player-search accessibility copy. Evidence: `apps/web/app/leagues/[leagueId]/players/playerSearchAccessibility.test.ts`.
+- [x] Document implemented fields and verified route data limits. Evidence: `docs/accessibility/player-search.md`.
+- [ ] Record real-device player-search results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-023
+
+- [x] Add two-step waiver claim review before final submission. Evidence: `apps/web/app/leagues/[leagueId]/players/page.tsx`.
+- [x] Announce add asset, drop asset, FAAB status, priority model, clear time, and source franchise where present. Evidence: `apps/web/app/leagues/[leagueId]/players/waiverAccessibility.ts`.
+- [x] Preserve canonical waiver submission and withdrawal actions/RPCs. Evidence: `apps/web/app/leagues/[leagueId]/players/actions.ts` unchanged for final waiver mutations.
+- [x] Verify no active FAAB implementation exists in app code or migrations. Evidence: `rg -n "FAAB|faab|budget|bid" apps packages supabase docs -g '!node_modules'`.
+- [x] Add automated waiver review announcement coverage. Evidence: `apps/web/app/leagues/[leagueId]/players/waiverAccessibility.test.ts`.
+- [x] Document waiver architecture, review flow, and FAAB finding. Evidence: `docs/accessibility/waivers.md`.
+- [ ] Record real-device waiver results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-024
+
+- [x] Add accessible draft-state, on-clock, and recent-pick summaries. Evidence: `apps/web/app/drafts/[draftId]/page.tsx`, `apps/web/app/drafts/[draftId]/draftAccessibility.ts`.
+- [x] Replace every-second clock live text with queued 30/15/5-second announcements. Evidence: `apps/web/app/drafts/[draftId]/DraftClock.tsx`.
+- [x] Add draft candidate labels, inspect details, and review-before-confirm draft action. Evidence: `apps/web/app/drafts/[draftId]/DraftPlayerPool.tsx`.
+- [x] Preserve canonical draft and queue RPC paths. Evidence: `apps/web/app/drafts/actions.ts`.
+- [x] Add automated draft accessibility copy coverage. Evidence: `apps/web/app/drafts/[draftId]/draftAccessibility.test.ts`.
+- [x] Document draft architecture and remaining simulated-draft verification. Evidence: `docs/accessibility/draft-room.md`.
+- [ ] Record full simulated screen-reader draft results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-025
+
+- [x] Add textual matchup summary, result state, and scoreboard accessible label. Evidence: `apps/web/app/matchups/[matchupId]/page.tsx`, `apps/web/app/matchups/[matchupId]/matchupAccessibility.ts`.
+- [x] Add throttled screen-reader score summary announcements through the shared announcer. Evidence: `apps/web/app/matchups/[matchupId]/MatchupScoreAnnouncer.tsx`.
+- [x] Add score-refresh status confirmation while preserving canonical `recompute_matchup` RPC. Evidence: `apps/web/app/matchups/actions.ts`.
+- [x] Add contextual scoring-row labels. Evidence: `apps/web/app/matchups/[matchupId]/page.tsx`.
+- [x] Add automated matchup accessibility copy coverage. Evidence: `apps/web/app/matchups/[matchupId]/matchupAccessibility.test.ts`.
+- [x] Document matchup architecture, chart/win-probability finding, and data limits. Evidence: `docs/accessibility/matchup-live-scoring.md`.
+- [ ] Record real-device matchup/live-scoring results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-026
+
+- [x] Add table roles, hidden headers, and row labels to League HQ standings. Evidence: `apps/web/app/leagues/[leagueId]/page.tsx`.
+- [x] Add table roles, hidden headers, row labels, and hidden tiebreaker cells to Schedule standings. Evidence: `apps/web/app/leagues/[leagueId]/schedule/page.tsx`.
+- [x] Add postseason seed row context. Evidence: `apps/web/app/leagues/[leagueId]/schedule/page.tsx`.
+- [x] Add automated standings accessibility copy coverage. Evidence: `apps/web/app/leagues/[leagueId]/standingsAccessibility.test.ts`.
+- [x] Document standings architecture and remaining device checks. Evidence: `docs/accessibility/standings.md`.
+- [ ] Record real-device standings results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-027
+
+- [x] Add full sender/time/message/reaction/reply labels to Locker Room events. Evidence: `apps/web/app/leagues/[leagueId]/locker-room/page.tsx`, `apps/web/app/leagues/[leagueId]/locker-room/lockerRoomAccessibility.ts`.
+- [x] Add accessible reply-to-composer action without inventing threaded reply storage. Evidence: `apps/web/app/leagues/[leagueId]/locker-room/page.tsx`.
+- [x] Replace generic live feed announcements with concrete event announcements through the shared announcer. Evidence: `apps/web/app/leagues/[leagueId]/locker-room/LockerRoomLive.tsx`.
+- [x] Add message-sent status confirmation. Evidence: `apps/web/app/social/actions.ts`.
+- [x] Add automated Locker Room accessibility copy coverage. Evidence: `apps/web/app/leagues/[leagueId]/locker-room/lockerRoomAccessibility.test.ts`.
+- [x] Document chat/notification architecture and threaded-reply schema finding. Evidence: `docs/accessibility/league-chat-notifications.md`.
+- [ ] Record real-device Locker Room results in `docs/accessibility/test-matrix.md`.
+
+---
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-028
+
+- [x] Add multi-address review, duplicate/pending/invalid-address status, character-by-character readback, and remove controls to commissioner invite flow. Evidence: `apps/web/app/leagues/[leagueId]/InviteManagersForm.tsx`, `apps/web/app/leagues/[leagueId]/invitationAccessibility.ts`.
+- [x] Extend invite creation to accept a reviewed list while preserving canonical `create_league_invite` RPC usage. Evidence: `apps/web/app/leagues/actions.ts`.
+- [x] Add accessible invite confirmation, invite-ledger table/link semantics, and resend for pending invites. Evidence: `apps/web/app/leagues/[leagueId]/page.tsx`, `apps/web/app/leagues/actions.ts`.
+- [x] Add automated invitation parsing/validation/confirmation coverage. Evidence: `apps/web/app/leagues/[leagueId]/invitationAccessibility.test.ts`.
+- [x] Document invitation architecture and verified resend/revoke backend limits. Evidence: `docs/accessibility/league-invitations.md`.
+- [ ] Add revoke only after canonical invite revocation support exists.
+- [ ] Record real-device invitation flow results in `docs/accessibility/test-matrix.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-030
+
+- [x] Add stack-appropriate accessibility test tooling to the existing Vitest setup. Evidence: `apps/web/app/accessibility-automation/axeTestUtils.ts`, `apps/web/package.json`, `package-lock.json`.
+- [x] Prove the tooling fails on injected defects for accessible names, form labels, ARIA roles/states, and dialog names. Evidence: `apps/web/app/accessibility-automation/axeTooling.test.ts`.
+- [x] Document local commands, coverage, and jsdom/browser limits. Evidence: `docs/accessibility/accessibility-test-tooling.md`.
+- [x] Add P0 screen regression fixtures in BE-A11Y-031.
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-031
+
+- [x] Add source-anchored P0 regression coverage for roster/lineup, player search, waivers, draft, matchup/live scoring, and standings. Evidence: `apps/web/app/accessibility-automation/p0ScreenRegression.test.ts`.
+- [x] Cover removal of key labels, roles, states, live announcements, and transaction review/confirmation content. Evidence: `apps/web/app/accessibility-automation/p0ScreenRegression.test.ts`.
+- [x] Document coverage and server-component/Supabase rendering constraint. Evidence: `docs/accessibility/p0-screen-regression-suite.md`.
+- [x] Add the accessibility regression command to CI in BE-A11Y-032.
+
+## Accessibility + Voice Assistant GM Beta — BE-A11Y-032
+
+- [x] Add dedicated root and web accessibility test commands. Evidence: `package.json`, `apps/web/package.json`.
+- [x] Add explicit accessibility regression step to GitHub Actions CI. Evidence: `.github/workflows/ci.yml`.
+- [x] Document CI gate behavior and failure output locations. Evidence: `docs/accessibility/ci-accessibility-gate.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-040
+
+- [x] Add narrow structured Assistant GM read-tool boundary with explicit request/response shape. Evidence: `apps/web/lib/assistant-gm/tools.ts`.
+- [x] Enforce league membership and owned-franchise authorization before returning protected state. Evidence: `apps/web/lib/assistant-gm/tools.ts`.
+- [x] Keep all current Assistant GM tools read-only and map them to existing Supabase tables/helpers instead of duplicating game or transaction logic. Evidence: `apps/web/lib/assistant-gm/tools.ts`, `docs/accessibility/assistant-gm-tool-boundary.md`.
+- [x] Add boundary tests for declared tools, read-only contracts, authorized reads, and unauthorized rejection. Evidence: `apps/web/lib/assistant-gm/tools.test.ts`.
+- [x] Add deterministic grounding rules in BE-GM-041.
+- [ ] Wire the boundary to an LLM/Assistant UI only after read-intent, feature flag, and confirmation model tasks are complete.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-041
+
+- [x] Add no-fabrication grounding policy for score, roster, waiver balance, availability, standings, draft status, injury state, and league rules. Evidence: `apps/web/lib/assistant-gm/grounding.ts`.
+- [x] Require explicit successful tool results before factual answer rendering. Evidence: `apps/web/lib/assistant-gm/grounding.ts`.
+- [x] Add unavailable/missing-data tests. Evidence: `apps/web/lib/assistant-gm/grounding.test.ts`.
+- [x] Document required tool map and failure message behavior. Evidence: `docs/accessibility/assistant-gm-grounding-rules.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-042
+
+- [x] Add deterministic roster/lineup read-intent renderer for lineup, bench, injuries, empty slots, and game-time questions. Evidence: `apps/web/lib/assistant-gm/rosterLineupIntents.ts`.
+- [x] Derive answers entirely from structured `getRoster` and `getLineup` responses. Evidence: `apps/web/lib/assistant-gm/rosterLineupIntents.ts`.
+- [x] Refuse to invent game-time state when no verified kickoff data is present. Evidence: `apps/web/lib/assistant-gm/rosterLineupIntents.test.ts`.
+- [x] Document supported intents and current game-time data limit. Evidence: `docs/accessibility/assistant-gm-roster-lineup-intents.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-043
+
+- [x] Add deterministic matchup and standings read-intent renderer. Evidence: `apps/web/lib/assistant-gm/matchupStandingsIntents.ts`.
+- [x] Distinguish projection language from factual current-score language. Evidence: `apps/web/lib/assistant-gm/matchupStandingsIntents.test.ts`.
+- [x] Refuse to invent remaining-player or projection state when verified data is absent. Evidence: `apps/web/lib/assistant-gm/matchupStandingsIntents.test.ts`.
+- [x] Document supported intents and current projection/game-status data limits. Evidence: `docs/accessibility/assistant-gm-matchup-standings-intents.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-044
+
+- [x] Add deterministic player detail, comparison, best-available, and available-by-position answer rendering. Evidence: `apps/web/lib/assistant-gm/playerSearchIntents.ts`.
+- [x] Trigger clarification for ambiguous player searches. Evidence: `apps/web/lib/assistant-gm/playerSearchIntents.test.ts`.
+- [x] Ensure rostered players are not presented as available and source labels are included for recommendations. Evidence: `apps/web/lib/assistant-gm/playerSearchIntents.test.ts`.
+- [x] Document supported player intents and current parser boundary. Evidence: `docs/accessibility/assistant-gm-player-search-intents.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-045
+
+- [x] Add deterministic draft read-intent renderer for availability, best available by position, next pick, position need, recent picks, and availability verification. Evidence: `apps/web/lib/assistant-gm/draftIntents.ts`.
+- [x] Include current-pick freshness checks so stale draft-state answers are blocked. Evidence: `apps/web/lib/assistant-gm/draftIntents.test.ts`.
+- [x] Refuse silent substitution when a requested player is no longer available. Evidence: `apps/web/lib/assistant-gm/draftIntents.test.ts`.
+- [x] Document supported draft intents and freshness behavior. Evidence: `docs/accessibility/assistant-gm-draft-intents.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-046
+
+- [x] Add deterministic waiver read-intent renderer for FAAB/rules, pending claims, recommendations, and best available players. Evidence: `apps/web/lib/assistant-gm/waiverIntents.ts`.
+- [x] Require waiver facts from waiver rule/state tools and avoid invented FAAB balances. Evidence: `apps/web/lib/assistant-gm/waiverIntents.test.ts`.
+- [x] Label add advice as recommendation, not a transaction. Evidence: `apps/web/lib/assistant-gm/waiverIntents.test.ts`.
+- [x] Document supported waiver intents and transaction deferral. Evidence: `docs/accessibility/assistant-gm-waiver-intents.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-047
+
+- [x] Add deterministic Sunday briefing composer for lineup, injury, bye, projection, bench, and waiver checks. Evidence: `apps/web/lib/assistant-gm/sundayBriefing.ts`.
+- [x] Keep each briefing item traceable to a structured Assistant GM tool result. Evidence: `apps/web/lib/assistant-gm/sundayBriefing.test.ts`.
+- [x] Label recommendations and confirm no transaction is made. Evidence: `apps/web/lib/assistant-gm/sundayBriefing.test.ts`.
+- [x] Document supported checks, guardrails, and follow-up issue-key behavior. Evidence: `docs/accessibility/assistant-gm-sunday-briefing.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-VOICE-050
+
+- [x] Add disabled-by-default voice and spoken-update feature flags. Evidence: `apps/web/lib/feature-flags/voiceFlags.ts`, `.env.example`.
+- [x] Allow each voice capability to be independently disabled and require `voice_gm` for voice subfeatures. Evidence: `apps/web/lib/feature-flags/voiceFlags.test.ts`.
+- [x] Add flags to Turbo build environment passthrough. Evidence: `turbo.json`.
+- [x] Document flag names, env vars, and guardrail behavior. Evidence: `docs/accessibility/voice-feature-flags.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-VOICE-051
+
+- [x] Add flagged Ask GM push-to-talk entry point in authenticated product header. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`, `apps/web/app/components/BigExecAppHeader.tsx`.
+- [x] Add idle/listening/processing/speaking/error visual and accessible states with cancel/dismiss controls. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Mount only when `voice_gm` is enabled and preserve no-always-listening behavior. Evidence: route layouts and `apps/web/lib/feature-flags/voiceFlags.ts`.
+- [x] Add rendering coverage for all states and flag-off/flag-on header behavior. Evidence: `apps/web/app/components/AskGmPushToTalk.test.tsx`.
+- [x] Document state behavior and remaining STT/TTS limits. Evidence: `docs/accessibility/ask-gm-push-to-talk.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-VOICE-052
+
+- [x] Add browser speech-to-text adapter with support detection, start/stop/abort, transcript callbacks, and explicit unsupported-browser errors. Evidence: `apps/web/lib/voice/speechToText.ts`.
+- [x] Wire push-to-talk start/finish/cancel to the adapter so capture starts only after user action and can be canceled. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Expose microphone permission/cancel copy, transcript text, retry, and typed fallback in the UI. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Add adapter tests for permission copy, unsupported browsers, transcript results, and abort cancellation. Evidence: `apps/web/lib/voice/speechToText.test.ts`.
+- [x] Document adapter behavior and browser-support limits. Evidence: `docs/accessibility/speech-to-text-adapter.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-VOICE-053
+
+- [x] Add browser text-to-speech adapter with support detection, speak, stop, replay, and preserved last response. Evidence: `apps/web/lib/voice/textToSpeech.ts`.
+- [x] Add stop/replay controls and persistent text response support to Ask GM. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Ensure TTS failure does not erase response text. Evidence: `apps/web/lib/voice/textToSpeech.test.ts`.
+- [x] Document adapter behavior and screen-reader collision follow-up. Evidence: `docs/accessibility/text-to-speech-adapter.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-VOICE-054
+
+- [x] Add GM audio-state event and queue policy for speech/announcement collision handling. Evidence: `apps/web/app/components/ScreenReaderAnnouncer.tsx`, `apps/web/app/components/announcementQueue.ts`.
+- [x] Tag live-scoring announcements so they queue/throttle while GM speech is active. Evidence: `apps/web/app/matchups/[matchupId]/MatchupScoreAnnouncer.tsx`.
+- [x] Ensure assertive transaction/error announcements are not held by GM speech. Evidence: `apps/web/app/components/announcementQueue.test.ts`.
+- [x] Keep immediate stop speech behavior in Ask GM. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Document audio priority and focus policy. Evidence: `docs/accessibility/gm-audio-collision-policy.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-VOICE-055
+
+- [x] Add voice error/ambiguity taxonomy for speech not understood, ambiguous player, unavailable player, stale draft state, network failure, AI/tool timeout, and unsupported request. Evidence: `apps/web/lib/voice/voiceErrors.ts`.
+- [x] Ensure each failure exposes retry, type instead, and cancel/return. Evidence: `apps/web/lib/voice/voiceErrors.test.ts`, `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Prevent silent command substitution for unsupported requests. Evidence: `apps/web/lib/voice/voiceErrors.test.ts`.
+- [x] Document voice failure behavior. Evidence: `docs/accessibility/voice-error-ambiguity-ux.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-060
+
+- [x] Add `prepare -> confirm -> commit` transaction confirmation model. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Include action ID, user ID, league ID, action type, proposed changes, state version/hash, created time, and expiration time in the confirmation object. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Require valid confirmation before future commit callbacks execute. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
+- [x] Reject expired, wrong-scope, modified-proposal, and changed-state confirmations. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
+- [x] Document that future writes must call existing canonical Supabase RPCs instead of creating duplicate game/transaction engines. Evidence: `docs/accessibility/assistant-gm-transaction-confirmations.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-061
+
+- [x] Add idempotent Assistant GM commit wrapper keyed by confirmation `actionId`. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Add idempotency store interface for future durable storage-backed write paths. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Verify repeated commits execute once and return the prior result. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
+- [x] Verify invalid confirmations do not create idempotency records or execute writes. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
+- [x] Document that future production Voice GM writes must back the interface with durable storage and still call canonical RPCs. Evidence: `docs/accessibility/assistant-gm-transaction-confirmations.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-062
+
+- [x] Add state revalidation reasons for drafted player, unavailable waiver player, lineup eligibility change, FAAB change, roster change, and generic state change. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Reject stale confirmations when the current verified state hash differs from the prepared confirmation. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
+- [x] Return understandable stale-state explanations before any commit callback can run. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
+- [x] Explicitly prevent silent player substitution in stale draft and waiver cases. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
+- [x] Document the state revalidation boundary and future RPC reuse requirement. Evidence: `docs/accessibility/assistant-gm-transaction-confirmations.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-063
+
+- [x] Add Voice GM lineup move preparation over verified roster and lineup state. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.ts`.
+- [x] Resolve requested roster asset, determine legal destination slots, and explain invalid/ambiguous moves before preparing a transaction. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.test.ts`.
+- [x] Generate confirmation copy naming affected player, target slot, week, and replaced player when present. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.test.ts`.
+- [x] Commit only after valid confirmation, idempotency, and current-state hash revalidation. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.ts`.
+- [x] Call canonical Supabase RPC `set_lineup_slot` for the actual lineup mutation. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.test.ts`.
+- [x] Document the Voice GM lineup transaction flow and guardrails. Evidence: `docs/accessibility/assistant-gm-lineup-transactions.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-064
+
+- [x] Add Voice GM draft-pick preparation over verified draft state and available draft pool. Evidence: `apps/web/lib/assistant-gm/draftTransactions.ts`.
+- [x] Verify draft is live and requester is on the clock before preparing a pick. Evidence: `apps/web/lib/assistant-gm/draftTransactions.test.ts`.
+- [x] Reject unavailable or ambiguous player requests without selecting a fallback. Evidence: `apps/web/lib/assistant-gm/draftTransactions.test.ts`.
+- [x] Generate confirmation copy naming the exact asset and pick number. Evidence: `apps/web/lib/assistant-gm/draftTransactions.test.ts`.
+- [x] Commit only after valid confirmation, idempotency, and current-state hash revalidation. Evidence: `apps/web/lib/assistant-gm/draftTransactions.ts`.
+- [x] Call canonical Supabase RPC `make_draft_pick` with `p_auto: false`; no draft tables are written directly. Evidence: `apps/web/lib/assistant-gm/draftTransactions.test.ts`.
+- [x] Document the Voice GM draft transaction flow and guardrails. Evidence: `docs/accessibility/assistant-gm-draft-transactions.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-065
+
+- [x] Add Voice GM waiver-claim preparation over verified waiver holds, roster state, and rules. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.ts`.
+- [x] Require complete claim review with add, drop, FAAB, and priority/rule context. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.test.ts`.
+- [x] Require an explicit verified drop when roster capacity is full. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.test.ts`.
+- [x] Reject unavailable waiver assets without selecting a fallback. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.test.ts`.
+- [x] Validate FAAB bids against verified budget when FAAB is enabled; do not invent a FAAB write parameter absent from the canonical RPC. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.ts`, `apps/web/lib/assistant-gm/waiverTransactions.test.ts`.
+- [x] Commit only after valid confirmation, idempotency, and current-state hash revalidation. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.ts`.
+- [x] Call canonical Supabase RPC `submit_waiver_claim`; no waiver tables are written directly. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.test.ts`.
+- [x] Document the Voice GM waiver transaction flow and guardrails. Evidence: `docs/accessibility/assistant-gm-waiver-transactions.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-066
+
+- [x] Add structured Assistant GM action audit-log entry model. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.ts`.
+- [x] Include user, league, source, requested action, prepared action, confirmation timestamp, commit result, failure reason, state/version hash, action ID, and created time. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.test.ts`.
+- [x] Add audit store interface for future durable storage wiring. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.ts`.
+- [x] Strip unnecessary raw voice audio-like fields from audit payloads. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.test.ts`.
+- [x] Document audit fields and privacy boundary. Evidence: `docs/accessibility/assistant-gm-action-audit-log.md`.
+
+## Accessibility + Voice Assistant GM Beta — BE-GM-067
+
+- [x] Add explicit Assistant GM autonomy guard requiring a user-originated voice/text request plus valid confirmation before commit. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.ts`.
+- [x] Reject unsolicited lineup changes, waiver claims, draft picks, and trade resolution/acceptance attempts. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.test.ts`.
+- [x] Reject standalone roster drops in beta. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.test.ts`.
+- [x] Reject payment and account actions entirely. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.test.ts`.
+- [x] Verify guarded commits run only when request scope and confirmation are valid. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.test.ts`.
+- [x] Document the autonomy guard and explicit rejections. Evidence: `docs/accessibility/assistant-gm-autonomy-guard.md`.
+
+## Repo Tightening — 2026-09-01
+
+- [x] Create tightening log for future cleanup audits. Evidence: `docs/TIGHTENING_LOG.md`.
+- [x] Centralize repeated Assistant GM missing-confirmation response and remove impossible null checks. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Replace repeated missing-confirmation branches in lineup, draft, and waiver transaction helpers. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.ts`, `apps/web/lib/assistant-gm/draftTransactions.ts`, `apps/web/lib/assistant-gm/waiverTransactions.ts`.
+- [x] Clear ignored local Turbo cache output while preserving source and QA evidence. Evidence: `docs/TIGHTENING_LOG.md`.

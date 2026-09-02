@@ -1,11 +1,14 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
-import { createLeagueInvite, generateCircuitSchedule } from '../actions';
+import { generateCircuitSchedule, resendLeagueInvite } from '../actions';
 import { initializeDraft } from '../../drafts/actions';
 import { FranchiseCrest } from '../../components/FranchiseCrest';
 import { SportIdentity } from '../../components/SportIdentity';
+import { standingRowLabel } from './standingsAccessibility';
+import InviteManagersForm from './InviteManagersForm';
+import { inviteConfirmation } from './invitationAccessibility';
 
-export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_token?: string; invite_email?: string; invite_error?: string; joined?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
+export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_resent?: string; invite_token?: string; invite_email?: string; invite_count?: string; email_status?: string; invite_error?: string; joined?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
   const { leagueId } = await params;
   const query = await searchParams;
   const supabase = await createClient();
@@ -123,14 +126,11 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
               <span>01 • BUILD THE ROOM</span>
               <strong>{memberCount}/{leagueCapacity} franchises claimed</strong>
               <p>Invite managers and fill franchise seats. Draft setup unlocks at {draftMinimum} claimed franchises.</p>
-              {query.invite_error && <p className="errorNotice">{query.invite_error}</p>}
-              {query.invite_created && query.invite_token && <div className="inviteLinkBox"><span>INVITE READY FOR {query.invite_email}</span><code>{`${appUrl}/invite/${query.invite_token}`}</code></div>}
+              {query.invite_error && <p className="errorNotice" role="alert">{query.invite_error}</p>}
+              {query.invite_created && query.invite_token && <div className="inviteLinkBox" role="status"><span>{inviteConfirmation(Number(query.invite_count??1),query.invite_email??'manager',query.email_status)}</span><code aria-label={`Accessible invite link ${appUrl}/invite/${query.invite_token}`}>{`${appUrl}/invite/${query.invite_token}`}</code></div>}
+              {query.invite_resent && <p className="successNotice" role="status">{inviteConfirmation(1,query.invite_email??'manager',query.email_status)}</p>}
               {memberCount < leagueCapacity ? (
-                <form className="inlineForm" action={createLeagueInvite}>
-                  <input type="hidden" name="league_id" value={leagueId} />
-                  <input name="email" type="email" required placeholder="manager@example.com" aria-label="Manager email" />
-                  <button className="primary" type="submit">Send Invite</button>
-                </form>
+                <InviteManagersForm leagueId={leagueId} pendingEmails={(invites??[]).filter(invite=>invite.status==='pending').map(invite=>invite.email)} />
               ) : <p className="successNotice">League full. All {leagueCapacity} franchise spots are claimed.</p>}
             </article>
             <article className={`commandCard ${draftReady ? 'readyCard' : ''}`}>
@@ -147,7 +147,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
               ) : <p>Draft setup unlocks automatically when this league reaches {draftMinimum} claimed franchises.</p>}
             </article>
           </div>
-          {!!invites?.length && <div className="inviteLedger"><div className="sectionMiniHeader"><span>INVITE LEDGER</span><strong>{invites.length} TOTAL</strong></div>{invites.map(invite => <div key={invite.id} className="inviteRow"><span>{invite.email}</span><strong>{invite.status.toUpperCase()}</strong></div>)}</div>}
+          {!!invites?.length && <div className="inviteLedger" role="table" aria-label="Pending and historical league invitations"><div className="sectionMiniHeader"><span>INVITE LEDGER</span><strong>{invites.length} TOTAL</strong></div><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span><span role="columnheader">Expires</span><span role="columnheader">Invite link</span><span role="columnheader">Actions</span></div>{invites.map(invite => <div key={invite.id} className="inviteRow" role="row" aria-label={`Invite for ${invite.email}. Status ${invite.status}. Expires ${new Date(invite.expires_at).toLocaleDateString()}. Invite link ${appUrl}/invite/${invite.invite_token}.${invite.status==='pending'?' Resend available.':' Resend unavailable because this invite is not pending.'} Revoke is not supported in the current verified invite engine.`}><span role="cell">{invite.email}</span><strong role="cell">{invite.status.toUpperCase()}</strong><small className="srOnly" role="cell">Expires {new Date(invite.expires_at).toLocaleDateString()}</small><a role="cell" href={`/invite/${invite.invite_token}`} aria-label={`Open invite link for ${invite.email}`}>Invite Link</a><span role="cell">{invite.status==='pending'?<form action={resendLeagueInvite}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="invite_id" value={invite.id}/><button className="miniAction" type="submit" aria-label={`Resend invitation to ${invite.email}`}>Resend</button></form>:<span className="srOnly">No invite action available</span>}</span></div>)}</div>}
         </section>
       )}
 
@@ -169,7 +169,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
       {!!standings?.length && (
         <section className="panel">
           <p className="eyebrow">STANDINGS</p><h2>League table.</h2>
-          <div className="standingsList">{standings.map((row, index) => { const franchise = franchiseBySeasonId.get(row.season_franchise_id); return <div className="standingRow" key={row.season_franchise_id}><b>{index + 1}</b><span>{franchise?.name ?? 'Franchise'}</span><small>{row.wins}-{row.losses}{row.ties ? `-${row.ties}` : ''}</small><small>PF {Number(row.points_for).toFixed(2)}</small></div>; })}</div>
+          <div className="standingsList" role="table" aria-label="League standings"><div className="srOnly" role="row"><span role="columnheader">Rank</span><span role="columnheader">Team</span><span role="columnheader">Record</span><span role="columnheader">Points for</span></div>{standings.map((row, index) => { const franchise = franchiseBySeasonId.get(row.season_franchise_id); const record=`${row.wins}-${row.losses}${row.ties ? `-${row.ties}` : ''}`; return <div className="standingRow" role="row" aria-label={standingRowLabel({rank:index+1,team:franchise?.name??'Franchise',record,pointsFor:Number(row.points_for)})} key={row.season_franchise_id}><b role="cell">{index + 1}</b><span role="cell">{franchise?.name ?? 'Franchise'}</span><small role="cell">{record}</small><small role="cell">PF {Number(row.points_for).toFixed(2)}</small></div>; })}</div>
         </section>
       )}
 

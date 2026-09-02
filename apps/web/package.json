@@ -7,7 +7,8 @@
     "build": "next build",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:a11y": "vitest run app/accessibility-automation"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -17,9 +18,12 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
+    "axe-core": "^4.13.0",
+    "jsdom": "^30.0.1",
     "typescript": "^5.9.2"
   }
 }

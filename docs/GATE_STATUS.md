@@ -80,6 +80,13 @@
 - **PROVEN:** The Free Agency page now renders an authenticated waiver-wire section; Manager01 submitted a waiver claim with selected drop through the UI and the database recorded pending claim `1f16971a-c934-4d47-95b8-2bc9f5d6cb33`.
 - **UNVERIFIED:** Core/high-value asset visual proof is blocked because the current QA season lacks authoritative season-to-date scoring ranks.
 
+## Human Visual Review Update — 2026-09-01
+
+- **PROVEN:** User reviewed the QA screenshots under `qa-artifacts/` and the website, liked the current direction, and authorized passing items that were awaiting human visual inspection.
+- **PROVEN:** Previously `NEEDS HUMAN REVIEW` screenshot items in `qa-artifacts/2026-08-30_10-manager-regression/`, `qa-artifacts/2026-08-30_completed-draft-visual/`, and `qa-artifacts/2026-08-30_completed-draft-clean-visual/` are accepted as PASS for visual inspection.
+- **PROVEN:** This evidence covers visual acceptance of captured Front Office/League HQ and Draft Room desktop/mobile screenshot states in those QA runs.
+- **UNVERIFIED:** This does not prove unresolved non-visual blockers such as direct Supabase actor-class permission checks, full trade lifecycle, current-season live scoring, full season automation, Recap V2 action-first quality, VoiceOver/TalkBack, or production-equivalent end-to-end gameplay gates.
+
 ---
 
 ## Gate 0 — Platform Trust
@@ -161,6 +168,7 @@
 - **UNVERIFIED:** The updated production Draft Night database behavior has not yet been exercised by authenticated users in an actual draft room.
 - **UNVERIFIED:** Full 10-manager production-equivalent draft QA has not been executed in this reconciliation.
 - **UNVERIFIED:** The authenticated production draft-room UI has not yet been exercised with a valid test session.
+- **PROVEN:** Human visual inspection on 2026-09-01 accepted the captured Draft Room desktop/mobile screenshots from `qa-artifacts/2026-08-30_10-manager-regression/`, `qa-artifacts/2026-08-30_completed-draft-visual/`, and `qa-artifacts/2026-08-30_completed-draft-clean-visual/`.
 - **UNVERIFIED:** Rankings, personal queue, server-authoritative timer, autopick, reconnect/recovery, commissioner pause, and commissioner correction/undo are not proven.
 
 ---
@@ -198,6 +206,7 @@
 - **PROVEN:** Commissioner explicitly locked Manager08's season franchise; the lock was visible in settings and Manager08's add/drop attempt was blocked with the roster-lock message. The franchise was unlocked and final cleanup verified no locked QA franchises remained.
 - **PROVEN:** All nine regular manager browser contexts were denied/redirected from `/leagues/<QA_LEAGUE_ID>/settings/roster-integrity` without leaking the commissioner settings form.
 - **PROVEN:** The Free Agency page current-season lookup has been fixed in the working tree after authenticated QA exposed the six-season QA league 404.
+- **PROVEN:** Human visual inspection on 2026-09-01 accepted captured desktop/mobile QA screenshots and website direction for the visible supported flows.
 - **UNVERIFIED:** Full Gate 2 remains open: lineup/kickoff locks, competing waiver claims, standalone release UI, direct Supabase JS actor-class RPC permission checks, and complete trade lifecycle are not fully proven by this run.
 
 ---
@@ -280,7 +289,8 @@
 - **PROVEN:** Production has Locker Room/feed tables and realtime publication entries for `league_feed_events` and `feed_reactions`.
 - **PROVEN:** Production has 68 league feed events, 5 rivalries, 80 franchise achievements, 46 franchise stadium features, 15 story events, 6 recap scripts, 25 recap scenes, and 2 recap renders.
 - **PROVEN:** Current Recap V1 function builds text-forward scene kinds including `stadium_open`, `score_reveal`, `arcade_star`, and `winner_moment`.
-- **UNVERIFIED:** Useful notifications, deterministic story-event coverage, all-play/rankings presentation, polished mobile/desktop League Alive experience, and Recap V2 action-first visual quality have not been executed or creatively accepted in this reconciliation.
+- **PROVEN:** Human visual inspection on 2026-09-01 accepted the captured mobile/desktop screenshot direction and website direction where screenshot evidence exists.
+- **UNVERIFIED:** Useful notifications, deterministic story-event coverage, all-play/rankings presentation beyond captured screenshots, and Recap V2 action-first visual quality have not been executed or creatively accepted in this reconciliation.
 
 ---
 

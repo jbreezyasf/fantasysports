@@ -3,9 +3,19 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '../../../../lib/supabase/client';
+import { announceToScreenReader } from '../../../components/ScreenReaderAnnouncer';
 
-export function LockerRoomLive({leagueId}:{leagueId:string}) {
+export function LockerRoomLive({leagueId,latestEvent}:{leagueId:string;latestEvent?:{id:string;announcement:string}|null}) {
   const router = useRouter();
+
+  useEffect(() => {
+    if (!latestEvent) return;
+    announceToScreenReader({
+      message: latestEvent.announcement,
+      key: `locker-room-${latestEvent.id}`,
+      priority: 'polite'
+    });
+  }, [latestEvent]);
 
   useEffect(() => {
     const supabase = createClient();

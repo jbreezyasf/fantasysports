@@ -11,7 +11,13 @@
         "SPORTS_DATA_PROVIDER",
         "SPORTS_DATA_API_KEY",
         "OPENAI_API_KEY",
-        "RESEND_BIGEXEC_API_KEY"
+        "RESEND_BIGEXEC_API_KEY",
+        "BIG_EXEC_VOICE_GM",
+        "BIG_EXEC_VOICE_GM_TRANSACTIONS",
+        "BIG_EXEC_VOICE_DRAFTING",
+        "BIG_EXEC_VOICE_WAIVERS",
+        "BIG_EXEC_VOICE_LINEUP",
+        "BIG_EXEC_ACCESSIBILITY_SPOKEN_UPDATES"
       ]
     },
     "dev": { "cache": false, "persistent": true },

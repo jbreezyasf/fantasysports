@@ -4,6 +4,7 @@ export type FantasyEligibleAthlete = {
   id: string;
   display_name: string;
   position: string;
+  injury_status?: string | null;
   real_team_id: string | null;
   real_teams:
     | { display_name?: string | null; abbreviation?: string | null }
@@ -40,7 +41,7 @@ export async function loadFantasyEligibleAthletesFrom(supabase: AthletePoolClien
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await supabase
       .from('athletes')
-      .select('id,display_name,position,real_team_id,real_teams(display_name,abbreviation)')
+      .select('id,display_name,position,injury_status,real_team_id,real_teams(display_name,abbreviation)')
       .eq('active', true)
       .in('position', [...FANTASY_ELIGIBLE_POSITIONS])
       .order('position')

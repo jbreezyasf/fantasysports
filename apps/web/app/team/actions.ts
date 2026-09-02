@@ -13,6 +13,8 @@ export async function setLineup(formData: FormData) {
   const slotIndex = Number(formData.get('slot_index') ?? 1);
   const athleteId = String(formData.get('athlete_id') ?? '');
   const realTeamId = String(formData.get('real_team_id') ?? '');
+  const slotLabel = String(formData.get('slot_label') ?? slot);
+  const assetLabel = String(formData.get('asset_label') ?? 'Selected player');
 
   const { error } = await supabase.rpc('set_lineup_slot', {
     p_season_franchise_id: seasonFranchiseId,
@@ -24,5 +26,5 @@ export async function setLineup(formData: FormData) {
   });
   if (error) redirect(`/franchises/${franchiseId}/team?week=${week}&error=${encodeURIComponent(error.message)}`);
   revalidatePath(`/franchises/${franchiseId}/team`);
-  redirect(`/franchises/${franchiseId}/team?week=${week}`);
+  redirect(`/franchises/${franchiseId}/team?week=${week}&lineup_status=set&lineup_slot=${encodeURIComponent(slotLabel)}&lineup_asset=${encodeURIComponent(assetLabel)}`);
 }

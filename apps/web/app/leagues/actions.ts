@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '../../lib/supabase/server';
 import { sendTransactionalEmail } from '../../lib/email/resend';
 import { leagueInviteEmail } from '../../lib/email/templates';
+import { invalidInviteEmails, parseInviteEmails } from './[leagueId]/invitationAccessibility';
 
 export async function createLeague(formData: FormData) {
   const supabase = await createClient();
@@ -22,22 +23,53 @@ export async function createLeagueInvite(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
   const leagueId = String(formData.get('league_id') ?? '');
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
-  const { data, error } = await supabase.rpc('create_league_invite', { p_league_id: leagueId, p_email: email });
-  if (error) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(error.message));
-  const invite = data as { invite_id: string; invite_token: string; email: string };
-  const [{ data: league }, { data: profile }, { data: inviteRecord }, { count: claimedCount }] = await Promise.all([
+  const emails = parseInviteEmails(String(formData.get('emails') ?? formData.get('email') ?? ''));
+  const invalid = invalidInviteEmails(emails);
+  if (!emails.length) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent('Enter at least one manager email address.'));
+  if (invalid.length) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(`Correct invalid email address: ${invalid.join(', ')}`));
+  const [{ data: league }, { data: profile }, { count: claimedCount }] = await Promise.all([
     supabase.from('fantasy_leagues').select('name,max_franchises').eq('id', leagueId).maybeSingle(),
     supabase.from('user_profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
-    supabase.from('league_invites').select('expires_at').eq('id', invite.invite_id).maybeSingle(),
     supabase.from('league_members').select('id', { count:'exact', head:true }).eq('league_id', leagueId)
   ]);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bigexecfs.com';
-  const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, totalSpots: league?.max_franchises ?? 10, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: inviteRecord?.expires_at ? new Date(inviteRecord.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
-  const resendBucket = Math.floor(Date.now() / 60000);
-  const delivery = await sendTransactionalEmail({ to:email, subject:message.subject, html:message.html, text:message.text, idempotencyKey:`league-invite/${invite.invite_id}/${resendBucket}` });
+  let firstToken=''; let sent=0; let manual=0;
+  for (const email of emails) {
+    const { data, error } = await supabase.rpc('create_league_invite', { p_league_id: leagueId, p_email: email });
+    if (error) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(error.message));
+    const invite = data as { invite_id: string; invite_token: string; email: string };
+    if (!firstToken) firstToken=invite.invite_token;
+    const { data: inviteRecord } = await supabase.from('league_invites').select('expires_at').eq('id', invite.invite_id).maybeSingle();
+    const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, totalSpots: league?.max_franchises ?? 10, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: inviteRecord?.expires_at ? new Date(inviteRecord.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
+    const resendBucket = Math.floor(Date.now() / 60000);
+    const delivery = await sendTransactionalEmail({ to:email, subject:message.subject, html:message.html, text:message.text, idempotencyKey:`league-invite/${invite.invite_id}/${resendBucket}` });
+    if (delivery.sent) sent += 1; else manual += 1;
+  }
   revalidatePath(`/leagues/${leagueId}`);
-  redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${invite.invite_token}&invite_email=${encodeURIComponent(email)}&email_status=${delivery.sent ? 'sent' : 'manual'}`);
+  const emailStatus = sent && manual ? 'mixed' : sent ? 'sent' : 'manual';
+  redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${firstToken}&invite_email=${encodeURIComponent(emails.join(', '))}&invite_count=${emails.length}&email_status=${emailStatus}`);
+}
+
+export async function resendLeagueInvite(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+  const leagueId = String(formData.get('league_id') ?? '');
+  const inviteId = String(formData.get('invite_id') ?? '');
+  const { data: invite, error: inviteError } = await supabase.from('league_invites').select('id,email,invite_token,status,expires_at').eq('id', inviteId).eq('league_id', leagueId).maybeSingle();
+  if (inviteError || !invite) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(inviteError?.message ?? 'Invite not found.'));
+  if (invite.status !== 'pending') redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(`Only pending invitations can be resent. ${invite.email} is ${invite.status}.`));
+  const [{ data: league }, { data: profile }, { count: claimedCount }] = await Promise.all([
+    supabase.from('fantasy_leagues').select('name,max_franchises').eq('id', leagueId).maybeSingle(),
+    supabase.from('user_profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
+    supabase.from('league_members').select('id', { count:'exact', head:true }).eq('league_id', leagueId)
+  ]);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bigexecfs.com';
+  const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, totalSpots: league?.max_franchises ?? 10, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: invite.expires_at ? new Date(invite.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
+  const resendBucket = Math.floor(Date.now() / 60000);
+  const delivery = await sendTransactionalEmail({ to:invite.email, subject:message.subject, html:message.html, text:message.text, idempotencyKey:`league-invite/resend/${invite.id}/${resendBucket}` });
+  revalidatePath(`/leagues/${leagueId}`);
+  redirect(`/leagues/${leagueId}?invite_resent=1&invite_email=${encodeURIComponent(invite.email)}&email_status=${delivery.sent ? 'sent' : 'manual'}`);
 }
 
 export async function acceptLeagueInvite(formData: FormData) {

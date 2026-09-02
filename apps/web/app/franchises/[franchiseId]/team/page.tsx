@@ -3,10 +3,11 @@ import { createClient } from '../../../../lib/supabase/server';
 import { setLineup } from '../../../team/actions';
 import { FranchiseCrest } from '../../../components/FranchiseCrest';
 import { requestRosterIntegrityReview } from './actions';
+import { describeLineupSlot, describeRosterAsset, lineupMoveButtonLabel, lineupMoveConfirmation } from './lineupAccessibility';
 
 const slots = [['QB',1,'QB'],['RB',1,'RB1'],['RB',2,'RB2'],['WR',1,'WR1'],['WR',2,'WR2'],['TE',1,'TE'],['FLEX',1,'FLEX'],['K',1,'K'],['DST',1,'D/ST']] as const;
 
-export default async function TeamPage({ params, searchParams }: { params: Promise<{ franchiseId: string }>; searchParams: Promise<{ week?: string; error?: string; integrity_status?: string; integrity_error?: string }> }) {
+export default async function TeamPage({ params, searchParams }: { params: Promise<{ franchiseId: string }>; searchParams: Promise<{ week?: string; error?: string; lineup_status?: string; lineup_slot?: string; lineup_asset?: string; integrity_status?: string; integrity_error?: string }> }) {
   const { franchiseId } = await params;
   const query = await searchParams;
   const week = Math.max(1, Math.min(18, Number(query.week ?? 1)));
@@ -45,6 +46,28 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
     return `${team?.abbreviation ?? team?.display_name ?? 'Team'} D/ST`;
   }
 
+  function describeAssetForScreenReader(asset: NonNullable<typeof roster>[number], starterState: 'starter' | 'bench', slotLabel?: string) {
+    if (asset.athlete_id && asset.athletes) {
+      const athlete = Array.isArray(asset.athletes) ? asset.athletes[0] : asset.athletes as {display_name?: string;position?: string;real_teams?: {abbreviation?:string}|{abbreviation?:string}[]|null};
+      const team = Array.isArray(athlete?.real_teams) ? athlete?.real_teams[0] : athlete?.real_teams;
+      return describeRosterAsset({
+        name: athlete?.display_name ?? 'Athlete',
+        position: athlete?.position ?? '',
+        team: team?.abbreviation ?? 'FA',
+        starterState,
+        slotLabel
+      });
+    }
+    const team = Array.isArray(asset.real_teams) ? asset.real_teams[0] : asset.real_teams as {display_name?:string;abbreviation?:string}|null;
+    return describeRosterAsset({
+      name: `${team?.abbreviation ?? team?.display_name ?? 'Team'} D/ST`,
+      position: 'D/ST',
+      team: team?.abbreviation ?? team?.display_name ?? 'Defense',
+      starterState,
+      slotLabel
+    });
+  }
+
   return <main>
     <nav className="franchiseNav" aria-label="Franchise navigation">
       <a href="/dashboard">Home</a><a href={`/leagues/${franchise.league_id}`}>League HQ</a><a aria-current="page" href={`/franchises/${franchiseId}/team?week=${week}`}>Team</a><a href={`/franchises/${franchiseId}/stadium`}>My Stadium</a>
@@ -55,8 +78,8 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
       <div className="leagueHeroContent franchiseIdentity"><FranchiseCrest className="franchiseCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={primary} secondary={secondary}/><div><p className="eyebrow">BIG EXEC • FRONT OFFICE</p><h1>{franchise.name}</h1><p className="leagueTagline">Set the starting nine inside your franchise home.</p><div className="leagueMetaRow"><span>{franchise.abbreviation ?? 'BEX'}</span><span>WEEK {week}</span><span>STARTER STADIUM</span></div></div></div>
       <a className="stadiumHeroAction" href={`/franchises/${franchiseId}/stadium`}>View stadium <span aria-hidden="true">→</span></a>
     </section>
-    <section className="panel"><p className="eyebrow">LINEUP CONTROL</p><h2>Set your starters.</h2><p className="lede">Click a player option under a slot to promote them directly into the starting lineup. Each real player locks when their game begins once the current-season live schedule is connected.</p>{query.error && <p className="errorNotice" role="alert">{query.error}</p>}<div className="actions">{week > 1 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week-1}`}>← Week {week-1}</a>}{week < 18 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week+1}`}>Week {week+1} →</a>}<a className="secondary" href={`/franchises/${franchiseId}/stadium`}>View My Stadium</a></div></section>
-    <section className="panel"><p className="eyebrow">STARTERS</p><div className="lineupGrid">{slots.map(([slot,slotIndex,label]) => { const current = lineupMap.get(`${slot}:${slotIndex}`); const currentRoster = roster?.find(r => (current?.athlete_id && r.athlete_id===current.athlete_id) || (current?.real_team_id && r.real_team_id===current.real_team_id)); const eligible = (roster ?? []).filter(r => { if (r.real_team_id) return slot==='DST'; const athlete = Array.isArray(r.athletes) ? r.athletes[0] : r.athletes as {position?:string}|null; const pos = athlete?.position; if (slot==='FLEX') return ['RB','WR','TE'].includes(pos ?? ''); return pos===slot; }); return <article className="lineupSlot" key={`${slot}-${slotIndex}`}><span>{label}</span><strong>{currentRoster ? labelForAsset(currentRoster) : 'EMPTY'}</strong>{!!eligible.length && <div className="slotChoices">{eligible.slice(0,12).map(asset => <form action={setLineup} key={asset.id}><input type="hidden" name="season_franchise_id" value={seasonFranchise.id}/><input type="hidden" name="franchise_id" value={franchiseId}/><input type="hidden" name="week" value={week}/><input type="hidden" name="slot" value={slot}/><input type="hidden" name="slot_index" value={slotIndex}/>{asset.athlete_id && <input type="hidden" name="athlete_id" value={asset.athlete_id}/>} {asset.real_team_id && <input type="hidden" name="real_team_id" value={asset.real_team_id}/>}<button className="miniAction" type="submit">{labelForAsset(asset)}</button></form>)}</div>}</article>; })}</div></section>
+    <section className="panel"><p className="eyebrow">LINEUP CONTROL</p><h2>Set your starters.</h2><p className="lede">Click a player option under a slot to promote them directly into the starting lineup. Each real player locks when their game begins once the current-season live schedule is connected.</p>{query.error && <p className="errorNotice" role="alert">{query.error}</p>}{query.lineup_status==='set'&&<p className="successNotice" role="status">{lineupMoveConfirmation(query.lineup_asset??'Selected player',query.lineup_slot??'lineup slot',week)}</p>}<div className="actions">{week > 1 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week-1}`}>← Week {week-1}</a>}{week < 18 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week+1}`}>Week {week+1} →</a>}<a className="secondary" href={`/franchises/${franchiseId}/stadium`}>View My Stadium</a></div></section>
+    <section className="panel" aria-labelledby="starters-heading"><p className="eyebrow">STARTERS</p><h2 id="starters-heading" className="srOnly">Starting lineup for week {week}</h2><div className="lineupGrid">{slots.map(([slot,slotIndex,label]) => { const current = lineupMap.get(`${slot}:${slotIndex}`); const currentRoster = roster?.find(r => (current?.athlete_id && r.athlete_id===current.athlete_id) || (current?.real_team_id && r.real_team_id===current.real_team_id)); const currentLabel = currentRoster ? labelForAsset(currentRoster) : undefined; const eligible = (roster ?? []).filter(r => { if (r.real_team_id) return slot==='DST'; const athlete = Array.isArray(r.athletes) ? r.athletes[0] : r.athletes as {position?:string}|null; const pos = athlete?.position; if (slot==='FLEX') return ['RB','WR','TE'].includes(pos ?? ''); return pos===slot; }); return <article className="lineupSlot" aria-label={describeLineupSlot(label,currentLabel)} key={`${slot}-${slotIndex}`}><span>{label}</span><strong>{currentRoster ? labelForAsset(currentRoster) : 'EMPTY'}</strong>{currentRoster&&<small className="srOnly">{describeAssetForScreenReader(currentRoster,'starter',label)}</small>}{!!eligible.length && <div className="slotChoices" aria-label={`Move eligible players to ${label}`}>{eligible.slice(0,12).map(asset => { const assetLabel=labelForAsset(asset); return <form action={setLineup} key={asset.id}><input type="hidden" name="season_franchise_id" value={seasonFranchise.id}/><input type="hidden" name="franchise_id" value={franchiseId}/><input type="hidden" name="week" value={week}/><input type="hidden" name="slot" value={slot}/><input type="hidden" name="slot_index" value={slotIndex}/><input type="hidden" name="slot_label" value={label}/><input type="hidden" name="asset_label" value={assetLabel}/>{asset.athlete_id && <input type="hidden" name="athlete_id" value={asset.athlete_id}/>} {asset.real_team_id && <input type="hidden" name="real_team_id" value={asset.real_team_id}/>}<button className="miniAction" type="submit" aria-label={lineupMoveButtonLabel(assetLabel,label,week)}>{assetLabel}</button></form>; })}</div>}</article>; })}</div></section>
 
     {deadlinePassed && <section className="panel">
       <p className="eyebrow">ROSTER INTEGRITY</p><h2>{integrityActive?'Post-deadline protection is active.':'Open-roster mode is active.'}</h2>
@@ -72,6 +95,6 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
       </div>}
     </section>}
 
-    <section className="panel"><p className="eyebrow">BENCH / ROSTER</p><div className="playerList">{(roster ?? []).filter(asset => !starterAssetIds.has(asset.athlete_id ?? asset.real_team_id)).map(asset => <div className="playerRow" key={asset.id}><div><span>AVAILABLE TO START</span><strong>{labelForAsset(asset)}</strong></div></div>)}{!roster?.length && <p className="errorNotice">No roster yet. Players appear here as soon as the draft is completed.</p>}</div></section>
+    <section className="panel" aria-labelledby="bench-heading"><p className="eyebrow">BENCH / ROSTER</p><h2 id="bench-heading" className="srOnly">Bench and roster players for week {week}</h2><div className="playerList">{(roster ?? []).filter(asset => !starterAssetIds.has(asset.athlete_id ?? asset.real_team_id)).map(asset => <div className="playerRow" aria-label={describeAssetForScreenReader(asset,'bench')} key={asset.id}><div><span>AVAILABLE TO START</span><strong>{labelForAsset(asset)}</strong><small className="srOnly">Valid move actions are available in matching starter slots above.</small></div></div>)}{!roster?.length && <p className="errorNotice">No roster yet. Players appear here as soon as the draft is completed.</p>}</div></section>
   </main>;
 }

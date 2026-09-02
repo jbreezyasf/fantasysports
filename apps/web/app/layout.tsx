@@ -7,6 +7,8 @@ import './gate5.css';
 import './mobile-nav.css';
 import './forms-gate5.css';
 import './stadium-gate5.css';
+import './ops.css';
+import ScreenReaderAnnouncer from './components/ScreenReaderAnnouncer';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigexecfs.com'),
@@ -27,7 +29,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ScreenReaderAnnouncer />
+        {children}
+      </body>
     </html>
   );
 }
