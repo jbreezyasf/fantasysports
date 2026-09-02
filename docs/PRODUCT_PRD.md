@@ -89,3 +89,10 @@ The initial paid offer is **Big Exec Executive League Season Pass — $99 one-ti
 New Pro Football leagues may form, fill, and complete a draft until the sport-season late-entry cutoff, initially bounded by the official football trade deadline. Completed pre-activation periods are reconstructed automatically from the draft roster using the highest-scoring legal lineup, then scored through the canonical matchup engine. Later transactions never rewrite those periods. See `docs/product/LATE_START_LEAGUES_PRD.md` and `docs/product/LATE_START_LEAGUES_TASKS.md`.
 
 The Assistant GM stable-answer knowledge base begins at `docs/assistant-gm/knowledge-base/00_READ_THIS_FIRST.md`; live league facts continue to require authoritative state/tools.
+
+
+---
+
+## Storage Capacity and Production Hold
+
+`docs/architecture/DATA_STORAGE_CAPACITY_COST_PLAN.md` is the canonical storage, retention, backup, recovery, and growth-cost plan. Assistant GM persistence, late-start backfill storage, and material new permanent media must not be expanded in production until Storage Gates S0–S2 pass and Juanita explicitly authorizes Gate S3.
