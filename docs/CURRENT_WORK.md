@@ -570,3 +570,38 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Centralize repeated Assistant GM missing-confirmation response and remove impossible null checks. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
 - [x] Replace repeated missing-confirmation branches in lineup, draft, and waiver transaction helpers. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.ts`, `apps/web/lib/assistant-gm/draftTransactions.ts`, `apps/web/lib/assistant-gm/waiverTransactions.ts`.
 - [x] Clear ignored local Turbo cache output while preserving source and QA evidence. Evidence: `docs/TIGHTENING_LOG.md`.
+
+---
+
+## Approved Feature — Executive League + Assistant GM Pro+
+
+**Canonical specs:**
+
+- `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_PRD.md`
+- `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_TASKS.md`
+
+**Commercial decision:** Big Exec Executive League Season Pass is $99 one-time per league, sport, and season. Assistant GM Pro+ is included for all managers and is not a separate Stripe product at launch. Accessibility voice remains free.
+
+- [ ] Run `BE-EXEC-000` read-only repository/deployment/schema inventory.
+- [ ] Reconcile the new PRD with the existing accessibility + Voice Assistant GM backlog.
+- [ ] Do not start checkout until Stripe product/price configuration is provided.
+- [ ] Do not allow this workstream to displace unresolved standalone fantasy P0 gates.
+- [ ] Begin entitlement/GM foundation only after the inventory identifies exact current integration points.
+
+
+---
+
+## Approved Feature — Late-Start Leagues + Voice Knowledge Base
+
+**Canonical specs:**
+
+- `docs/product/LATE_START_LEAGUES_PRD.md`
+- `docs/product/LATE_START_LEAGUES_TASKS.md`
+- `docs/assistant-gm/knowledge-base/00_READ_THIS_FIRST.md`
+
+- [ ] Make the knowledge-base startup document the first stable-answer retrieval instruction.
+- [ ] Add sport-season hard enrollment cutoff and enforce it across create/join/draft boundaries.
+- [ ] Implement deterministic optimal-legal-lineup reconstruction from the frozen draft roster.
+- [ ] Backfill matchups and publish validated standings atomically.
+- [ ] Keep other sports and existing leagues independent of football enrollment closure.
+- [ ] Preserve free voice accessibility and league-scoped Executive entitlement.
