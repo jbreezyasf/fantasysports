@@ -605,3 +605,17 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [ ] Backfill matchups and publish validated standings atomically.
 - [ ] Keep other sports and existing leagues independent of football enrollment closure.
 - [ ] Preserve free voice accessibility and league-scoped Executive entitlement.
+
+
+---
+
+## P0 — Storage Capacity and Cost Gate
+
+**Canonical plan:** `docs/architecture/DATA_STORAGE_CAPACITY_COST_PLAN.md`
+
+**Production hold:** No production expansion of Assistant GM persistence, late-start backfill storage, or material permanent media until the storage gates below are satisfied and Juanita explicitly authorizes deployment.
+
+- [ ] S0: Capture Supabase plan/invoice/usage, Cloudflare R2 inventory/lifecycle/invoice, VPS disk/snapshot state, measured V2 recap sizes, and beginner-heavy GM usage.
+- [ ] S1: Approve retention, deletion, RPO/RTO, PITR timing, and media archive rules.
+- [ ] S2: Prove cleanup, backup/restore, cost attribution, and lifecycle behavior outside production.
+- [ ] S3: Approve 12-month forecast, spend controls, degraded modes, and production deployment.
