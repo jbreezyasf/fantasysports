@@ -225,3 +225,21 @@ Current objectives:
 # Working Rule
 
 When one item is completed, update this file in the same PR/commit with the evidence or link to the evidence. Do not check a box simply because code was written.
+
+
+---
+
+## Approved Feature — Executive League + Assistant GM Pro+
+
+**Canonical specs:**
+
+- `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_PRD.md`
+- `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_TASKS.md`
+
+**Commercial decision:** Big Exec Executive League Season Pass is $99 one-time per league, sport, and season. Assistant GM Pro+ is included for all managers and is not a separate Stripe product at launch. Accessibility voice remains free.
+
+- [ ] Run `BE-EXEC-000` read-only repository/deployment/schema inventory.
+- [ ] Reconcile the new PRD with the existing accessibility + Voice Assistant GM backlog.
+- [ ] Do not start checkout until Stripe product/price configuration is provided.
+- [ ] Do not allow this workstream to displace unresolved standalone fantasy P0 gates.
+- [ ] Begin entitlement/GM foundation only after the inventory identifies exact current integration points.
