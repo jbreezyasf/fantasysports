@@ -243,3 +243,21 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [ ] Do not start checkout until Stripe product/price configuration is provided.
 - [ ] Do not allow this workstream to displace unresolved standalone fantasy P0 gates.
 - [ ] Begin entitlement/GM foundation only after the inventory identifies exact current integration points.
+
+
+---
+
+## Approved Feature — Late-Start Leagues + Voice Knowledge Base
+
+**Canonical specs:**
+
+- `docs/product/LATE_START_LEAGUES_PRD.md`
+- `docs/product/LATE_START_LEAGUES_TASKS.md`
+- `docs/assistant-gm/knowledge-base/00_READ_THIS_FIRST.md`
+
+- [ ] Make the knowledge-base startup document the first stable-answer retrieval instruction.
+- [ ] Add sport-season hard enrollment cutoff and enforce it across create/join/draft boundaries.
+- [ ] Implement deterministic optimal-legal-lineup reconstruction from the frozen draft roster.
+- [ ] Backfill matchups and publish validated standings atomically.
+- [ ] Keep other sports and existing leagues independent of football enrollment closure.
+- [ ] Preserve free voice accessibility and league-scoped Executive entitlement.
