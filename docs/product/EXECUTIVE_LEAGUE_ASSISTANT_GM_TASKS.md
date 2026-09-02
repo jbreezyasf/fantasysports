@@ -620,3 +620,16 @@ Do not allow this feature to displace unresolved core standalone fantasy P0 work
 
 > Implement BE-EXEC-000 only. Read `AGENTS.md` and all required canonical files first. Inspect the current deployed Big Exec version, current main branch, and current production Supabase schema read-only. Create `docs/executive/REPO_INVENTORY.md` mapping the Executive League Season Pass and Assistant GM Pro+ PRD to exact existing routes, components, loaders, server actions, RPCs, tables, RLS policies, tests, CI, provider integrations, feature flags, and observability. Reconcile this PRD with the existing accessibility/voice backlog. Classify every finding as PROVEN, LIKELY/INFERRED, or UNVERIFIED. Do not implement checkout, AI, voice, migrations, or production changes in this task. Report conflicts before proposing architecture changes.
 
+
+
+---
+
+## Knowledge-Base Prerequisite
+
+Before BE-GM-120 or production prompt work:
+
+- [ ] Load `docs/assistant-gm/knowledge-base/00_READ_THIS_FIRST.md` as the mandatory stable-answer entry point.
+- [ ] Implement topic routing from `01_ROUTING_INDEX.md` to the smallest matching FAQ file.
+- [ ] Preserve live-state tool routing for volatile or league-specific facts.
+- [ ] Add tests that FAQ content cannot override authoritative state or commit an action.
+- [ ] Add review/version checks based on `SOURCE_AND_REVIEW_REGISTER.md`.
