@@ -80,3 +80,12 @@ The original **Big Exec Champions Trophy** lives in the winning franchise's Owne
 ## Approved Monetization Decision — Executive League
 
 The initial paid offer is **Big Exec Executive League Season Pass — $99 one-time per league, sport, and season**. It includes **Assistant GM Pro+** for every manager in the covered league. Assistant GM Pro+ is not a separate Stripe product at launch. Core gameplay and accessibility voice capabilities remain available without the Executive entitlement. See `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_PRD.md`.
+
+
+---
+
+## Approved Late-Start League Decision
+
+New Pro Football leagues may form, fill, and complete a draft until the sport-season late-entry cutoff, initially bounded by the official football trade deadline. Completed pre-activation periods are reconstructed automatically from the draft roster using the highest-scoring legal lineup, then scored through the canonical matchup engine. Later transactions never rewrite those periods. See `docs/product/LATE_START_LEAGUES_PRD.md` and `docs/product/LATE_START_LEAGUES_TASKS.md`.
+
+The Assistant GM stable-answer knowledge base begins at `docs/assistant-gm/knowledge-base/00_READ_THIS_FIRST.md`; live league facts continue to require authoritative state/tools.
