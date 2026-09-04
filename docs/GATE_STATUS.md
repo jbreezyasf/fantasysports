@@ -6,7 +6,28 @@
 >
 > A gate may only be marked **PASS** using current supporting evidence. Historical PASS labels do not transfer automatically into this gate model.
 >
-> **Current posture:** CURRENTLY RECONCILED THROUGH READ-ONLY INSPECTION. Codex/development must still execute actual user flows before marking any gameplay gate PASS.
+> **Current posture:** RECONCILED THROUGH READ-ONLY INSPECTION (2026-08-26) PLUS EXECUTED QA RUNS (2026-08-30 / 2026-08-31), REVIEWED 2026-09-04. Several gameplay flows have now been executed against production data; no gate has yet satisfied its full acceptance criteria.
+
+## QA Environment Caveat — applies to every 2026-08-30 and 2026-08-31 QA run
+
+- **PROVEN:** `scripts/qa-full-draft.mjs`, `scripts/qa-transactions-run.mjs`, `scripts/qa-roster-integrity-visual.mjs`, and the 10-manager regression all resolve the app under test as `QA_APP_URL` defaulting to `http://localhost:3000`, and resolve the database as `NEXT_PUBLIC_SUPABASE_URL` defaulting to production project `njjiqdqhmcbxblwhfade`.
+- **PROVEN:** Captured evidence routes in `qa-artifacts/2026-08-30_10-manager-regression/EVIDENCE.md` and `qa-artifacts/2026-08-30_transactions/TRANSACTIONS_QA.md` record `http://localhost:3000` URLs.
+- **Consequence:** these runs prove **production database, RPC, and RLS behavior under real authenticated actor classes**, exercised through a locally served build of the application. They do not prove the deployed Vercel production UI. Any gate criterion that depends specifically on the deployed surface remains open until re-run against it.
+
+## All-Gate Reconciliation — 2026-09-04
+
+This pass re-read every gate's evidence log against the artifacts actually present in `qa-artifacts/` and the QA scripts in `scripts/`. It was prompted by discovering that Gate 1 still carried UNVERIFIED claims that the 2026-08-30 draft runs had already disproven.
+
+Findings by gate:
+
+- **Gate 0:** partially updated. Actor-class permission boundaries are now proven for authenticated managers through real routes and RPCs; anon-class probes remain unproven.
+- **Gate 1:** substantially updated. Full 10-manager draft, autopick, duplicate protection, pause/resume, undo, queue, and legal rosters are now proven.
+- **Gate 2:** substantially updated. Competing waiver claims, complete trade lifecycle, atomic ownership transfer, and trade-deadline enforcement are now proven by `qa-artifacts/2026-08-30_transactions/`.
+- **Gate 3:** no new evidence found. Scoring evidence remains 2025 fixture data only; no current-season ingestion has been executed.
+- **Gate 4:** no new evidence found. No full-season rehearsal artifact exists.
+- **Gate 5:** minor update. Ten-actor Front Office rendering is proven; notifications, story-event coverage, and Recap V2 creative acceptance remain open.
+- **Gate 6:** unchanged, NOT STARTED.
+- **Gate 7:** annotated. Entitlement foundation code now exists but is unapplied and carries no Stripe configuration.
 
 ## Current Evidence Baseline — 2026-08-26
 
@@ -118,8 +139,13 @@
 - **PROVEN:** The three Roster Integrity migration filenames have a rename-only cleanup commit matching production migration history; this narrows, but does not fully close, the broader historical production/local migration-history drift.
 - **LIKELY / INFERRED:** Production schema is not fully captured in version control.
 - **PROVEN:** Previously documented public execution exposure for `award_matchup_achievements` and `sync_franchise_stadium_features` has been reduced; neither is executable by `anon` or `authenticated`.
-- **UNVERIFIED:** Permission-boundary tests for sensitive RPCs have not been executed with real actor classes.
+**Reconciled 2026-09-04.** The blanket claim that no permission-boundary test had been executed with real actor classes was stale; the 2026-08-30/31 runs exercised authenticated actor classes directly. It is narrowed below rather than removed, because anon-class probing genuinely has not been done.
+
+- **PROVEN:** Authenticated actor-class permission boundaries were exercised across ten distinct Supabase-authenticated sessions. `qa-artifacts/2026-08-30_transactions/TRANSACTIONS_QA.md` records Manager02 blocked from setting Manager01's lineup, Manager02's post to a private trade room rejected with a private-message read count of 0, and an invalid-asset trade rejected. `qa-artifacts/2026-08-30_full-draft-clean/DRAFT_QA.md` records a second actor's duplicate-asset draft pick rejected. The Roster Integrity run denied or redirected all nine regular-manager contexts from the commissioner-only settings route without leaking the form.
+- **PROVEN:** All ten QA actors authenticated and rendered their own role/franchise context; `qa-artifacts/2026-08-30_10-manager-regression/SUMMARY.md` records UX-FO-001 through UX-FO-010 PASS with zero failed or blocked checks.
+- **UNVERIFIED:** Anon-class and direct Supabase JS client RPC permission probes have not been executed. `docs/CURRENT_WORK.md` records this was blocked by missing local Supabase URL/anon environment variables, and that blocker is not resolved.
 - **UNVERIFIED:** Observability for beta-critical failures is not proven beyond CI, Vercel deployment status, table data, and the recap renderer CI path.
+- **UNVERIFIED:** The Operations Portal Phase 1 surface (`/ops`, `ops_staff_roles`, `ops_audit_events`) exists in the repository but its migration is not applied to production and no signed-in staff/non-staff behavior has been verified, so it does not yet count as observability evidence.
 
 ---
 
@@ -165,11 +191,25 @@
 - **PROVEN:** Vercel production runtime error/fatal log query for deployment `dpl_9bRKcnsFvTnjgn7HxBGqoiPuf9jM` over the last 30 minutes returned no logs.
 - **PROVEN:** Production has two completed drafts, both with 30 made picks and 10 WR picks.
 - **PROVEN:** Earlier read-only inspection found no `draft_queues` table, no production draft/autopick function, and no draft realtime publication entries; those observations are superseded by the later 2026-08-26 production SQL application and verification above.
-- **UNVERIFIED:** The updated production Draft Night database behavior has not yet been exercised by authenticated users in an actual draft room.
-- **UNVERIFIED:** Full 10-manager production-equivalent draft QA has not been executed in this reconciliation.
-- **UNVERIFIED:** The authenticated production draft-room UI has not yet been exercised with a valid test session.
 - **PROVEN:** Human visual inspection on 2026-09-01 accepted the captured Draft Room desktop/mobile screenshots from `qa-artifacts/2026-08-30_10-manager-regression/`, `qa-artifacts/2026-08-30_completed-draft-visual/`, and `qa-artifacts/2026-08-30_completed-draft-clean-visual/`.
-- **UNVERIFIED:** Rankings, personal queue, server-authoritative timer, autopick, reconnect/recovery, commissioner pause, and commissioner correction/undo are not proven.
+
+**Draft QA reconciliation — 2026-09-04.** The three UNVERIFIED claims previously recorded here (that full 10-manager draft QA had not been executed, that production Draft Night database behavior had not been exercised by authenticated users, and that rankings/queue/timer/autopick/pause/undo were unproven) were stale. They were written during the 2026-08-26 read-only reconciliation and were never updated after the 2026-08-30 draft QA runs. The artifacts below supersede them.
+
+- **PROVEN:** Two independent full-draft QA runs completed against production Supabase project `njjiqdqhmcbxblwhfade`: `qa-artifacts/2026-08-30_full-draft/DRAFT_QA.md` (league `912fc5c3-6ca6-4339-921e-920cd8c1b994`) and `qa-artifacts/2026-08-30_full-draft-clean/DRAFT_QA.md` (league `a4c87b5f-47d9-447b-b92e-735e0363058d`). Both recorded identical results.
+- **PROVEN:** Each run reached draft status `completed` with 150 manual picks submitted by ten distinct authenticated actor sessions (one commissioner, nine managers) and 150 total made picks.
+- **PROVEN:** Duplicate-pick protection is enforced: a second actor's attempt to draft an already-drafted asset was rejected in both runs.
+- **PROVEN:** Commissioner pause works: `pause_draft` rejected picks while paused and the draft resumed cleanly in both runs.
+- **PROVEN:** Commissioner correction/undo executes: `undo_last_draft_pick` succeeded in both runs.
+- **PROVEN:** Autopick executes from the server-authoritative deadline: `process_expired_draft_picks` produced a pick flagged `is_auto_pick` after `drafts.current_pick_deadline_at` was expired, and the autopick consumed the actor's personal queue entry created through `add_draft_queue_item`.
+- **PROVEN:** Complete legal rosters at finish: every franchise held 15 active roster entries with legal starter-position coverage in both runs.
+- **PROVEN:** Authenticated actor sessions loaded the draft room in a real browser for desktop and mobile screenshot capture before start and after completion (`qa-artifacts/2026-08-30_full-draft-clean/screenshots/`).
+- **UNVERIFIED:** Picks were submitted through authenticated Supabase RPC calls per actor (`make_draft_pick`), not by interacting with draft-room UI controls. The pick-by-pick draft-room UI interaction path is therefore not proven by these runs.
+- **UNVERIFIED:** Autopick expiry was triggered by forcing `current_pick_deadline_at` into the past through linked SQL. A natural client countdown reaching zero unaided has not been observed.
+- **UNVERIFIED:** Realtime pick propagation between concurrently connected clients was not exercised; the runs drive picks sequentially through RPC rather than observing live updates in a second session.
+- **UNVERIFIED:** Reconnect/recovery behavior after a dropped draft-room connection was not exercised.
+- **UNVERIFIED:** Rankings presentation in the draft room is not asserted by the QA scripts; only the personal queue was exercised functionally.
+- **UNVERIFIED:** The `draft_corrections` audit-trail row written by `undo_last_draft_pick` was not read back and verified, so "correction/undo with audit trail" is proven only for the undo action itself.
+- **UNVERIFIED:** `scripts/qa-full-draft.mjs` targets `QA_APP_URL` and defaults to `http://localhost:3000`. The database under test was production, but the artifacts do not record which app surface served the screenshots, so these runs are not confirmed against the deployed production UI.
 
 ---
 
@@ -207,7 +247,20 @@
 - **PROVEN:** All nine regular manager browser contexts were denied/redirected from `/leagues/<QA_LEAGUE_ID>/settings/roster-integrity` without leaking the commissioner settings form.
 - **PROVEN:** The Free Agency page current-season lookup has been fixed in the working tree after authenticated QA exposed the six-season QA league 404.
 - **PROVEN:** Human visual inspection on 2026-09-01 accepted captured desktop/mobile QA screenshots and website direction for the visible supported flows.
-- **UNVERIFIED:** Full Gate 2 remains open: lineup/kickoff locks, competing waiver claims, standalone release UI, direct Supabase JS actor-class RPC permission checks, and complete trade lifecycle are not fully proven by this run.
+**Reconciled 2026-09-04.** The previous single UNVERIFIED line listed competing waiver claims and complete trade lifecycle as unproven. `qa-artifacts/2026-08-30_transactions/TRANSACTIONS_QA.md` disproves both. That line is replaced by the itemized evidence below.
+
+- **PROVEN:** Lineup management works through an authenticated manager session: Manager01 set 9 lineup slots (`qa-artifacts/2026-08-30_transactions/TRANSACTIONS_QA.md`).
+- **PROVEN:** Free-agent add/drop created waiver hold `6c219863-c016-4588-b5a5-94f7f5fd4657`.
+- **PROVEN:** Competing waiver claims resolve by priority: two franchises claimed the same asset and processing recorded one `won` at `priority_rank` 1 and one `lost`, with winner `fa8345a6-1a4d-400f-acc1-55aa7c17cec6`.
+- **PROVEN:** Complete trade state lifecycle executed: private trade `7bb853ff-d16b-4196-a706-2b2177f8b10d` reached status `accepted`.
+- **PROVEN:** Atomic ownership change on trade acceptance: the offered asset moved to Manager07 and the requested asset moved to Manager03, both confirmed true.
+- **PROVEN:** Trade deadline enforcement: a new trade attempted after the deadline was rejected.
+- **PROVEN:** Trade authorization boundaries: an invalid-asset trade was rejected, and a non-participant's private trade-room message post was rejected with a read count of 0.
+- **UNVERIFIED:** Individual kickoff locks are not proven. No artifact exercises a per-player lock at kickoff.
+- **UNVERIFIED:** A standalone release UI does not exist to test visually.
+- **UNVERIFIED:** Direct Supabase JS actor-class RPC permission checks remain blocked by missing local environment variables.
+- **UNVERIFIED:** Capture 5 of the transactions run recorded `GET 404 http://localhost:3000/trades/7bb853ff-d16b-4196-a706-2b2177f8b10d` for the non-participant denial screenshot. Whether that 404 is the intended existence-hiding denial or an unintended routing failure has not been determined, and should be resolved before Gate 2 passes.
+- **UNVERIFIED:** All four transactions-run captures and both draft-run captures logged a React hydration mismatch console error. This is recorded in the artifacts and has not been investigated.
 
 ---
 
@@ -234,6 +287,8 @@
 - **PROVEN:** Production system scoring profile has 6-point passing touchdowns, and database scoring function `calculate_pro_football_player_scores` uses 6 points for passing touchdowns.
 - **PROVEN:** Production has no current 2026 `real_games` rows from database inspection.
 - **UNVERIFIED:** Current-season game/stat ingestion, live score latency, simultaneous current games, refresh/reconnect behavior, finalization, stat corrections, and audit behavior have not been executed end to end in this reconciliation.
+
+**Reconciled 2026-09-04.** No new evidence. Every 2026-08-30/31 QA artifact was checked; none exercises scoring. The draft and transactions runs operate on rosters and ownership, not on game ingestion or score calculation. Gate 3 evidence remains 2025 Week 1 fixture data plus schema/function inspection, and production still has no current-season 2026 `real_games` rows. This gate is unchanged and is the largest untested area of the product.
 
 ---
 
@@ -265,6 +320,8 @@
 - **PROVEN:** Production has one active unattended cron job, but it is limited to waiver processing.
 - **UNVERIFIED:** Weeks 1-9 Circuit, special weeks, official standings, all-play where required, weekly awards, playoff seeding, Redemption tournament, championship, automatic transitions, season close, and unattended weekly operation have not been executed as a full season rehearsal in this reconciliation.
 
+**Reconciled 2026-09-04.** No new evidence. No full-season rehearsal artifact exists in `qa-artifacts/`. The populated season/postseason/history tables cited above are synthetic QA history seeded by `scripts/qa-league-reset.mjs`, not the output of an executed season rehearsal, and must not be read as proof that season automation runs. Production still has exactly one active cron job, limited to waiver processing, so unattended weekly operation has no scheduler behind it beyond waivers and the draft autopick job recorded under Gate 1.
+
 ---
 
 ## Gate 5 — League Feels Alive
@@ -290,7 +347,10 @@
 - **PROVEN:** Production has 68 league feed events, 5 rivalries, 80 franchise achievements, 46 franchise stadium features, 15 story events, 6 recap scripts, 25 recap scenes, and 2 recap renders.
 - **PROVEN:** Current Recap V1 function builds text-forward scene kinds including `stadium_open`, `score_reveal`, `arcade_star`, and `winner_moment`.
 - **PROVEN:** Human visual inspection on 2026-09-01 accepted the captured mobile/desktop screenshot direction and website direction where screenshot evidence exists.
+- **PROVEN:** All ten authenticated actors rendered the Front Office / League HQ shell with correct league, role, and franchise context; `qa-artifacts/2026-08-30_10-manager-regression/SUMMARY.md` records UX-FO-001 through UX-FO-010 PASS with 24 screenshots and zero failed or blocked checks.
 - **UNVERIFIED:** Useful notifications, deterministic story-event coverage, all-play/rankings presentation beyond captured screenshots, and Recap V2 action-first visual quality have not been executed or creatively accepted in this reconciliation.
+
+**Reconciled 2026-09-04.** Minor update only. The ten-actor Front Office pass above is the one addition. The 10-manager regression covers Front Office landing per actor and nothing deeper; there is no artifact exercising Locker Room posting, notification delivery, or story-event generation as user flows. Accessibility work under `docs/accessibility/` added unit-test coverage for Locker Room and standings semantics, but unit tests are not gate evidence for this gate's experiential criteria.
 
 ---
 
@@ -320,6 +380,16 @@ Entry requires Gates 0–5 to satisfy the beta-entry acceptance criteria defined
 **STATUS:** NOT STARTED
 
 Requires legal/trademark/data-rights/privacy/moderation/app-store review plus a validated cost model and unit economics.
+
+### Evidence log
+
+**Annotated 2026-09-04.** Foundation code for the Executive League Season Pass now exists, but nothing in it advances this gate.
+
+- **PROVEN:** `apps/web/lib/executive/` contains a capability matrix, entitlement service, feature flags, and a Stripe configuration contract, with tests.
+- **PROVEN:** `supabase/migrations/20260902065522_executive_entitlement_foundation.sql` defines `league_season_entitlements`.
+- **UNVERIFIED:** That migration is not applied to production; production migration-history drift still blocks `supabase db push --linked --dry-run`.
+- **UNVERIFIED:** No Stripe checkout, webhook, product, or price identifier exists. `apps/web/lib/executive/stripeConfig.ts` is a contract with empty placeholders, held deliberately per backlog Operating Rule 7 until real Stripe configuration is supplied.
+- **UNVERIFIED:** No cost model, unit economics, legal, trademark, data-rights, privacy, moderation, or app-store review has been performed.
 
 ---
 
