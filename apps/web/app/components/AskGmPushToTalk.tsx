@@ -1,7 +1,15 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
-import { createBrowserSpeechToText, microphonePermissionCopy, type SpeechToTextAdapter } from '../../lib/voice/speechToText';
+import { microphonePermissionCopy } from '../../lib/voice/speechToText';
+import {
+  createBoundedSpeechCapture,
+  createBrowserSpeechProvider,
+  selectSpeechToTextProvider,
+  type BoundedSpeechCapture,
+  type SpeechCaptureTelemetryEvent,
+  type SpeechToTextProvider
+} from '../../lib/voice/speechProvider';
 import { createBrowserTextToSpeech, type TextToSpeechAdapter } from '../../lib/voice/textToSpeech';
 import { announceToScreenReader, setGmAudioSpeaking } from './ScreenReaderAnnouncer';
 import { VisuallyHidden } from './accessibility';
@@ -56,6 +64,13 @@ export type AskGmPushToTalkProps = {
   onAsk?: (question: string) => void;
   /** Requests deeper detail for the last answer. */
   onTellMeMore?: () => void;
+  /** BE-VOICE-101 provider abstraction. Defaults to the browser adapter. */
+  speechProviders?: SpeechToTextProvider[];
+  voiceInputEnabled?: boolean;
+  cloudSpeechEnabled?: boolean;
+  captureLimitMs?: number;
+  /** Capture metrics sink. Never receives transcript content. */
+  onSpeechTelemetry?: (event: SpeechCaptureTelemetryEvent) => void;
 };
 
 function seedState(input: {
@@ -86,7 +101,12 @@ export default function AskGmPushToTalk({
   policy,
   capabilities,
   onAsk,
-  onTellMeMore
+  onTellMeMore,
+  speechProviders,
+  voiceInputEnabled = true,
+  cloudSpeechEnabled = false,
+  captureLimitMs,
+  onSpeechTelemetry
 }: AskGmPushToTalkProps) {
   const [state, dispatch] = useReducer(
     askGmReducer,
@@ -94,7 +114,7 @@ export default function AskGmPushToTalk({
     seedState
   );
 
-  const sttRef = useRef<SpeechToTextAdapter | null>(null);
+  const captureRef = useRef<BoundedSpeechCapture | null>(null);
   const ttsRef = useRef<TextToSpeechAdapter | null>(null);
 
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -160,34 +180,55 @@ export default function AskGmPushToTalk({
   );
 
   function startListening() {
-    const adapter = createBrowserSpeechToText();
-    if (!adapter.isSupported()) {
-      send({ type: 'fail', error: 'microphone_denied' });
+    const selection = selectSpeechToTextProvider({
+      providers: speechProviders ?? [createBrowserSpeechProvider()],
+      voiceInputEnabled,
+      cloudEnabled: cloudSpeechEnabled
+    });
+
+    if (!selection.ok) {
+      // Degrades to the typed path with the selection's own explanation.
+      send({ type: 'fail', error: 'microphone_denied', message: selection.message });
       return;
     }
 
-    sttRef.current = adapter;
+    const capture = createBoundedSpeechCapture({
+      provider: selection.provider,
+      telemetry: onSpeechTelemetry
+    });
+    captureRef.current = capture;
     send({ type: 'pressToTalk' });
-    adapter.start({
-      onResult: result => send({ type: 'interimTranscript', text: result.transcript }),
-      onError: () => send({ type: 'fail', error: 'transcription_failed' }),
-      onEnd: () => {
-        sttRef.current = null;
+
+    capture.start({
+      limitMs: captureLimitMs,
+      onInterim: transcript => send({ type: 'interimTranscript', text: transcript }),
+      onFinal: result => {
+        captureRef.current = null;
+        if (!result.transcript) {
+          send({ type: 'releaseToTalk' });
+          return;
+        }
+        // Replays the final transcript into the machine so the submitted
+        // question is exactly the text the manager saw previewed.
+        send({ type: 'interimTranscript', text: result.transcript });
+        send({ type: 'releaseToTalk' });
+        onAsk?.(result.transcript);
+      },
+      onError: () => {
+        captureRef.current = null;
+        send({ type: 'fail', error: 'transcription_failed' });
       }
     });
   }
 
   function finishListening() {
-    sttRef.current?.stop();
-    const question = state.partialTranscript.trim();
-    send({ type: 'releaseToTalk' });
-    if (question) onAsk?.(question);
+    captureRef.current?.stop();
   }
 
   function cancel() {
-    sttRef.current?.abort();
+    captureRef.current?.cancel();
     ttsRef.current?.stop();
-    sttRef.current = null;
+    captureRef.current = null;
     setGmAudioSpeaking(false);
     send({ type: 'cancel' });
   }

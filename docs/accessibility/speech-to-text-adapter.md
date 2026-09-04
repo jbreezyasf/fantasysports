@@ -4,6 +4,10 @@
 
 BE-VOICE-052 is implemented with a browser Web Speech API adapter.
 
+**Extended by BE-VOICE-101.** Provider abstraction, capture duration cap, and
+telemetry now live in `apps/web/lib/voice/speechProvider.ts`, which wraps this
+adapter unchanged. See `docs/accessibility/speech-provider-abstraction.md`.
+
 ## Files
 
 - `apps/web/lib/voice/speechToText.ts`
