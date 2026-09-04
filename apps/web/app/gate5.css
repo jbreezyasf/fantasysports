@@ -167,3 +167,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
   .actions a,.actions button,.actions form,.arenaMatchupHero .actions>*{width:100%}
   .leagueMetaRow,.draftPositionRail{flex-wrap:wrap;overflow-x:visible}
 }
+/* BE-VOICE-100 Ask GM transcript, Tell me more, and policy states */
+.askGmControl{flex-wrap:wrap}
+.askGmHistory{max-width:220px;max-height:150px;overflow-y:auto;margin:0;padding:4px 0}
+.askGmHistory:focus-visible{outline:2px solid #f0d77c;outline-offset:2px}
+.askGmTurns{display:flex;flex-direction:column;gap:5px;margin:0;padding:0;list-style:none}
+.askGmTurn{display:flex;flex-direction:column;gap:2px;font-size:.68rem;overflow-wrap:anywhere}
+.askGmTurnRole{color:#8f8a80;font-size:.58rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.askGmTurn.is-manager .askGmTurnText{color:#f5f1e8}
+.askGmTurn.is-assistant .askGmTurnText{color:#cfd9ff}
+.askGmError:focus-visible{outline:2px solid #ff6f61;outline-offset:2px}
+.askGmTypedSubmit{display:inline-flex}
+.askGmControl--unavailable{flex-direction:column;align-items:flex-start;gap:6px}
+.askGmUnavailable{max-width:220px;margin:0;color:#d8d3c9;font-size:.7rem;overflow-wrap:anywhere}
+.askGmUpgrade{display:flex;flex-direction:column;gap:3px;max-width:220px;padding:7px 9px;border:1px solid #4a4238;background:#15161a}
+.askGmUpgradeHeadline{color:#f0d77c;font-size:.64rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase}
+.askGmUpgrade span{color:#d8d3c9;font-size:.68rem;overflow-wrap:anywhere}
+@media (prefers-reduced-motion:reduce){.askGmDot{box-shadow:none}}

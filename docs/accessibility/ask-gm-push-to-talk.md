@@ -4,6 +4,11 @@
 
 BE-VOICE-051 is implemented behind the `voice_gm` feature flag.
 
+**Superseded in part by BE-VOICE-100.** This component now drives its state from
+`apps/web/app/components/askGm/askGmMachine.ts` and adds a transcript, Tell me
+more, focus restoration, an assistant integration seam, and BE-GM-105 policy
+gating. See `docs/accessibility/ask-gm-control.md`.
+
 ## Files
 
 - `apps/web/app/components/AskGmPushToTalk.tsx`
