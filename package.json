@@ -19,6 +19,8 @@
     "qa:auth:save": "node scripts/qa-auth-save.mjs",
     "qa:draft:run": "node scripts/qa-full-draft.mjs",
     "qa:draft:realtime": "node scripts/qa-draft-realtime.mjs",
+    "qa:draft:watch": "node scripts/qa-draft-watch.mjs",
+    "qa:draft:verify": "node scripts/qa-draft-verify-rosters.mjs",
     "qa:transactions:run": "node scripts/qa-transactions-run.mjs",
     "qa:roster-integrity:audit": "node scripts/qa-roster-integrity-audit.mjs",
     "qa:roster-integrity:visual": "node scripts/qa-roster-integrity-visual.mjs",
