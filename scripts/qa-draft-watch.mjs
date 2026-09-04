@@ -10,7 +10,10 @@ const supabase = await signInQaActor('Commissioner');
 const fixture = await resolveQaFixture(supabase);
 const draftId = fixture.draft.id;
 
-const deadlineMs = Date.now() + 75 * 60 * 1000;
+// Autopick throughput is bounded by the cron frequency (every 60s), not by
+// pick_seconds (30s), so a fully idle 150-pick draft takes ~150 minutes.
+const watchMinutes = Number(process.env.QA_WATCH_MINUTES || 180);
+const deadlineMs = Date.now() + watchMinutes * 60 * 1000;
 let last = -1;
 
 while (Date.now() < deadlineMs) {
@@ -37,5 +40,5 @@ while (Date.now() < deadlineMs) {
   }
   await new Promise(resolve => setTimeout(resolve, 30_000));
 }
-console.log('WATCH TIMEOUT: draft did not complete inside 75 minutes');
+console.log(`WATCH TIMEOUT: draft did not complete inside ${watchMinutes} minutes`);
 process.exit(2);
