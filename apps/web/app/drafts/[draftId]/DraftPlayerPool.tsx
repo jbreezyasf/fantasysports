@@ -15,7 +15,9 @@ const rosterGuide=[['QB','1 starter'],['RB','2 starters'],['WR','2 starters'],['
 function formatRankingVersion(value:string){
   const parsed=new Date(value);
   if(Number.isNaN(parsed.getTime()))return value;
-  return parsed.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  // Explicit locale and time zone: an undefined locale resolves to the server's
+  // locale during SSR and the viewer's locale on the client, which mismatches.
+  return parsed.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 }
 
 function formatScore(value:number|null){
