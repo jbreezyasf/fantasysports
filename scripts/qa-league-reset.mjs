@@ -466,6 +466,14 @@ select jsonb_pretty(to_jsonb(summary)) as qa_fixture_summary from summary;
 commit;
 `;
 
+// --print-sql emits the exact statement this script would run, so the reset can
+// be applied through another authenticated path (for example the Supabase MCP
+// connection) without hand-writing production SQL.
+if (process.argv.includes('--print-sql')) {
+  process.stdout.write(sql);
+  process.exit(0);
+}
+
 const tempDir = await mkdtemp(join(tmpdir(), 'big-exec-qa-reset-'));
 const file = join(tempDir, 'reset.sql');
 
