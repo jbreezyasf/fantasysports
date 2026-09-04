@@ -16,7 +16,7 @@ export default async function SchedulePage({ params, searchParams }:{params:Prom
   if (!league) notFound();
   const { data:member } = await supabase.from('league_members').select('role').eq('league_id',leagueId).eq('user_id',user.id).maybeSingle();
   if (!member) notFound();
-  const { data:season } = await supabase.from('league_seasons').select('id,status').eq('league_id',leagueId).maybeSingle();
+  const { data:season } = await supabase.from('league_seasons').select('id,status').eq('league_id',leagueId).eq('is_current',true).maybeSingle();
   if (!season) notFound();
   const { data:seasonFranchises } = await supabase.from('season_franchises').select('id,franchises(name,abbreviation)').eq('league_season_id',season.id);
   const franchiseMap = new Map((seasonFranchises ?? []).map(sf=>[sf.id,first(sf.franchises as Franchise|Franchise[]|null)]));

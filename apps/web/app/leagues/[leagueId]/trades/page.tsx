@@ -10,7 +10,7 @@ export default async function TradesPage({params,searchParams}:{params:Promise<{
  const [{data:league},{data:member},{data:season}]=await Promise.all([
   supabase.from('fantasy_leagues').select('name').eq('id',leagueId).maybeSingle(),
   supabase.from('league_members').select('role').eq('league_id',leagueId).eq('user_id',user.id).maybeSingle(),
-  supabase.from('league_seasons').select('id,trade_deadline_at').eq('league_id',leagueId).maybeSingle()
+  supabase.from('league_seasons').select('id,trade_deadline_at').eq('league_id',leagueId).eq('is_current',true).maybeSingle()
  ]); if(!league||!member||!season) notFound();
  const deadline=season.trade_deadline_at?new Date(season.trade_deadline_at):null;
  const tradeClosed=!!deadline&&Date.now()>=deadline.getTime();
