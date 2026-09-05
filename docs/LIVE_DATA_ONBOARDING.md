@@ -43,3 +43,28 @@ Never prefix provider secrets with `NEXT_PUBLIC_`, paste them into chat, or comm
 ## Human handoff
 
 Once the provider account is active, enter the credentials directly in Vercel. The next engineering step is a provider-specific adapter and a historical-week reconciliation run. No UI rewrite should be required.
+## balldontlie NFL Draft Values
+
+balldontlie is the preferred paid provider path for new NFL and future NBA work. Keep Sportradar configured as a fallback until the balldontlie proof/import has run successfully against production data.
+
+Required variables:
+
+```bash
+BALLDONTLIE_API_KEY=
+BALLDONTLIE_BASE_URL=https://api.balldontlie.io
+BALLDONTLIE_MIN_REQUEST_MS=12500
+```
+
+Use the proof-only mode first. It checks teams, one season-stat page, and the GOAT-tier fantasy endpoints without writing database rows:
+
+```bash
+npm run data:balldontlie:nfl:historical -- --proof-only --sample-year=2025 --current-season=2026
+```
+
+After the proof passes, import historical NFL draft values into `draft_historical_values`:
+
+```bash
+npm run data:balldontlie:nfl:historical -- --years=2021,2022,2023,2024,2025 --current-season=2026
+```
+
+For a no-write rehearsal, add `--dry-run`. The importer writes only season-stat scoring to the draft-value table. Fantasy rankings, ADP, and projections are verified for availability first, but are not mixed into the draft board yet so draft values are not double-counted.
