@@ -14,10 +14,13 @@ function loadLocalEnv(file = '.env.local', env = process.env) {
 
 loadLocalEnv();
 
-const args = new Map(process.argv.slice(2).map((arg) => {
-  const [key, value = 'true'] = arg.replace(/^--/, '').split('=');
-  return [key, value];
-}));
+const args = new Map(process.argv.slice(2)
+  .map((arg) => arg.trim())
+  .filter((arg) => arg && arg !== '--')
+  .map((arg) => {
+    const [key, value = 'true'] = arg.replace(/^--/, '').split('=');
+    return [key, value];
+  }));
 
 if (args.has('help')) {
   console.log(`Usage:
@@ -31,7 +34,7 @@ Options:
   --years=YYYY,...        Historical seasons to import. Defaults to 2021-2025.
   --season-type=2         1 preseason, 2 regular season, 3 postseason. Defaults to 2.
   --current-season=YYYY   Season used to verify fantasy rankings, ADP, and projections.
-  --ranking-type=half_ppr Ranking type for the fantasy rankings proof call.
+  --ranking-type=ppr      Ranking type for the fantasy rankings proof call.
 `);
   process.exit(0);
 }
@@ -43,7 +46,7 @@ const years = (args.get('years') ?? '2021,2022,2023,2024,2025')
 const seasonType = Number(args.get('season-type') ?? 2);
 const dryRun = args.has('dry-run');
 const proofOnly = args.has('proof-only');
-const rankingType = args.get('ranking-type') ?? 'half_ppr';
+const rankingType = args.get('ranking-type') ?? 'ppr';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const apiKey = process.env.BALLDONTLIE_API_KEY || process.env.balldontlie || (process.env.SPORTS_DATA_PROVIDER === 'balldontlie' ? process.env.SPORTS_DATA_API_KEY : '');
@@ -194,11 +197,16 @@ async function bdlAll(path, params = {}) {
   return rows;
 }
 
+async function bdlPage(path, params = {}) {
+  const payload = await bdlGet(path, { ...params, per_page: params.per_page ?? 1 });
+  return payload.data ?? [];
+}
+
 async function proveFantasyEndpoints(currentSeason) {
   const [rankings, adp, projections] = await Promise.all([
-    bdlAll('/nfl/v1/fantasy/rankings', { season: currentSeason, ranking_type: rankingType, per_page: 1 }),
-    bdlAll('/nfl/v1/fantasy/adp', { season: currentSeason, per_page: 1 }),
-    bdlAll('/nfl/v1/fantasy/projections', { season: currentSeason, per_page: 1 }),
+    bdlPage('/nfl/v1/fantasy/rankings', { season: currentSeason, ranking_type: rankingType, per_page: 1 }),
+    bdlPage('/nfl/v1/fantasy/adp', { season: currentSeason, per_page: 1 }),
+    bdlPage('/nfl/v1/fantasy/projections', { season: currentSeason, per_page: 1 }),
   ]);
   return {
     season: currentSeason,
@@ -216,7 +224,7 @@ async function main() {
 
   if (proofOnly) {
     const sampleYear = Number(args.get('sample-year') ?? currentSeason);
-    const sampleStats = await bdlAll('/nfl/v1/season_stats', { season: sampleYear, season_type: seasonType, per_page: 1 });
+    const sampleStats = await bdlPage('/nfl/v1/season_stats', { season: sampleYear, season_type: seasonType, per_page: 1 });
     console.log(JSON.stringify({ proofOnly, teams: teams.length, sampleYear, sampleStats: sampleStats.length, fantasyProof, requests }, null, 2));
     return;
   }
