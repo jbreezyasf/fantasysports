@@ -59,6 +59,27 @@ describe('buildDraftRankings', () => {
     expect(rankings.defenses).toMatchObject([{ id: 'steady-dst', overallRank: 3, positionRank: 1, rankingScore: 120 }]);
   });
 
+  it('prefers balldontlie over fallback values for the same asset season', () => {
+    const rankings = buildDraftRankings(
+      [
+        { id: 'primary-rb', displayName: 'Primary Runner', position: 'RB', team: 'ALP' },
+        { id: 'fallback-rb', displayName: 'Fallback Runner', position: 'RB', team: 'BET' },
+      ],
+      [],
+      [
+        { assetId: 'primary-rb', points: 80, calculated_at: '2026-08-19T12:00:00Z', seasonYear: 2025, source: 'existing_fantasy_scores' },
+        { assetId: 'primary-rb', points: 160, calculated_at: '2026-08-18T12:00:00Z', seasonYear: 2025, source: 'balldontlie' },
+        { assetId: 'fallback-rb', points: 120, calculated_at: '2026-08-19T12:00:00Z', seasonYear: 2025, source: 'existing_fantasy_scores' },
+      ],
+      [],
+    );
+
+    expect(rankings.athletes.map(player => [player.id, player.overallRank, player.rankingScore])).toEqual([
+      ['primary-rb', 1, 160],
+      ['fallback-rb', 2, 120],
+    ]);
+  });
+
   it('uses conservative position priors when no historical ranking data exists', () => {
     const rankings = buildDraftRankings(
       [

@@ -3,6 +3,7 @@ export type DraftRankingScore = {
   points: number | string | null;
   calculated_at: string | null;
   seasonYear?: number | string | null;
+  source?: string | null;
 };
 
 export type RankableAthlete = {
@@ -73,6 +74,12 @@ const REPLACEMENT_RANK: Record<string, number> = {
   K: 12,
 };
 
+const SOURCE_PRIORITY: Record<string, number> = {
+  balldontlie: 1,
+  sportradar: 2,
+  existing_fantasy_scores: 3,
+};
+
 function normalizeScore(value: number | string | null) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
@@ -92,7 +99,7 @@ function normalizeSeasonYear(value: number | string | null | undefined) {
 }
 
 function scoreMap(scores: DraftRankingScore[]) {
-  const perSeason = new Map<string, Map<number, number>>();
+  const perSeason = new Map<string, Map<number, { points: number; sourcePriority: number; calculatedAt: string }>>();
   const aggregate = new Map<string, number>();
   let latestVersion: string | null = null;
   let hasSeasonalScores = false;
@@ -106,8 +113,13 @@ function scoreMap(scores: DraftRankingScore[]) {
       aggregate.set(score.assetId, (aggregate.get(score.assetId) ?? 0) + points);
     } else {
       hasSeasonalScores = true;
-      const seasons = perSeason.get(score.assetId) ?? new Map<number, number>();
-      seasons.set(seasonYear, (seasons.get(seasonYear) ?? 0) + points);
+      const seasons = perSeason.get(score.assetId) ?? new Map<number, { points: number; sourcePriority: number; calculatedAt: string }>();
+      const sourcePriority = SOURCE_PRIORITY[score.source ?? ''] ?? 9;
+      const calculatedAt = score.calculated_at ?? '';
+      const existing = seasons.get(seasonYear);
+      if (!existing || sourcePriority < existing.sourcePriority || (sourcePriority === existing.sourcePriority && calculatedAt > existing.calculatedAt)) {
+        seasons.set(seasonYear, { points, sourcePriority, calculatedAt });
+      }
       perSeason.set(score.assetId, seasons);
     }
     if (score.calculated_at && (!latestVersion || score.calculated_at > latestVersion)) {
@@ -120,7 +132,7 @@ function scoreMap(scores: DraftRankingScore[]) {
     const recentTotals = [...seasons.entries()]
       .sort(([a], [b]) => b - a)
       .slice(0, 5)
-      .map(([, points]) => points);
+      .map(([, value]) => value.points);
     if (recentTotals.length) {
       totals.set(assetId, recentTotals.reduce((sum, points) => sum + points, 0) / recentTotals.length);
     }

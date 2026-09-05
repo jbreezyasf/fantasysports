@@ -4,6 +4,7 @@ import {
   balldontliePlayerFantasyPoints,
   balldontliePlayerName,
   normalizeNflPosition,
+  normalizeNflTeamAlias,
   readStat,
 } from './balldontlieScoring';
 
@@ -12,6 +13,13 @@ describe('balldontlie NFL normalization', () => {
     expect(normalizeNflPosition('QB')).toBe('QB');
     expect(normalizeNflPosition('dst')).toBe('D/ST');
     expect(normalizeNflPosition('DEF')).toBe('D/ST');
+    expect(normalizeNflPosition('PK')).toBe('K');
+  });
+
+  it('normalizes provider team aliases into Big Exec team aliases', () => {
+    expect(normalizeNflTeamAlias('JAC')).toBe('JAX');
+    expect(normalizeNflTeamAlias('WSH')).toBe('WAS');
+    expect(normalizeNflTeamAlias('LAR')).toBe('LA');
   });
 
   it('builds a stable player display name from first and last name', () => {

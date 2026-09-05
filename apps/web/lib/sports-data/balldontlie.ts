@@ -5,6 +5,7 @@ export {
   balldontliePlayerFantasyPoints,
   balldontliePlayerName,
   normalizeNflPosition,
+  normalizeNflTeamAlias,
   numberValue,
   readStat,
 } from './balldontlieScoring';

@@ -40,7 +40,16 @@ export function readStat(row: Record<string, unknown>, key: keyof typeof statAli
 export function normalizeNflPosition(value?: string | null) {
   const position = value?.trim().toUpperCase();
   if (position === 'DST' || position === 'DEF') return 'D/ST';
+  if (position === 'PK') return 'K';
   return position ?? '';
+}
+
+export function normalizeNflTeamAlias(value?: string | null) {
+  const alias = value?.trim().toUpperCase();
+  if (alias === 'JAC') return 'JAX';
+  if (alias === 'WSH') return 'WAS';
+  if (alias === 'LAR') return 'LA';
+  return alias ?? '';
 }
 
 export function balldontliePlayerName(player?: BalldontlieNflPlayer | null) {

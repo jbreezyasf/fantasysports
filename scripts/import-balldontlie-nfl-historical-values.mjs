@@ -31,6 +31,7 @@ if (args.has('help')) {
 Options:
   --proof-only            Check provider access without database writes.
   --dry-run               Fetch and map rows without database writes.
+  --verbose               Print per-season fetch progress.
   --years=YYYY,...        Historical seasons to import. Defaults to 2021-2025.
   --season-type=2         1 preseason, 2 regular season, 3 postseason. Defaults to 2.
   --current-season=YYYY   Season used to verify fantasy rankings, ADP, and projections.
@@ -46,6 +47,7 @@ const years = (args.get('years') ?? '2021,2022,2023,2024,2025')
 const seasonType = Number(args.get('season-type') ?? 2);
 const dryRun = args.has('dry-run');
 const proofOnly = args.has('proof-only');
+const verbose = args.has('verbose');
 const rankingType = args.get('ranking-type') ?? 'ppr';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -69,10 +71,17 @@ const number = (value) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-const normalizeAlias = (alias) => alias?.trim().toUpperCase() === 'JAC' ? 'JAX' : alias?.trim().toUpperCase();
+const normalizeAlias = (alias) => {
+  const normalized = alias?.trim().toUpperCase();
+  if (normalized === 'JAC') return 'JAX';
+  if (normalized === 'WSH') return 'WAS';
+  if (normalized === 'LAR') return 'LA';
+  return normalized;
+};
 const normalizePosition = (position) => {
   const normalized = position?.trim().toUpperCase();
   if (normalized === 'DST' || normalized === 'DEF') return 'D/ST';
+  if (normalized === 'PK') return 'K';
   return normalized ?? '';
 };
 const playerName = (player) => [player?.first_name, player?.last_name].filter(Boolean).join(' ').trim();
@@ -147,6 +156,21 @@ function defenseFantasyPoints(row) {
     + readStat(row, 'specialTeamsTouchdowns') * 6
     + pointsAllowedScore
   ) * 100) / 100;
+}
+
+function dedupeRows(rows) {
+  const byConflictKey = new Map();
+  for (const row of rows) {
+    const assetKey = row.athlete_id ?? row.real_team_id;
+    const key = `${row.competition_id}|${row.season_year}|${row.source}|${row.asset_type}|${assetKey}`;
+    const existing = byConflictKey.get(key);
+    if (!existing || number(row.points) > number(existing.points)) byConflictKey.set(key, row);
+  }
+  return [...byConflictKey.values()];
+}
+
+function dedupeProviderLinks(providerLinks) {
+  return [...new Map(providerLinks.map((row) => [`${row.provider}|${row.provider_athlete_id}`, row])).values()];
 }
 
 async function bdlGet(path, params = {}) {
@@ -251,16 +275,26 @@ async function main() {
     `${athlete.display_name.toLowerCase()}|${athlete.position}|${athlete.real_team_id ?? ''}`,
     athlete.id,
   ]));
+  const athleteByNamePosition = new Map();
+  const duplicatedNamePositions = new Set();
+  for (const athlete of athleteResult.data ?? []) {
+    const key = `${athlete.display_name.toLowerCase()}|${athlete.position}`;
+    if (athleteByNamePosition.has(key)) duplicatedNamePositions.add(key);
+    athleteByNamePosition.set(key, athlete.id);
+  }
+  for (const key of duplicatedNamePositions) athleteByNamePosition.delete(key);
 
   const rows = [];
   const providerLinks = [];
   const skippedPlayers = [];
 
   for (const year of years) {
+    if (verbose) console.error(`Fetching balldontlie NFL ${year} season stats...`);
     const [playerStats, teamStats] = await Promise.all([
       bdlAll('/nfl/v1/season_stats', { season: year, season_type: seasonType, per_page: 100 }),
       bdlAll('/nfl/v1/team_season_stats', { season: year, team_ids: mappedTeamIds, season_type: seasonType, per_page: 100 }),
     ]);
+    if (verbose) console.error(`Fetched ${year}: playerStats=${playerStats.length}, teamStats=${teamStats.length}`);
 
     for (const stat of teamStats) {
       const team = bdlTeamById.get(stat.team?.id);
@@ -287,7 +321,10 @@ async function main() {
       const position = normalizePosition(player?.position_abbreviation ?? stat.position ?? player?.position);
       if (!['QB', 'RB', 'WR', 'TE', 'K'].includes(position)) continue;
       const name = playerName(player);
-      const athleteId = athleteByProviderId.get(String(player?.id)) ?? athleteByIdentity.get(`${name.toLowerCase()}|${position}|${team?.dbId ?? ''}`);
+      const athleteId =
+        athleteByProviderId.get(String(player?.id)) ??
+        athleteByIdentity.get(`${name.toLowerCase()}|${position}|${team?.dbId ?? ''}`) ??
+        athleteByNamePosition.get(`${name.toLowerCase()}|${position}`);
       if (!athleteId) {
         skippedPlayers.push({ year, playerId: player?.id ?? null, name: name || 'Unknown', position, team: team?.abbreviation ?? null });
         continue;
@@ -314,24 +351,28 @@ async function main() {
     counts[row.position] = (counts[row.position] ?? 0) + 1;
     return counts;
   }, {});
+  const dedupedRows = dedupeRows(rows);
+  const dedupedProviderLinks = dedupeProviderLinks(providerLinks);
+  const duplicateRows = rows.length - dedupedRows.length;
+  const duplicateProviderLinks = providerLinks.length - dedupedProviderLinks.length;
 
   if (dryRun) {
-    console.log(JSON.stringify({ dryRun, years, seasonType, rows: rows.length, skippedPlayers: skippedPlayers.length, byPosition, fantasyProof, requests }, null, 2));
+    console.log(JSON.stringify({ dryRun, years, seasonType, rows: dedupedRows.length, duplicateRows, skippedPlayers: skippedPlayers.length, byPosition, fantasyProof, requests }, null, 2));
     return;
   }
 
-  for (let index = 0; index < providerLinks.length; index += 500) {
-    const { error } = await supabase.from('athlete_provider_ids').upsert(providerLinks.slice(index, index + 500), { onConflict: 'provider,provider_athlete_id' });
+  for (let index = 0; index < dedupedProviderLinks.length; index += 500) {
+    const { error } = await supabase.from('athlete_provider_ids').upsert(dedupedProviderLinks.slice(index, index + 500), { onConflict: 'provider,provider_athlete_id' });
     if (error) throw new Error(error.message);
   }
-  for (let index = 0; index < rows.length; index += 500) {
-    const { error } = await supabase.from('draft_historical_values').upsert(rows.slice(index, index + 500), {
+  for (let index = 0; index < dedupedRows.length; index += 500) {
+    const { error } = await supabase.from('draft_historical_values').upsert(dedupedRows.slice(index, index + 500), {
       onConflict: 'competition_id,season_year,source,asset_type,asset_key',
     });
     if (error) throw new Error(error.message);
   }
 
-  console.log(JSON.stringify({ imported: rows.length, providerLinks: providerLinks.length, skippedPlayers: skippedPlayers.length, requests, years, seasonType, byPosition, fantasyProof }, null, 2));
+  console.log(JSON.stringify({ imported: dedupedRows.length, duplicateRows, providerLinks: dedupedProviderLinks.length, duplicateProviderLinks, skippedPlayers: skippedPlayers.length, requests, years, seasonType, byPosition, fantasyProof }, null, 2));
 }
 
 main().catch((error) => {
