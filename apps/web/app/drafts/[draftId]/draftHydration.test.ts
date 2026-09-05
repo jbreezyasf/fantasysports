@@ -29,6 +29,15 @@ describe('draft client components avoid hydration mismatches', () => {
     expect(source('drafts/[draftId]/DraftClock.tsx')).toContain('aria-label={`${totalSeconds} seconds remaining`}');
   });
 
+  it('submits expired picks automatically once the server deadline has passed', () => {
+    const clock = source('drafts/[draftId]/DraftClock.tsx');
+    const page = source('drafts/[draftId]/page.tsx');
+
+    expect(clock).toContain('requestSubmit()');
+    expect(clock).toContain('submittedDeadline === deadlineAt');
+    expect(page).toContain('processExpiredAction={processExpiredDraftPick}');
+  });
+
   it('formats draft ranking dates with an explicit locale and time zone', () => {
     const pool = source('drafts/[draftId]/DraftPlayerPool.tsx');
 

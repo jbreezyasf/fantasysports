@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { announceToScreenReader } from '../../components/ScreenReaderAnnouncer';
 
 function formatRemaining(milliseconds: number) {
@@ -12,8 +12,21 @@ function formatRemaining(milliseconds: number) {
 
 const thresholds = [30, 15, 5];
 
-export default function DraftClock({ deadlineAt, announcementPrefix, announceThresholds = false }: { deadlineAt: string | null; announcementPrefix?: string; announceThresholds?: boolean }) {
+export default function DraftClock({
+  deadlineAt,
+  announcementPrefix,
+  announceThresholds = false,
+  draftId,
+  processExpiredAction
+}: {
+  deadlineAt: string | null;
+  announcementPrefix?: string;
+  announceThresholds?: boolean;
+  draftId?: string;
+  processExpiredAction?: (formData: FormData) => void | Promise<void>;
+}) {
   const deadline = useMemo(() => deadlineAt ? new Date(deadlineAt).getTime() : null, [deadlineAt]);
+  const expiredFormRef = useRef<HTMLFormElement>(null);
   // `now` stays null through the server render and the first client render.
   // Seeding it with Date.now() made the server emit a countdown computed from
   // server time that the client immediately disagreed with, which is a hydration
@@ -21,6 +34,7 @@ export default function DraftClock({ deadlineAt, announcementPrefix, announceThr
   // existing "Clock pending" state and the real clock starts on mount.
   const [now, setNow] = useState<number | null>(null);
   const [announced, setAnnounced] = useState<number[]>([]);
+  const [submittedDeadline, setSubmittedDeadline] = useState<string | null>(null);
 
   useEffect(() => {
     setNow(Date.now());
@@ -30,6 +44,7 @@ export default function DraftClock({ deadlineAt, announcementPrefix, announceThr
 
   useEffect(() => {
     setAnnounced([]);
+    setSubmittedDeadline(null);
   }, [deadlineAt]);
 
   const remaining = deadline !== null && now !== null ? deadline - now : null;
@@ -47,7 +62,22 @@ export default function DraftClock({ deadlineAt, announcementPrefix, announceThr
     });
   }, [announceThresholds, announcementPrefix, announced, deadlineAt, totalSeconds]);
 
+  useEffect(() => {
+    if (!draftId || !processExpiredAction || !deadlineAt || remaining === null || remaining > 0 || submittedDeadline === deadlineAt) return;
+    setSubmittedDeadline(deadlineAt);
+    expiredFormRef.current?.requestSubmit();
+  }, [deadlineAt, draftId, processExpiredAction, remaining, submittedDeadline]);
+
   if (!deadline || remaining === null || totalSeconds === null) return <span className="draftClock" aria-live="polite">Clock pending</span>;
-  if (remaining <= 0) return <span className="draftClock isExpired" aria-live="polite">Expired</span>;
-  return <span className="draftClock" aria-label={`${totalSeconds} seconds remaining`}>{formatRemaining(remaining)}</span>;
+  const clock = remaining <= 0
+    ? <span className="draftClock isExpired" aria-live="polite">Expired</span>
+    : <span className="draftClock" aria-label={`${totalSeconds} seconds remaining`}>{formatRemaining(remaining)}</span>;
+  if (!draftId || !processExpiredAction) return clock;
+  return <>
+    {clock}
+    <form ref={expiredFormRef} action={processExpiredAction} hidden aria-hidden="true">
+      <input type="hidden" name="draft_id" value={draftId} />
+      <button type="submit">Process expired pick</button>
+    </form>
+  </>;
 }

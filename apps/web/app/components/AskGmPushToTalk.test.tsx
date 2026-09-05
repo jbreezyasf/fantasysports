@@ -44,10 +44,12 @@ describe('AskGmPushToTalk', () => {
     expect(html).toContain('Assistant GM spoken responses keep text visible');
   });
 
-  it('keeps Ask GM out of the header when the flag is disabled', () => {
+  it('keeps typed Ask GM in the header when voice input is disabled', () => {
     const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled={false} />);
 
-    expect(html).not.toContain('Assistant GM push to talk');
+    expect(html).toContain('Assistant GM push to talk');
+    expect(html).toContain('Assistant GM voice input is off');
+    expect(html).toContain('Type your Assistant GM question');
   });
 
   it('mounts Ask GM in the header when the flag is enabled', () => {

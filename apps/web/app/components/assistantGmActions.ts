@@ -234,7 +234,11 @@ export async function askHeaderAssistantGm(leagueId: string, question: string): 
   const flags = resolveExecutiveFeatureFlags();
   const gateway = createAssistantGmGateway({
     supabase: supabase as unknown as EntitlementSupabase & AssistantGmToolContext['supabase'],
-    flags: legacyVoiceEnabled ? { ...flags, assistant_gm: true, assistant_gm_voice_input: true } : flags
+    flags: {
+      ...flags,
+      assistant_gm: true,
+      assistant_gm_voice_input: legacyVoiceEnabled || flags.assistant_gm_voice_input
+    }
   });
   const response = await gateway.handle({
     userId: user.id,

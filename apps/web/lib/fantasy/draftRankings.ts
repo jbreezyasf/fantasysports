@@ -34,7 +34,16 @@ type Candidate<T> = {
 };
 
 export const DRAFT_RANKING_SOURCE = 'Big Exec internal form';
-export const DRAFT_RANKING_FALLBACK_VERSION = 'deterministic-fallback-v1';
+export const DRAFT_RANKING_FALLBACK_VERSION = 'big-exec-draft-board-v2';
+
+const POSITION_BASE_VALUE: Record<string, number> = {
+  RB: 100,
+  WR: 98,
+  QB: 86,
+  TE: 76,
+  'D/ST': 28,
+  K: 8,
+};
 
 const POSITION_PRIORITY: Record<string, number> = {
   RB: 1,
@@ -80,9 +89,19 @@ function compareCandidates(a: Candidate<unknown>, b: Candidate<unknown>) {
 
   const positionDelta = (POSITION_PRIORITY[a.position] ?? 99) - (POSITION_PRIORITY[b.position] ?? 99);
   if (positionDelta !== 0) return positionDelta;
-  const nameDelta = a.displayName.localeCompare(b.displayName);
-  if (nameDelta !== 0) return nameDelta;
   return a.id.localeCompare(b.id);
+}
+
+function fallbackScore(candidate: Pick<Candidate<unknown>, 'id' | 'position'>) {
+  return (POSITION_BASE_VALUE[candidate.position] ?? 0) + stableDraftBoardTiebreak(candidate.id);
+}
+
+function stableDraftBoardTiebreak(id: string) {
+  let hash = 0;
+  for (const char of id) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 1000;
+  }
+  return hash / 100000;
 }
 
 export function buildDraftRankings(
@@ -93,6 +112,7 @@ export function buildDraftRankings(
 ) {
   const athleteScoreMap = scoreMap(athleteScores);
   const defenseScoreMap = scoreMap(defenseScores);
+  const hasAnyScore = athleteScoreMap.totals.size > 0 || defenseScoreMap.totals.size > 0;
   const rankingVersion =
     [athleteScoreMap.latestVersion, defenseScoreMap.latestVersion].filter(Boolean).sort().at(-1) ??
     DRAFT_RANKING_FALLBACK_VERSION;
@@ -103,14 +123,14 @@ export function buildDraftRankings(
       id: asset.id,
       position: asset.position,
       displayName: asset.displayName,
-      score: athleteScoreMap.totals.get(asset.id) ?? null,
+      score: athleteScoreMap.totals.get(asset.id) ?? (hasAnyScore ? null : fallbackScore({ id: asset.id, position: asset.position })),
     })),
     ...defenses.map(asset => ({
       asset,
       id: asset.id,
       position: 'D/ST',
       displayName: asset.displayName,
-      score: defenseScoreMap.totals.get(asset.id) ?? null,
+      score: defenseScoreMap.totals.get(asset.id) ?? (hasAnyScore ? null : fallbackScore({ id: asset.id, position: 'D/ST' })),
     })),
   ].sort(compareCandidates);
 

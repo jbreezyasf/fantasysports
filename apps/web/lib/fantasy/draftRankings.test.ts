@@ -28,12 +28,13 @@ describe('buildDraftRankings', () => {
     expect(rankings.athletes[0].rankingScore).toBe(15);
   });
 
-  it('uses a stable fallback order when no score exists', () => {
+  it('uses Big Exec fallback draft values instead of alphabetical order when no score exists', () => {
     const rankings = buildDraftRankings(
       [
         { id: 'wr-b', displayName: 'B Receiver', position: 'WR', team: 'BET' },
         { id: 'rb-a', displayName: 'A Runner', position: 'RB', team: 'ALP' },
         { id: 'wr-a', displayName: 'A Receiver', position: 'WR', team: 'ALP' },
+        { id: 'qb-a', displayName: 'A Quarterback', position: 'QB', team: 'ALP' },
       ],
       [{ id: 'dst-a', displayName: 'A Defense', team: 'ALP' }],
       [],
@@ -43,9 +44,16 @@ describe('buildDraftRankings', () => {
     expect(rankings.version).toBe(DRAFT_RANKING_FALLBACK_VERSION);
     expect(rankings.athletes.map(player => [player.id, player.overallRank, player.positionRank])).toEqual([
       ['rb-a', 1, 1],
-      ['wr-a', 2, 1],
-      ['wr-b', 3, 2],
+      ['wr-b', 2, 1],
+      ['wr-a', 3, 2],
+      ['qb-a', 4, 1],
     ]);
-    expect(rankings.defenses).toMatchObject([{ id: 'dst-a', overallRank: 4, positionRank: 1 }]);
+    expect(rankings.defenses).toMatchObject([{ id: 'dst-a', overallRank: 5, positionRank: 1 }]);
+    expect(rankings.athletes.map(player => player.displayName)).not.toEqual([
+      'A Quarterback',
+      'A Receiver',
+      'A Runner',
+      'B Receiver',
+    ]);
   });
 });

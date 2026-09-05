@@ -332,6 +332,11 @@ export default function AskGmPushToTalk({
       <p className="srOnly" id="ask-gm-permission">
         {microphonePermissionCopy()}
       </p>
+      {!voiceInputEnabled && (
+        <p className="srOnly" role="status">
+          Assistant GM voice input is off. Typed Ask GM is available.
+        </p>
+      )}
 
       {state.partialTranscript && (
         <p className="askGmTranscript" aria-label={`Transcript: ${state.partialTranscript}`}>
