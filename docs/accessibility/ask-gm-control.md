@@ -2,7 +2,7 @@
 
 ## Status
 
-BE-VOICE-100 is implemented by evolving the existing BE-VOICE-051 push-to-talk entry point rather than adding a second Ask GM surface. It remains behind the `voice_gm` feature flag.
+BE-VOICE-100 is implemented by evolving the existing BE-VOICE-051 push-to-talk entry point rather than adding a second Ask GM surface. It remains behind the legacy `voice_gm` feature flag or the newer Assistant GM voice-input flag.
 
 ## Reconciliation note
 
@@ -14,6 +14,8 @@ BE-VOICE-100 is implemented by evolving the existing BE-VOICE-051 push-to-talk e
 - `apps/web/app/components/askGm/askGmMachine.test.ts`
 - `apps/web/app/components/AskGmPushToTalk.tsx`
 - `apps/web/app/components/AskGmPushToTalk.test.tsx`
+- `apps/web/app/components/assistantGmActions.ts`
+- `apps/web/app/components/BigExecAppHeader.tsx`
 - `apps/web/app/gate5.css`
 
 ## Architecture
@@ -21,6 +23,8 @@ BE-VOICE-100 is implemented by evolving the existing BE-VOICE-051 push-to-talk e
 Interaction behavior lives in a pure reducer (`askGmMachine`) so states, announcements, and focus destinations are testable without a DOM — this repository has no React Testing Library, so component tests are `renderToStaticMarkup` assertions and the behavioral coverage belongs in the machine.
 
 The component owns only the adapter wiring: `lib/voice/speechToText` for capture (BE-VOICE-052), `lib/voice/textToSpeech` for spoken output (BE-VOICE-053), and `ScreenReaderAnnouncer` for announcements.
+
+As of the 2026-09-05 finish branch, `BigExecAppHeader` wires `onAsk` to `askHeaderAssistantGm`, a server action that authenticates the user, verifies league membership, resolves the current league season, routes common roster/lineup/standings/draft/waiver/trade/history questions to the read-only Assistant GM gateway, and returns a visible/spoken answer. The action does not expose write tools.
 
 ## States
 
@@ -48,6 +52,6 @@ Every failure exposes cancel plus at least one of retry or type instead. A micro
 ## Known limits
 
 - Voice capture and spoken output still use browser adapters only; the provider abstraction for cloud STT/TTS is BE-VOICE-101/102.
-- `onAsk` is not yet wired to the Assistant GM gateway by any caller, so no live question reaches the tool boundary.
+- `onAsk` is wired from the authenticated product header to the read-only Assistant GM gateway in the finish branch. Production deployment and authenticated browser QA are still separate release evidence.
 - Audio priority against VoiceOver/TalkBack is modeled through the announcement queue's `gm` channel but is not proven on device; that is BE-VOICE-103.
 - No device assistive-technology session has been run for this control.

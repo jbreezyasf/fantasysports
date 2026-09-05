@@ -61,9 +61,9 @@ export type AskGmPushToTalkProps = {
   policy?: AssistantGmPolicyDecision;
   capabilities?: Partial<AskGmCapabilities>;
   /** Assistant execution seam. Wired by the caller; absent means typed-only echo. */
-  onAsk?: (question: string) => void;
+  onAsk?: (question: string) => AskGmAnswer | Promise<AskGmAnswer>;
   /** Requests deeper detail for the last answer. */
-  onTellMeMore?: () => void;
+  onTellMeMore?: () => AskGmAnswer | Promise<AskGmAnswer>;
   /** BE-VOICE-101 provider abstraction. Defaults to the browser adapter. */
   speechProviders?: SpeechToTextProvider[];
   voiceInputEnabled?: boolean;
@@ -72,6 +72,10 @@ export type AskGmPushToTalkProps = {
   /** Capture metrics sink. Never receives transcript content. */
   onSpeechTelemetry?: (event: SpeechCaptureTelemetryEvent) => void;
 };
+
+export type AskGmAnswer =
+  | { ok: true; text: string; detail?: string }
+  | { ok: false; message: string };
 
 function seedState(input: {
   initialState: AskGmPhase;
@@ -179,6 +183,35 @@ export default function AskGmPushToTalk({
     [send]
   );
 
+  const finishAnswer = useCallback(
+    (answer: AskGmAnswer | void) => {
+      if (!answer) {
+        const text = 'I am connected, but this screen has not provided a league answer yet. Type a roster, lineup, standings, draft, waiver, trade, or history question.';
+        send({ type: 'answer', text });
+        if (state.capabilities.spokenOutput) speak(text);
+        return;
+      }
+      if (!answer.ok) {
+        send({ type: 'fail', error: 'assistant_failed', message: answer.message });
+        return;
+      }
+      send({ type: 'answer', text: answer.text, detail: answer.detail });
+      if (state.capabilities.spokenOutput) speak(answer.text);
+    },
+    [send, speak, state.capabilities.spokenOutput]
+  );
+
+  const ask = useCallback(
+    async (question: string) => {
+      try {
+        finishAnswer(await onAsk?.(question));
+      } catch {
+        send({ type: 'fail', error: 'assistant_failed' });
+      }
+    },
+    [finishAnswer, onAsk, send]
+  );
+
   function startListening() {
     const selection = selectSpeechToTextProvider({
       providers: speechProviders ?? [createBrowserSpeechProvider()],
@@ -212,7 +245,7 @@ export default function AskGmPushToTalk({
         // question is exactly the text the manager saw previewed.
         send({ type: 'interimTranscript', text: result.transcript });
         send({ type: 'releaseToTalk' });
-        onAsk?.(result.transcript);
+        void ask(result.transcript);
       },
       onError: () => {
         captureRef.current = null;
@@ -247,7 +280,13 @@ export default function AskGmPushToTalk({
 
   function tellMeMore() {
     send({ type: 'tellMeMore' });
-    onTellMeMore?.();
+    if (onTellMeMore) {
+      void Promise.resolve(onTellMeMore()).then(finishAnswer).catch(() => send({ type: 'fail', error: 'assistant_failed' }));
+      return;
+    }
+    if (state.lastAnswer?.detail) {
+      finishAnswer({ ok: true, text: state.lastAnswer.detail });
+    }
   }
 
   function submitTyped(event: React.FormEvent) {
@@ -255,7 +294,7 @@ export default function AskGmPushToTalk({
     const question = state.draftText.trim();
     if (!question) return;
     send({ type: 'submitTyped' });
-    onAsk?.(question);
+    void ask(question);
   }
 
   // Policy denial replaces the control with the one shared explanation. The
@@ -320,17 +359,17 @@ export default function AskGmPushToTalk({
         </div>
       )}
 
-      <label className="askGmTypedFallback">
-        <span className="srOnly">Type your Assistant GM question</span>
-        <input
-          ref={typedInputRef}
-          id="ask-gm-typed-fallback"
-          value={state.draftText}
-          onChange={event => send({ type: 'changeDraft', text: event.target.value })}
-          placeholder="Type Ask GM question"
-        />
-      </label>
       <form className="askGmTypedSubmit" onSubmit={submitTyped}>
+        <label className="askGmTypedFallback">
+          <span className="srOnly">Type your Assistant GM question</span>
+          <input
+            ref={typedInputRef}
+            id="ask-gm-typed-fallback"
+            value={state.draftText}
+            onChange={event => send({ type: 'changeDraft', text: event.target.value })}
+            placeholder="Type Ask GM question"
+          />
+        </label>
         <button type="submit" className="secondary askGmButton" disabled={!state.draftText.trim()} aria-label="Send typed Assistant GM question">
           Ask
         </button>

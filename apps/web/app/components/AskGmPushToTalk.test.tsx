@@ -56,6 +56,13 @@ describe('AskGmPushToTalk', () => {
     expect(html).toContain('Assistant GM push to talk');
     expect(html).toContain('Start push to talk with Assistant GM');
   });
+
+  it('keeps header Ask GM non-modal when critical controls are active', () => {
+    const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled criticalControlsActive />);
+
+    expect(html).toContain('role="region"');
+    expect(html).not.toContain('role="dialog"');
+  });
 });
 
 const entitlementRequired: AssistantGmPolicyDecision = {
@@ -104,6 +111,7 @@ describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" />);
 
     expect(html).toContain('Send typed Assistant GM question');
+    expect(html).toContain('class="askGmTypedSubmit"');
     expect(html).toContain('id="ask-gm-typed-fallback"');
   });
 
