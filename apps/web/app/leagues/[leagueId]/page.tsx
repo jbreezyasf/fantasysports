@@ -22,7 +22,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null);
   const ownedIds = new Set((ownerships ?? []).map(item => item.franchise_id));
   const myFranchise = (franchises ?? []).find(item => ownedIds.has(item.id));
-  const { data: leagueSeason } = await supabase.from('league_seasons').select('id,competition_seasons(competitions(code,display_name))').eq('league_id', leagueId).maybeSingle();
+  const { data: leagueSeason } = await supabase.from('league_seasons').select('id,competition_seasons(competitions(code,display_name))').eq('league_id', leagueId).eq('is_current', true).maybeSingle();
   const competitionSeasonRelation = leagueSeason?.competition_seasons as unknown as { competitions?: { code?: string | null; display_name?: string | null } | { code?: string | null; display_name?: string | null }[] | null } | { competitions?: { code?: string | null; display_name?: string | null } | { code?: string | null; display_name?: string | null }[] | null }[] | null;
   const competitionSeason = Array.isArray(competitionSeasonRelation) ? competitionSeasonRelation[0] : competitionSeasonRelation;
   const competitionRelation = competitionSeason?.competitions;

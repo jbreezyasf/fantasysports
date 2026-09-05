@@ -40,7 +40,11 @@ export type AssistantGmToolName =
   | 'getDraftState'
   | 'getDraftAvailablePlayers'
   | 'getDraftQueue'
-  | 'getInjuryStatus';
+  | 'getInjuryStatus'
+  | 'getTradeContext'
+  | 'getInvitationState'
+  | 'getHistory'
+  | 'getEntitlement';
 
 export type AssistantGmToolRequest = {
   tool: AssistantGmToolName;
@@ -50,6 +54,7 @@ export type AssistantGmToolRequest = {
   matchupId?: string;
   athleteId?: string;
   athleteIds?: string[];
+  tradeId?: string;
   position?: string;
   query?: string;
   week?: number;
@@ -73,6 +78,9 @@ type DraftPickRow = { id: string; pick_number: number; round_number: number; rou
 type DraftQueueRow = { id: string; queue_rank: number; athlete_id?: string | null; real_team_id?: string | null };
 type WaiverHoldRow = { id: string; athlete_id?: string | null; real_team_id?: string | null; source_season_franchise_id?: string | null; starts_at?: string; clears_at: string; status: string; athletes?: Record<string, unknown> | Record<string, unknown>[] | null; real_teams?: Record<string, unknown> | Record<string, unknown>[] | null };
 type WaiverClaimRow = { id: string; waiver_hold_id: string; status: string; drop_roster_entry_id?: string | null; created_at?: string; failure_reason?: string | null };
+type TradeRow = { id: string; league_season_id: string; proposed_by_franchise_id: string; proposed_to_franchise_id: string; status: string; created_at?: string; resolved_at?: string | null };
+type LeagueInviteRow = { id: string; email: string; status: string; expires_at?: string | null; created_at?: string | null };
+type EntitlementRow = { id: string; league_season_id: string; product_code: string; status: string; activated_at?: string | null; expires_at?: string | null };
 
 export const assistantGmToolContracts: Record<AssistantGmToolName, { access: 'league_member' | 'owned_franchise' | 'league_member_or_participant'; writes: false; description: string }> = {
   getLeague: { access: 'league_member', writes: false, description: 'Read league metadata and requester league role.' },
@@ -89,7 +97,11 @@ export const assistantGmToolContracts: Record<AssistantGmToolName, { access: 'le
   getDraftState: { access: 'league_member', writes: false, description: 'Read draft status, current pick, and order state.' },
   getDraftAvailablePlayers: { access: 'league_member', writes: false, description: 'Read draft-available players ranked through the canonical draft ranking helper.' },
   getDraftQueue: { access: 'owned_franchise', writes: false, description: 'Read the requester-owned draft queue.' },
-  getInjuryStatus: { access: 'league_member', writes: false, description: 'Read verified injury status when present in the fantasy athlete pool.' }
+  getInjuryStatus: { access: 'league_member', writes: false, description: 'Read verified injury status when present in the fantasy athlete pool.' },
+  getTradeContext: { access: 'league_member', writes: false, description: 'Read current league trade context without accepting, rejecting, or proposing a trade.' },
+  getInvitationState: { access: 'league_member', writes: false, description: 'Read commissioner-authorized league invitation state.' },
+  getHistory: { access: 'league_member', writes: false, description: 'Read authorized league history, championships, awards, and story events.' },
+  getEntitlement: { access: 'league_member', writes: false, description: 'Read current league-season Assistant GM entitlement mode.' }
 };
 
 function fail(tool: AssistantGmToolName, code: 'unauthorized' | 'not_found' | 'invalid_request' | 'data_error', message: string): AssistantGmToolResponse {
@@ -289,6 +301,38 @@ export async function runAssistantGmTool(ctx: AssistantGmToolContext, request: A
         if (!request.draftId) return fail(request.tool, 'invalid_request', 'draftId is required');
         const queue = await many<DraftQueueRow>(ctx.supabase.from('draft_queues').select('id,queue_rank,athlete_id,real_team_id').eq('draft_id', request.draftId).eq('season_franchise_id', seasonFranchise.id).order('queue_rank'));
         return ok(request.tool, { seasonFranchiseId: seasonFranchise.id, queue });
+      }
+      case 'getTradeContext': {
+        await requireLeagueMember(ctx, request.leagueId);
+        const season = await currentSeason(ctx, request.leagueId);
+        let tradeQuery = ctx.supabase.from('trades').select('id,league_season_id,proposed_by_franchise_id,proposed_to_franchise_id,status,created_at,resolved_at').eq('league_season_id', season.id).order('created_at', { ascending: false }).limit(25);
+        if (request.tradeId) tradeQuery = tradeQuery.eq('id', request.tradeId);
+        const trades = await many<TradeRow>(tradeQuery);
+        const tradeIds = trades.map((trade) => trade.id);
+        const items = tradeIds.length ? await many(ctx.supabase.from('trade_items').select('id,trade_id,from_season_franchise_id,to_season_franchise_id,athlete_id,real_team_id').in('trade_id', tradeIds)) : [];
+        return ok(request.tool, { leagueSeasonId: season.id, trades, items });
+      }
+      case 'getInvitationState': {
+        const { member } = await requireLeagueMember(ctx, request.leagueId);
+        if (member.role !== 'commissioner') return fail(request.tool, 'unauthorized', 'Only commissioners can read league invitation state.');
+        const invites = await many<LeagueInviteRow>(ctx.supabase.from('league_invites').select('id,email,status,expires_at,created_at').eq('league_id', request.leagueId).order('created_at', { ascending: false }).limit(50));
+        return ok(request.tool, { invites });
+      }
+      case 'getHistory': {
+        await requireLeagueMember(ctx, request.leagueId);
+        const season = await currentSeason(ctx, request.leagueId);
+        const [championships, weeklyAwards, storyEvents] = await Promise.all([
+          many(ctx.supabase.from('championships').select('id,league_season_id,bracket,winner_season_franchise_id,runner_up_season_franchise_id,awarded_at').eq('league_season_id', season.id).order('awarded_at', { ascending: false }).limit(10)),
+          many(ctx.supabase.from('weekly_awards').select('id,league_season_id,week,code,title,winner_season_franchise_id,created_at').eq('league_season_id', season.id).order('created_at', { ascending: false }).limit(25)),
+          many(ctx.supabase.from('story_events').select('id,league_id,league_season_id,event_type,facts,created_at').eq('league_id', request.leagueId).order('created_at', { ascending: false }).limit(25))
+        ]);
+        return ok(request.tool, { leagueSeasonId: season.id, championships, weeklyAwards, storyEvents });
+      }
+      case 'getEntitlement': {
+        await requireLeagueMember(ctx, request.leagueId);
+        const season = await currentSeason(ctx, request.leagueId);
+        const entitlement = await one<EntitlementRow>(ctx.supabase.from('league_season_entitlements').select('id,league_season_id,product_code,status,activated_at,expires_at').eq('league_season_id', season.id).eq('product_code', 'big_exec_executive_league_season_pass').order('created_at', { ascending: false }).limit(1).maybeSingle());
+        return ok(request.tool, { leagueSeasonId: season.id, mode: entitlement?.status === 'active' ? 'pro_plus' : 'standard', entitlement: entitlement ?? null });
       }
       default:
         return fail(request.tool, 'invalid_request', 'Unknown Assistant GM tool');

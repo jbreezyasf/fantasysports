@@ -6,7 +6,7 @@ export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
   const {data:{user}}=await supabase.auth.getUser();
   if(!user) return null;
   const [{data:season},{data:ownerships}]=await Promise.all([
-    supabase.from('league_seasons').select('id').eq('league_id',leagueId).maybeSingle(),
+    supabase.from('league_seasons').select('id').eq('league_id',leagueId).eq('is_current',true).maybeSingle(),
     supabase.from('franchise_owners').select('franchise_id').eq('user_id',user.id).is('ends_on',null)
   ]);
   const ownedIds=(ownerships??[]).map(x=>x.franchise_id);

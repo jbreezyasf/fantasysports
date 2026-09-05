@@ -67,7 +67,11 @@ describe('Assistant GM tool boundary', () => {
       'getDraftState',
       'getDraftAvailablePlayers',
       'getDraftQueue',
-      'getInjuryStatus'
+      'getInjuryStatus',
+      'getTradeContext',
+      'getInvitationState',
+      'getHistory',
+      'getEntitlement'
     ]);
     expect(Object.values(assistantGmToolContracts).every((contract) => contract.writes === false)).toBe(true);
   });
@@ -113,6 +117,61 @@ describe('Assistant GM tool boundary', () => {
         code: 'unauthorized',
         message: 'User is not a member of this league'
       }
+    });
+  });
+
+  it('reads commissioner invitation state without exposing it to regular members', async () => {
+    const baseTables = {
+      fantasy_leagues: [{ id: 'league-1', name: 'Executive Room' }],
+      league_members: [{ league_id: 'league-1', user_id: 'user-1', role: 'manager' }],
+      league_invites: [{ id: 'invite-1', league_id: 'league-1', email: 'manager@example.com', status: 'pending' }]
+    };
+
+    const managerResult = await runAssistantGmTool(
+      { supabase: fakeSupabase(baseTables) as AssistantGmToolContext['supabase'], userId: 'user-1' },
+      { tool: 'getInvitationState', leagueId: 'league-1' }
+    );
+    expect(managerResult).toEqual({
+      ok: false,
+      tool: 'getInvitationState',
+      error: { code: 'unauthorized', message: 'Only commissioners can read league invitation state.' }
+    });
+
+    const commissionerResult = await runAssistantGmTool(
+      {
+        supabase: fakeSupabase({
+          ...baseTables,
+          league_members: [{ league_id: 'league-1', user_id: 'user-1', role: 'commissioner' }]
+        }) as AssistantGmToolContext['supabase'],
+        userId: 'user-1'
+      },
+      { tool: 'getInvitationState', leagueId: 'league-1' }
+    );
+    expect(commissionerResult).toMatchObject({
+      ok: true,
+      tool: 'getInvitationState',
+      data: { invites: [{ email: 'manager@example.com', status: 'pending' }] }
+    });
+  });
+
+  it('reads Assistant GM entitlement mode from the current league season', async () => {
+    const result = await runAssistantGmTool(
+      {
+        supabase: fakeSupabase({
+          fantasy_leagues: [{ id: 'league-1', name: 'Executive Room' }],
+          league_members: [{ league_id: 'league-1', user_id: 'user-1', role: 'manager' }],
+          league_seasons: [{ id: 'season-1', league_id: 'league-1', is_current: true }],
+          league_season_entitlements: [{ id: 'entitlement-1', league_season_id: 'season-1', product_code: 'big_exec_executive_league_season_pass', status: 'active' }]
+        }) as AssistantGmToolContext['supabase'],
+        userId: 'user-1'
+      },
+      { tool: 'getEntitlement', leagueId: 'league-1' }
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      tool: 'getEntitlement',
+      data: { leagueSeasonId: 'season-1', mode: 'pro_plus' }
     });
   });
 });

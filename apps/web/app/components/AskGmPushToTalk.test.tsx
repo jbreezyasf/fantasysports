@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import AskGmPushToTalk from './AskGmPushToTalk';
 import BigExecAppHeader from './BigExecAppHeader';
+import type { AssistantGmPolicyDecision } from '../../lib/assistant-gm/capabilityPolicy';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/leagues/league-1'
@@ -54,5 +55,88 @@ describe('AskGmPushToTalk', () => {
 
     expect(html).toContain('Assistant GM push to talk');
     expect(html).toContain('Start push to talk with Assistant GM');
+  });
+
+  it('keeps header Ask GM non-modal when critical controls are active', () => {
+    const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled criticalControlsActive />);
+
+    expect(html).toContain('role="region"');
+    expect(html).not.toContain('role="dialog"');
+  });
+});
+
+const entitlementRequired: AssistantGmPolicyDecision = {
+  allowed: false,
+  intentId: 'pro_plus.lineup_review',
+  capabilityId: 'pro_plus.lineup_review',
+  intentClass: 'pro_plus',
+  reason: 'entitlement_required',
+  message: 'Assistant GM Pro+ requires an active Executive league-season entitlement.',
+  upgradeRequired: true
+};
+
+const commissionerOnly: AssistantGmPolicyDecision = {
+  allowed: false,
+  intentId: 'commissioner.invitation_state',
+  capabilityId: 'invitations.read',
+  intentClass: 'commissioner_only',
+  reason: 'audience_denied',
+  message: 'Only the league commissioner can use that Assistant GM capability.',
+  upgradeRequired: false
+};
+
+describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
+  it('renders a conversation transcript alongside the spoken response', () => {
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." />);
+
+    expect(html).toContain('aria-label="Assistant GM conversation transcript"');
+    expect(html).toContain('askGmTurns');
+    expect(html).toContain('Assistant GM');
+  });
+
+  it('exposes a focusable transcript region for programmatic focus restoration', () => {
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." />);
+
+    expect(html).toMatch(/class="askGmHistory"[^>]*tabindex="-1"/);
+  });
+
+  it('makes the error alert a focus target so failures are not silent', () => {
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="error" />);
+
+    expect(html).toMatch(/class="askGmError"[^>]*tabindex="-1"/);
+    expect(html).toContain('role="alert"');
+  });
+
+  it('offers a typed submit path in every state', () => {
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" />);
+
+    expect(html).toContain('Send typed Assistant GM question');
+    expect(html).toContain('class="askGmTypedSubmit"');
+    expect(html).toContain('id="ask-gm-typed-fallback"');
+  });
+
+  it('stays non-modal while a time-critical gameplay control is live', () => {
+    const calm = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" />);
+    const duringDraft = renderToStaticMarkup(
+      <AskGmPushToTalk initialState="idle" capabilities={{ criticalControlsActive: true }} />
+    );
+
+    expect(calm).toContain('role="dialog"');
+    expect(duringDraft).toContain('role="region"');
+    expect(duringDraft).not.toContain('role="dialog"');
+  });
+
+  it('replaces the control with the shared upgrade prompt on an entitlement denial', () => {
+    const html = renderToStaticMarkup(<AskGmPushToTalk policy={entitlementRequired} />);
+
+    expect(html).toContain('Executive League Season Pass required');
+    expect(html).not.toContain('Start push to talk with Assistant GM');
+  });
+
+  it('never shows an upgrade prompt for a role denial', () => {
+    const html = renderToStaticMarkup(<AskGmPushToTalk policy={commissionerOnly} />);
+
+    expect(html).toContain('Only the league commissioner can use that Assistant GM capability.');
+    expect(html).not.toContain('Executive League Season Pass required');
   });
 });

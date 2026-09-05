@@ -10,7 +10,7 @@ export default async function LockerRoomPage({params,searchParams}:{params:Promi
   const [{data:league},{data:member},{data:season}] = await Promise.all([
     supabase.from('fantasy_leagues').select('name').eq('id',leagueId).maybeSingle(),
     supabase.from('league_members').select('role').eq('league_id',leagueId).eq('user_id',user.id).maybeSingle(),
-    supabase.from('league_seasons').select('id').eq('league_id',leagueId).maybeSingle()
+    supabase.from('league_seasons').select('id').eq('league_id',leagueId).eq('is_current',true).maybeSingle()
   ]);
   if(!league||!member) notFound();
   const {data:events}=await supabase.from('league_feed_events').select('id,actor_user_id,event_type,body,payload,created_at').eq('league_id',leagueId).order('created_at',{ascending:true}).limit(100);
