@@ -2,6 +2,7 @@ export type DraftRankingScore = {
   assetId: string | null;
   points: number | string | null;
   calculated_at: string | null;
+  seasonYear?: number | string | null;
 };
 
 export type RankableAthlete = {
@@ -34,16 +35,7 @@ type Candidate<T> = {
 };
 
 export const DRAFT_RANKING_SOURCE = 'Big Exec internal form';
-export const DRAFT_RANKING_FALLBACK_VERSION = 'big-exec-draft-board-v2';
-
-const POSITION_BASE_VALUE: Record<string, number> = {
-  RB: 100,
-  WR: 98,
-  QB: 86,
-  TE: 76,
-  'D/ST': 28,
-  K: 8,
-};
+export const DRAFT_RANKING_FALLBACK_VERSION = 'historical-average-unavailable';
 
 const POSITION_PRIORITY: Record<string, number> = {
   RB: 1,
@@ -63,18 +55,49 @@ function normalizeScore(value: number | string | null) {
   return null;
 }
 
+function normalizeSeasonYear(value: number | string | null | undefined) {
+  if (typeof value === 'number' && Number.isInteger(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed)) return parsed;
+  }
+  return null;
+}
+
 function scoreMap(scores: DraftRankingScore[]) {
-  const totals = new Map<string, number>();
+  const perSeason = new Map<string, Map<number, number>>();
+  const aggregate = new Map<string, number>();
   let latestVersion: string | null = null;
 
   for (const score of scores) {
     if (!score.assetId) continue;
     const points = normalizeScore(score.points);
     if (points === null) continue;
-    totals.set(score.assetId, (totals.get(score.assetId) ?? 0) + points);
+    const seasonYear = normalizeSeasonYear(score.seasonYear);
+    if (seasonYear === null) {
+      aggregate.set(score.assetId, (aggregate.get(score.assetId) ?? 0) + points);
+    } else {
+      const seasons = perSeason.get(score.assetId) ?? new Map<number, number>();
+      seasons.set(seasonYear, (seasons.get(seasonYear) ?? 0) + points);
+      perSeason.set(score.assetId, seasons);
+    }
     if (score.calculated_at && (!latestVersion || score.calculated_at > latestVersion)) {
       latestVersion = score.calculated_at;
     }
+  }
+
+  const totals = new Map<string, number>();
+  for (const [assetId, seasons] of perSeason) {
+    const recentTotals = [...seasons.entries()]
+      .sort(([a], [b]) => b - a)
+      .slice(0, 5)
+      .map(([, points]) => points);
+    if (recentTotals.length) {
+      totals.set(assetId, recentTotals.reduce((sum, points) => sum + points, 0) / recentTotals.length);
+    }
+  }
+  for (const [assetId, points] of aggregate) {
+    if (!totals.has(assetId)) totals.set(assetId, points);
   }
 
   return { totals, latestVersion };
@@ -92,18 +115,6 @@ function compareCandidates(a: Candidate<unknown>, b: Candidate<unknown>) {
   return a.id.localeCompare(b.id);
 }
 
-function fallbackScore(candidate: Pick<Candidate<unknown>, 'id' | 'position'>) {
-  return (POSITION_BASE_VALUE[candidate.position] ?? 0) + stableDraftBoardTiebreak(candidate.id);
-}
-
-function stableDraftBoardTiebreak(id: string) {
-  let hash = 0;
-  for (const char of id) {
-    hash = (hash * 31 + char.charCodeAt(0)) % 1000;
-  }
-  return hash / 100000;
-}
-
 export function buildDraftRankings(
   athletes: RankableAthlete[],
   defenses: RankableDefense[],
@@ -112,7 +123,6 @@ export function buildDraftRankings(
 ) {
   const athleteScoreMap = scoreMap(athleteScores);
   const defenseScoreMap = scoreMap(defenseScores);
-  const hasAnyScore = athleteScoreMap.totals.size > 0 || defenseScoreMap.totals.size > 0;
   const rankingVersion =
     [athleteScoreMap.latestVersion, defenseScoreMap.latestVersion].filter(Boolean).sort().at(-1) ??
     DRAFT_RANKING_FALLBACK_VERSION;
@@ -123,14 +133,14 @@ export function buildDraftRankings(
       id: asset.id,
       position: asset.position,
       displayName: asset.displayName,
-      score: athleteScoreMap.totals.get(asset.id) ?? (hasAnyScore ? null : fallbackScore({ id: asset.id, position: asset.position })),
+      score: athleteScoreMap.totals.get(asset.id) ?? null,
     })),
     ...defenses.map(asset => ({
       asset,
       id: asset.id,
       position: 'D/ST',
       displayName: asset.displayName,
-      score: defenseScoreMap.totals.get(asset.id) ?? (hasAnyScore ? null : fallbackScore({ id: asset.id, position: 'D/ST' })),
+      score: defenseScoreMap.totals.get(asset.id) ?? null,
     })),
   ].sort(compareCandidates);
 

@@ -11,7 +11,10 @@ import { draftStateAnnouncement, onClockAnnouncement } from './draftAccessibilit
 type FranchiseRef={name?:string;abbreviation?:string};
 type AthleteRef={display_name?:string;position?:string};
 type TeamRef={display_name?:string;abbreviation?:string};
+type ScoreSeasonRef={competition_seasons?:{season_year?:number|string|null}|{season_year?:number|string|null}[]|null};
+type ScoreWithSeason={athlete_id?:string|null;real_team_id?:string|null;points:number|string|null;calculated_at:string|null;league_seasons?:ScoreSeasonRef|ScoreSeasonRef[]|null};
 function firstRef<T>(value:T|T[]|null|undefined):T|null{return !value?null:Array.isArray(value)?value[0]??null:value;}
+function scoreSeasonYear(score:ScoreWithSeason){return firstRef(firstRef(score.league_seasons)?.competition_seasons)?.season_year??null;}
 
 export default async function DraftPage({ params, searchParams }: { params: Promise<{ draftId: string }>; searchParams: Promise<{ error?: string; draft_status?: string; draft_asset?: string }> }) {
   const { draftId } = await params;
@@ -41,8 +44,8 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
   const [{ data: athletes, error: athleteError }, { data: realTeams, error: teamError }, { data: athleteScores }, { data: defenseScores }, { data: queueItems, error: queueError }] = await Promise.all([
     loadFantasyEligibleAthletes(supabase),
     competitionSeason?.competition_id ? supabase.from('real_teams').select('id,display_name,abbreviation').eq('competition_id', competitionSeason.competition_id).order('abbreviation').limit(64) : Promise.resolve({ data: [], error: null }),
-    supabase.from('fantasy_player_scores').select('athlete_id,points,calculated_at').order('calculated_at', { ascending: false }).limit(5000),
-    supabase.from('fantasy_team_scores').select('real_team_id,points,calculated_at').order('calculated_at', { ascending: false }).limit(5000),
+    supabase.from('fantasy_player_scores').select('athlete_id,points,calculated_at,league_seasons(competition_seasons(season_year))').order('calculated_at', { ascending: false }).limit(5000),
+    supabase.from('fantasy_team_scores').select('real_team_id,points,calculated_at,league_seasons(competition_seasons(season_year))').order('calculated_at', { ascending: false }).limit(5000),
     mySeasonFranchise
       ? supabase.from('draft_queues').select('id,queue_rank,athlete_id,real_team_id').eq('draft_id', draftId).eq('season_franchise_id', mySeasonFranchise.id).order('queue_rank')
       : Promise.resolve({ data: [], error: null })
@@ -57,8 +60,8 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
       return { id: athlete.id, displayName: athlete.display_name, position: athlete.position, team: team?.abbreviation ?? 'FA' };
     }),
     availableDST.map(team => ({ id: team.id, displayName: team.display_name ?? team.abbreviation ?? 'Defense', team: team.abbreviation ?? team.display_name ?? 'D/ST' })),
-    (athleteScores ?? []).map(score => ({ assetId: score.athlete_id, points: score.points, calculated_at: score.calculated_at })),
-    (defenseScores ?? []).map(score => ({ assetId: score.real_team_id, points: score.points, calculated_at: score.calculated_at })),
+    ((athleteScores ?? []) as ScoreWithSeason[]).map(score => ({ assetId: score.athlete_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
+    ((defenseScores ?? []) as ScoreWithSeason[]).map(score => ({ assetId: score.real_team_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
   );
   const athleteQueueItems = (queueItems ?? []).filter((item): item is typeof item & { athlete_id: string } => Boolean(item.athlete_id));
   const teamQueueItems = (queueItems ?? []).filter((item): item is typeof item & { real_team_id: string } => Boolean(item.real_team_id));
