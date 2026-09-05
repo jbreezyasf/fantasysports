@@ -3,6 +3,15 @@ import 'server-only';
 type RadarTeam = { id: string; alias?: string; market?: string; name?: string };
 type RadarPlayer = { id: string; name?: string; full_name?: string; position?: string; status?: string };
 type RadarSeason = { year: number; start_date?: string; end_date?: string; type?: { code?: string } | string };
+type RadarSeasonalStatistics = {
+  id?: string;
+  alias?: string;
+  market?: string;
+  name?: string;
+  record?: Record<string, unknown>;
+  opponents?: Record<string, unknown>;
+  player_records?: Array<RadarPlayer & { games_played?: number | string; games_started?: number | string } & Record<string, unknown>>;
+};
 
 export type SportradarDraftSnapshot = {
   teams: Array<RadarTeam & { players: RadarPlayer[] }>;
@@ -74,5 +83,9 @@ export class SportradarNflClient {
       season: { year, startsOn: regular?.start_date, endsOn: regular?.end_date },
       requests: this.requests,
     };
+  }
+
+  async getSeasonalStatistics(year: number, seasonType: 'REG' | 'PST' | 'PRE', teamId: string): Promise<RadarSeasonalStatistics> {
+    return this.get<RadarSeasonalStatistics>(`/seasons/${year}/${seasonType}/teams/${encodeURIComponent(teamId)}/statistics.json`);
   }
 }

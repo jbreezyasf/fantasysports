@@ -22,6 +22,7 @@
     "qa:draft:watch": "node scripts/qa-draft-watch.mjs",
     "qa:draft:verify": "node scripts/qa-draft-verify-rosters.mjs",
     "qa:draft:autopick-fast": "node scripts/qa-draft-autopick-fast.mjs",
+    "data:sportradar:historical": "node scripts/import-sportradar-historical-values.mjs",
     "db:apply": "node scripts/db-apply-migration.mjs",
     "qa:roster:needs": "node scripts/qa-roster-needs.mjs",
     "qa:transactions:run": "node scripts/qa-transactions-run.mjs",

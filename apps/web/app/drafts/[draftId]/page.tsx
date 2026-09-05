@@ -13,6 +13,7 @@ type AthleteRef={display_name?:string;position?:string};
 type TeamRef={display_name?:string;abbreviation?:string};
 type ScoreSeasonRef={competition_seasons?:{season_year?:number|string|null}|{season_year?:number|string|null}[]|null};
 type ScoreWithSeason={athlete_id?:string|null;real_team_id?:string|null;points:number|string|null;calculated_at:string|null;league_seasons?:ScoreSeasonRef|ScoreSeasonRef[]|null};
+type DraftHistoricalValue={athlete_id?:string|null;real_team_id?:string|null;points:number|string|null;imported_at:string|null;season_year:number|string|null};
 function firstRef<T>(value:T|T[]|null|undefined):T|null{return !value?null:Array.isArray(value)?value[0]??null:value;}
 function scoreSeasonYear(score:ScoreWithSeason){return firstRef(firstRef(score.league_seasons)?.competition_seasons)?.season_year??null;}
 
@@ -41,9 +42,10 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
   const mySeasonFranchise = (seasonFranchises ?? []).find(sf => ownedFranchiseIds.has(sf.franchise_id));
   const current = picks?.find(p => p.pick_number === draft.current_pick);
   const currentFranchise = seasonFranchises?.find(sf => sf.id === current?.season_franchise_id);
-  const [{ data: athletes, error: athleteError }, { data: realTeams, error: teamError }, { data: athleteScores }, { data: defenseScores }, { data: queueItems, error: queueError }] = await Promise.all([
+  const [{ data: athletes, error: athleteError }, { data: realTeams, error: teamError }, { data: draftValues }, { data: athleteScores }, { data: defenseScores }, { data: queueItems, error: queueError }] = await Promise.all([
     loadFantasyEligibleAthletes(supabase),
     competitionSeason?.competition_id ? supabase.from('real_teams').select('id,display_name,abbreviation').eq('competition_id', competitionSeason.competition_id).order('abbreviation').limit(64) : Promise.resolve({ data: [], error: null }),
+    competitionSeason?.competition_id ? supabase.from('draft_historical_values').select('athlete_id,real_team_id,points,imported_at,season_year').eq('competition_id', competitionSeason.competition_id).order('season_year', { ascending: false }).limit(10000) : Promise.resolve({ data: [], error: null }),
     supabase.from('fantasy_player_scores').select('athlete_id,points,calculated_at,league_seasons(competition_seasons(season_year))').order('calculated_at', { ascending: false }).limit(5000),
     supabase.from('fantasy_team_scores').select('real_team_id,points,calculated_at,league_seasons(competition_seasons(season_year))').order('calculated_at', { ascending: false }).limit(5000),
     mySeasonFranchise
@@ -54,14 +56,20 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
   const draftedTeamIds = new Set((picks ?? []).map(p => p.real_team_id).filter(Boolean));
   const availableAthletes = (athletes ?? []).filter(a => !draftedAthleteIds.has(a.id));
   const availableDST = (realTeams ?? []).filter(team => !draftedTeamIds.has(team.id));
+  const historicalValues = (draftValues ?? []) as DraftHistoricalValue[];
+  const hasHistoricalValues = historicalValues.length > 0;
   const rankedPool = buildDraftRankings(
     availableAthletes.map(athlete => {
       const team = Array.isArray(athlete.real_teams) ? athlete.real_teams[0] : athlete.real_teams;
       return { id: athlete.id, displayName: athlete.display_name, position: athlete.position, team: team?.abbreviation ?? 'FA' };
     }),
     availableDST.map(team => ({ id: team.id, displayName: team.display_name ?? team.abbreviation ?? 'Defense', team: team.abbreviation ?? team.display_name ?? 'D/ST' })),
-    ((athleteScores ?? []) as ScoreWithSeason[]).map(score => ({ assetId: score.athlete_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
-    ((defenseScores ?? []) as ScoreWithSeason[]).map(score => ({ assetId: score.real_team_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
+    hasHistoricalValues
+      ? historicalValues.filter(score => score.athlete_id).map(score => ({ assetId: score.athlete_id ?? null, points: score.points, calculated_at: score.imported_at, seasonYear: score.season_year }))
+      : ((athleteScores ?? []) as ScoreWithSeason[]).map(score => ({ assetId: score.athlete_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
+    hasHistoricalValues
+      ? historicalValues.filter(score => score.real_team_id).map(score => ({ assetId: score.real_team_id ?? null, points: score.points, calculated_at: score.imported_at, seasonYear: score.season_year }))
+      : ((defenseScores ?? []) as ScoreWithSeason[]).map(score => ({ assetId: score.real_team_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
   );
   const athleteQueueItems = (queueItems ?? []).filter((item): item is typeof item & { athlete_id: string } => Boolean(item.athlete_id));
   const teamQueueItems = (queueItems ?? []).filter((item): item is typeof item & { real_team_id: string } => Boolean(item.real_team_id));

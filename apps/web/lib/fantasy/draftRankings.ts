@@ -34,8 +34,8 @@ type Candidate<T> = {
   score: number | null;
 };
 
-export const DRAFT_RANKING_SOURCE = 'Big Exec internal form';
-export const DRAFT_RANKING_FALLBACK_VERSION = 'historical-average-unavailable';
+export const DRAFT_RANKING_SOURCE = 'Big Exec historical draft value';
+export const DRAFT_RANKING_FALLBACK_VERSION = 'historical-average-position-prior';
 
 const POSITION_PRIORITY: Record<string, number> = {
   RB: 1,
@@ -44,6 +44,33 @@ const POSITION_PRIORITY: Record<string, number> = {
   TE: 4,
   'D/ST': 5,
   K: 6,
+};
+
+const NO_HISTORY_FACTOR: Record<string, number> = {
+  RB: 0.62,
+  WR: 0.58,
+  QB: 0.56,
+  TE: 0.54,
+  'D/ST': 0.72,
+  K: 0.72,
+};
+
+const EMERGENCY_POSITION_PRIOR: Record<string, number> = {
+  RB: 95,
+  WR: 88,
+  QB: 84,
+  TE: 56,
+  'D/ST': 48,
+  K: 44,
+};
+
+const REPLACEMENT_RANK: Record<string, number> = {
+  QB: 12,
+  RB: 36,
+  WR: 48,
+  TE: 12,
+  'D/ST': 12,
+  K: 12,
 };
 
 function normalizeScore(value: number | string | null) {
@@ -68,6 +95,7 @@ function scoreMap(scores: DraftRankingScore[]) {
   const perSeason = new Map<string, Map<number, number>>();
   const aggregate = new Map<string, number>();
   let latestVersion: string | null = null;
+  let hasSeasonalScores = false;
 
   for (const score of scores) {
     if (!score.assetId) continue;
@@ -77,6 +105,7 @@ function scoreMap(scores: DraftRankingScore[]) {
     if (seasonYear === null) {
       aggregate.set(score.assetId, (aggregate.get(score.assetId) ?? 0) + points);
     } else {
+      hasSeasonalScores = true;
       const seasons = perSeason.get(score.assetId) ?? new Map<number, number>();
       seasons.set(seasonYear, (seasons.get(seasonYear) ?? 0) + points);
       perSeason.set(score.assetId, seasons);
@@ -100,19 +129,36 @@ function scoreMap(scores: DraftRankingScore[]) {
     if (!totals.has(assetId)) totals.set(assetId, points);
   }
 
-  return { totals, latestVersion };
+  return { totals, latestVersion, hasSeasonalScores };
 }
 
 function compareCandidates(a: Candidate<unknown>, b: Candidate<unknown>) {
-  if (a.score !== null || b.score !== null) {
-    if (a.score === null) return 1;
-    if (b.score === null) return -1;
-    if (b.score !== a.score) return b.score - a.score;
-  }
+  if (a.score !== null && b.score !== null && b.score !== a.score) return b.score - a.score;
 
   const positionDelta = (POSITION_PRIORITY[a.position] ?? 99) - (POSITION_PRIORITY[b.position] ?? 99);
   if (positionDelta !== 0) return positionDelta;
   return a.id.localeCompare(b.id);
+}
+
+function median(values: number[]) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const midpoint = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[midpoint] : (sorted[midpoint - 1] + sorted[midpoint]) / 2;
+}
+
+function positionPrior(position: string, scoredByPosition: Map<string, number[]>) {
+  const fromHistory = median(scoredByPosition.get(position) ?? []);
+  const base = fromHistory ?? EMERGENCY_POSITION_PRIOR[position] ?? 20;
+  return Math.round(base * (NO_HISTORY_FACTOR[position] ?? 0.5) * 10) / 10;
+}
+
+function replacementBaseline(position: string, scoredByPosition: Map<string, number[]>) {
+  const values = [...(scoredByPosition.get(position) ?? [])].sort((a, b) => b - a);
+  const rank = REPLACEMENT_RANK[position] ?? 12;
+  if (values.length >= rank) return values[rank - 1];
+  if (values.length >= 5) return values.at(-1) ?? 0;
+  return 0;
 }
 
 export function buildDraftRankings(
@@ -126,6 +172,24 @@ export function buildDraftRankings(
   const rankingVersion =
     [athleteScoreMap.latestVersion, defenseScoreMap.latestVersion].filter(Boolean).sort().at(-1) ??
     DRAFT_RANKING_FALLBACK_VERSION;
+  const hasAnyScores = athleteScoreMap.totals.size > 0 || defenseScoreMap.totals.size > 0;
+  const shouldUsePositionPriors = athleteScoreMap.hasSeasonalScores || defenseScoreMap.hasSeasonalScores || !hasAnyScores;
+
+  const scoredByPosition = new Map<string, number[]>();
+  for (const asset of athletes) {
+    const score = athleteScoreMap.totals.get(asset.id);
+    if (score === undefined) continue;
+    const scores = scoredByPosition.get(asset.position) ?? [];
+    scores.push(score);
+    scoredByPosition.set(asset.position, scores);
+  }
+  for (const asset of defenses) {
+    const score = defenseScoreMap.totals.get(asset.id);
+    if (score === undefined) continue;
+    const scores = scoredByPosition.get('D/ST') ?? [];
+    scores.push(score);
+    scoredByPosition.set('D/ST', scores);
+  }
 
   const candidates: Array<Candidate<RankableAthlete | RankableDefense>> = [
     ...athletes.map(asset => ({
@@ -133,14 +197,20 @@ export function buildDraftRankings(
       id: asset.id,
       position: asset.position,
       displayName: asset.displayName,
-      score: athleteScoreMap.totals.get(asset.id) ?? null,
+      score: (() => {
+        const points = athleteScoreMap.totals.get(asset.id) ?? (shouldUsePositionPriors ? positionPrior(asset.position, scoredByPosition) : null);
+        return points === null ? null : points - replacementBaseline(asset.position, scoredByPosition);
+      })(),
     })),
     ...defenses.map(asset => ({
       asset,
       id: asset.id,
       position: 'D/ST',
       displayName: asset.displayName,
-      score: defenseScoreMap.totals.get(asset.id) ?? null,
+      score: (() => {
+        const points = defenseScoreMap.totals.get(asset.id) ?? (shouldUsePositionPriors ? positionPrior('D/ST', scoredByPosition) : null);
+        return points === null ? null : points - replacementBaseline('D/ST', scoredByPosition);
+      })(),
     })),
   ].sort(compareCandidates);
 

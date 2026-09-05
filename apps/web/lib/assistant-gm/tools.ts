@@ -78,6 +78,7 @@ type DraftPickRow = { id: string; pick_number: number; round_number: number; rou
 type DraftQueueRow = { id: string; queue_rank: number; athlete_id?: string | null; real_team_id?: string | null };
 type ScoreSeasonRef = { competition_seasons?: { season_year?: number | string | null } | { season_year?: number | string | null }[] | null };
 type ScoreWithSeason = { athlete_id?: string | null; real_team_id?: string | null; points: number | string | null; calculated_at: string | null; league_seasons?: ScoreSeasonRef | ScoreSeasonRef[] | null };
+type DraftHistoricalValue = { athlete_id?: string | null; real_team_id?: string | null; points: number | string | null; imported_at: string | null; season_year: number | string | null };
 type WaiverHoldRow = { id: string; athlete_id?: string | null; real_team_id?: string | null; source_season_franchise_id?: string | null; starts_at?: string; clears_at: string; status: string; athletes?: Record<string, unknown> | Record<string, unknown>[] | null; real_teams?: Record<string, unknown> | Record<string, unknown>[] | null };
 type WaiverClaimRow = { id: string; waiver_hold_id: string; status: string; drop_roster_entry_id?: string | null; created_at?: string; failure_reason?: string | null };
 type TradeRow = { id: string; league_season_id: string; proposed_by_franchise_id: string; proposed_to_franchise_id: string; status: string; created_at?: string; resolved_at?: string | null };
@@ -285,20 +286,27 @@ export async function runAssistantGmTool(ctx: AssistantGmToolContext, request: A
         const season = await currentSeason(ctx, request.leagueId);
         const draft = await one<DraftRow>(ctx.supabase.from('drafts').select('id,status,league_season_id').eq('id', request.draftId ?? '').maybeSingle());
         if (!draft || draft.league_season_id !== season.id) return fail(request.tool, 'not_found', 'Draft not found for current league season');
-        const [athletes, realTeams, picks, athleteScores, defenseScores] = await Promise.all([
+        const competitionSeason = await one<{ competition_id?: string | null }>(ctx.supabase.from('competition_seasons').select('competition_id').eq('id', season.competition_season_id ?? '').maybeSingle());
+        const [athletes, realTeams, picks, draftValues, athleteScores, defenseScores] = await Promise.all([
           loadFantasyEligibleAthletesFrom(ctx.supabase as unknown as AthletePoolClient),
-          many<{ id: string; display_name?: string; abbreviation?: string }>(ctx.supabase.from('real_teams').select('id,display_name,abbreviation').order('abbreviation').limit(64)),
+          many<{ id: string; display_name?: string; abbreviation?: string }>(ctx.supabase.from('real_teams').select('id,display_name,abbreviation').eq('competition_id', competitionSeason?.competition_id ?? '').order('abbreviation').limit(64)),
           many<DraftPickRow>(ctx.supabase.from('draft_picks').select('athlete_id,real_team_id,pick_number,round_number,round_pick,season_franchise_id').eq('draft_id', draft.id).order('pick_number').limit(250)),
+          many<DraftHistoricalValue>(ctx.supabase.from('draft_historical_values').select('athlete_id,real_team_id,points,imported_at,season_year').eq('competition_id', competitionSeason?.competition_id ?? '').order('season_year', { ascending: false }).limit(10000)),
           many<ScoreWithSeason>(ctx.supabase.from('fantasy_player_scores').select('athlete_id,points,calculated_at,league_seasons(competition_seasons(season_year))').order('calculated_at', { ascending: false }).limit(5000)),
           many<ScoreWithSeason>(ctx.supabase.from('fantasy_team_scores').select('real_team_id,points,calculated_at,league_seasons(competition_seasons(season_year))').order('calculated_at', { ascending: false }).limit(5000))
         ]);
+        const hasHistoricalValues = draftValues.length > 0;
         const draftedAthleteIds = new Set(picks.map((pick) => pick.athlete_id).filter(Boolean));
         const draftedTeamIds = new Set(picks.map((pick) => pick.real_team_id).filter(Boolean));
         const rankings = buildDraftRankings(
           (athletes.data ?? []).filter((athlete) => !draftedAthleteIds.has(athlete.id)).map((athlete) => ({ id: athlete.id, displayName: athlete.display_name, position: athlete.position, team: first(athlete.real_teams)?.abbreviation ?? 'FA' })),
           realTeams.filter((team) => !draftedTeamIds.has(team.id)).map((team) => ({ id: team.id, displayName: team.display_name ?? team.abbreviation ?? 'Defense', team: team.abbreviation ?? team.display_name ?? 'D/ST' })),
-          athleteScores.map((score) => ({ assetId: score.athlete_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
-          defenseScores.map((score) => ({ assetId: score.real_team_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) }))
+          hasHistoricalValues
+            ? draftValues.filter(score => score.athlete_id).map((score) => ({ assetId: score.athlete_id ?? null, points: score.points, calculated_at: score.imported_at, seasonYear: score.season_year }))
+            : athleteScores.map((score) => ({ assetId: score.athlete_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) })),
+          hasHistoricalValues
+            ? draftValues.filter(score => score.real_team_id).map((score) => ({ assetId: score.real_team_id ?? null, points: score.points, calculated_at: score.imported_at, seasonYear: score.season_year }))
+            : defenseScores.map((score) => ({ assetId: score.real_team_id ?? null, points: score.points, calculated_at: score.calculated_at, seasonYear: scoreSeasonYear(score) }))
         );
         return ok(request.tool, { draftId: draft.id, rankings });
       }

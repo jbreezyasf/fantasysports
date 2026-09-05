@@ -54,12 +54,12 @@ describe('buildDraftRankings', () => {
     expect(rankings.athletes.map(player => [player.id, player.overallRank, player.positionRank, player.rankingScore])).toEqual([
       ['spike-wr', 1, 1, 200],
       ['steady-rb', 2, 1, 150],
-      ['no-history-qb', 4, 1, null],
+      ['no-history-qb', 4, 1, 47],
     ]);
     expect(rankings.defenses).toMatchObject([{ id: 'steady-dst', overallRank: 3, positionRank: 1, rankingScore: 120 }]);
   });
 
-  it('does not invent scoring when no historical ranking data exists', () => {
+  it('uses conservative position priors when no historical ranking data exists', () => {
     const rankings = buildDraftRankings(
       [
         { id: 'wr-a', displayName: 'A Receiver', position: 'WR', team: 'ALP' },
@@ -72,8 +72,25 @@ describe('buildDraftRankings', () => {
 
     expect(rankings.version).toBe(DRAFT_RANKING_FALLBACK_VERSION);
     expect(rankings.athletes.map(player => [player.id, player.overallRank, player.positionRank, player.rankingScore])).toEqual([
-      ['rb-a', 1, 1, null],
-      ['wr-a', 2, 1, null],
+      ['rb-a', 1, 1, 58.9],
+      ['wr-a', 2, 1, 51],
+    ]);
+  });
+
+  it('keeps no-history players below proven players at the same position', () => {
+    const rankings = buildDraftRankings(
+      [
+        { id: 'rookie-rb', displayName: 'Rookie Runner', position: 'RB', team: 'ALP' },
+        { id: 'veteran-rb', displayName: 'Veteran Runner', position: 'RB', team: 'BET' },
+      ],
+      [],
+      [{ assetId: 'veteran-rb', points: 180, calculated_at: '2026-08-20T12:00:00Z', seasonYear: 2025 }],
+      [],
+    );
+
+    expect(rankings.athletes.map(player => [player.id, player.overallRank, player.rankingScore])).toEqual([
+      ['veteran-rb', 1, 180],
+      ['rookie-rb', 2, 111.6],
     ]);
   });
 });

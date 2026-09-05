@@ -21,7 +21,7 @@ function formatRankingVersion(value:string){
 }
 
 function formatScore(value:number|null){
-  return value===null?'NO SCORE':`${value.toFixed(1)} PTS`;
+  return value===null?'NO VALUE':`${value.toFixed(1)} VALUE`;
 }
 
 export function DraftPlayerPool({draftId,status,athletes,defenses,queuedAssets,rankingSource,rankingVersion}:{draftId:string;status:string;athletes:Athlete[];defenses:Defense[];queuedAssets:QueuedAsset[];rankingSource:string;rankingVersion:string}){
@@ -34,7 +34,7 @@ export function DraftPlayerPool({draftId,status,athletes,defenses,queuedAssets,r
   const defenseMatches=(position==='ALL'||position==='D/ST')?defenses.filter(team=>!deferredSearch||`${team.displayName} ${team.team} defense`.toLowerCase().includes(deferredSearch)):[];
   const resultCount=athleteMatches.length+defenseMatches.length;
   const countFor=(value:Position)=>value==='D/ST'?defenses.length:value==='ALL'?athletes.length+defenses.length:value==='FLEX'?athletes.filter(player=>['RB','WR','TE'].includes(player.position)).length:athletes.filter(player=>player.position===value).length;
-  const candidateDetails=(details:{position:string;team:string;rank:number;score:string})=><dl className="playerDetailsList staticDetails"><div><dt>Position</dt><dd>{details.position}</dd></div><div><dt>NFL team</dt><dd>{details.team}</dd></div><div><dt>Overall rank</dt><dd>{details.rank}</dd></div><div><dt>Projection score</dt><dd>{details.score}</dd></div></dl>;
+  const candidateDetails=(details:{position:string;team:string;rank:number;score:string})=><dl className="playerDetailsList staticDetails"><div><dt>Position</dt><dd>{details.position}</dd></div><div><dt>NFL team</dt><dd>{details.team}</dd></div><div><dt>Overall rank</dt><dd>{details.rank}</dd></div><div><dt>Draft value</dt><dd>{details.score}</dd></div></dl>;
 
   return <section className="panel draftPlayerFinder" aria-labelledby="draft-player-heading">
     <div className="draftFinderHeading"><div><p className="eyebrow">PLAYER FINDER</p><h2 id="draft-player-heading">Build your roster.</h2><p className="lede">Ranked by {rankingSource} • Updated {formatRankingVersion(rankingVersion)}</p></div><span className="sectionCounter" aria-live="polite">{resultCount} AVAILABLE</span></div>
