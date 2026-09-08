@@ -1,5 +1,6 @@
 import { buildDraftRankings } from '../fantasy/draftRankings';
 import { loadFantasyEligibleAthletesFrom, type AthletePoolClient } from '../fantasy/athletePoolCore';
+import { searchAssistantGmKnowledgeBase } from './knowledgeRetrieval';
 
 type QueryResult<T> = { data: T | null; error?: { message?: string } | null; count?: number | null };
 type SupabaseQuery = {
@@ -44,7 +45,8 @@ export type AssistantGmToolName =
   | 'getTradeContext'
   | 'getInvitationState'
   | 'getHistory'
-  | 'getEntitlement';
+  | 'getEntitlement'
+  | 'searchKnowledgeBase';
 
 export type AssistantGmToolRequest = {
   tool: AssistantGmToolName;
@@ -104,7 +106,8 @@ export const assistantGmToolContracts: Record<AssistantGmToolName, { access: 'le
   getTradeContext: { access: 'league_member', writes: false, description: 'Read current league trade context without accepting, rejecting, or proposing a trade.' },
   getInvitationState: { access: 'league_member', writes: false, description: 'Read commissioner-authorized league invitation state.' },
   getHistory: { access: 'league_member', writes: false, description: 'Read authorized league history, championships, awards, and story events.' },
-  getEntitlement: { access: 'league_member', writes: false, description: 'Read current league-season Assistant GM entitlement mode.' }
+  getEntitlement: { access: 'league_member', writes: false, description: 'Read current league-season Assistant GM entitlement mode.' },
+  searchKnowledgeBase: { access: 'league_member', writes: false, description: 'Retrieve sourced Big Exec rules and support answers from the local Assistant GM knowledge base.' }
 };
 
 function fail(tool: AssistantGmToolName, code: 'unauthorized' | 'not_found' | 'invalid_request' | 'data_error', message: string): AssistantGmToolResponse {
@@ -347,6 +350,13 @@ export async function runAssistantGmTool(ctx: AssistantGmToolContext, request: A
         const season = await currentSeason(ctx, request.leagueId);
         const entitlement = await one<EntitlementRow>(ctx.supabase.from('league_season_entitlements').select('id,league_season_id,product_code,status,activated_at,expires_at').eq('league_season_id', season.id).eq('product_code', 'big_exec_executive_league_season_pass').order('created_at', { ascending: false }).limit(1).maybeSingle());
         return ok(request.tool, { leagueSeasonId: season.id, mode: entitlement?.status === 'active' ? 'pro_plus' : 'standard', entitlement: entitlement ?? null });
+      }
+      case 'searchKnowledgeBase': {
+        await requireLeagueMember(ctx, request.leagueId);
+        return ok(request.tool, {
+          query: request.query ?? '',
+          results: searchAssistantGmKnowledgeBase(request.query ?? '', 5)
+        });
       }
       default:
         return fail(request.tool, 'invalid_request', 'Unknown Assistant GM tool');

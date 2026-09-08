@@ -12,6 +12,11 @@ Before planning, diagnosing, or modifying the product, read:
 4. `docs/CURRENT_WORK.md`
 5. `docs/UX_UI_PAGE_SPEC.md`
 
+Machine/API discoverability:
+
+- `apps/web/public/openapi.json` is the checked-in OpenAPI contract for authenticated machine surfaces.
+- `mcp.json` exposes the local `big-exec` MCP server. It is read-oriented by default and calls documented `/api/*` routes. Authenticated calls require the operator to provide a valid session cookie or bearer token through environment; do not commit credentials.
+
 For recap-renderer work, also read:
 
 6. `docs/recap/RECAP_V2_PRD.md`

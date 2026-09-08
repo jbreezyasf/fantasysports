@@ -3,6 +3,14 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '../../lib/supabase/server';
+import {
+  buildPostgameTalkPrompt,
+  parsePostgameTalkOptions,
+  postgameTalkPromptId,
+  postgameTalkStructuredOutputSchema,
+  type PostgameTalkFacts as Facts,
+  type PostgameTalkTone as Tone
+} from '../../lib/matchups/postgameTalk';
 
 export async function refreshMatchup(formData: FormData) {
   const supabase = await createClient();
@@ -21,9 +29,6 @@ export async function finalizeMatchup(formData: FormData) {
   revalidatePath(`/matchups/${matchupId}`);
   redirect(`/matchups/${matchupId}?finalized=1`);
 }
-
-type Tone = 'respect'|'playful'|'petty'|'savage';
-type Facts = { week:number; homeName:string; awayName:string; homePoints:number; awayPoints:number; winnerName:string; loserName:string; margin:number; requesterWon:boolean; };
 
 function fallbackOptions(tone:Tone,f:Facts):string[] {
   const score=`${f.winnerName} ${Math.max(f.homePoints,f.awayPoints).toFixed(2)} – ${Math.min(f.homePoints,f.awayPoints).toFixed(2)} ${f.loserName}`;
@@ -44,13 +49,11 @@ function extractResponseText(payload:unknown):string|null {
 async function aiOptions(tone:Tone,f:Facts):Promise<{options:string[];provider:string}> {
   const key=process.env.OPENAI_API_KEY?.trim();
   if(!key) return {options:fallbackOptions(tone,f),provider:'template'};
-  const immutableFacts={week:f.week,home_team:f.homeName,away_team:f.awayName,home_points:f.homePoints,away_points:f.awayPoints,winner:f.winnerName,loser:f.loserName,margin:f.margin,requester_won:f.requesterWon};
   try {
-    const res=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-5.6-luna',input:[{role:'user',content:`You write short fantasy-sports Locker Room lines for Big Exec Fantasy Sports.\nTone: ${tone}.\nImmutable facts: ${JSON.stringify(immutableFacts)}\nReturn ONLY a JSON array of exactly 3 strings. Each must be under 180 characters. Never invent scores, records, streaks, rivalry history, injuries, player facts, or private trade information. Do not use slurs, threats, protected-class insults, sexual humiliation, or harassment. Petty and savage should feel funny and competitive, not hateful. Respect/playful can be warmer.`}],max_output_tokens:300}),cache:'no-store'});
+    const res=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-5.6-luna',input:[{role:'system',content:'Follow the versioned Big Exec postgame prompt. Return only data matching the supplied structured output schema.'},{role:'user',content:buildPostgameTalkPrompt(tone,f)}],text:{format:{type:'json_schema',name:'postgame_talk_options',strict:true,schema:postgameTalkStructuredOutputSchema}},metadata:{prompt_id:postgameTalkPromptId},max_output_tokens:300}),cache:'no-store'});
     if(!res.ok) throw new Error(`OpenAI ${res.status}`);
     const text=extractResponseText(await res.json()); if(!text) throw new Error('No generated text');
-    const parsed=JSON.parse(text) as unknown; if(!Array.isArray(parsed)) throw new Error('Unexpected generated format');
-    const options=parsed.filter((x):x is string=>typeof x==='string').map(x=>x.trim()).filter(Boolean).slice(0,3);
+    const options=parsePostgameTalkOptions(text);
     if(options.length!==3 || options.some(x=>x.length>180)) throw new Error('Invalid generated options');
     return {options,provider:'openai:gpt-5.6-luna'};
   } catch { return {options:fallbackOptions(tone,f),provider:'template'}; }

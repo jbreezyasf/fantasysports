@@ -71,7 +71,8 @@ describe('Assistant GM tool boundary', () => {
       'getTradeContext',
       'getInvitationState',
       'getHistory',
-      'getEntitlement'
+      'getEntitlement',
+      'searchKnowledgeBase'
     ]);
     expect(Object.values(assistantGmToolContracts).every((contract) => contract.writes === false)).toBe(true);
   });

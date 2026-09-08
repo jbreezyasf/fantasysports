@@ -41,6 +41,20 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Remaining before the real beta draft:** identify the actual beta league id, run `npm run beta:draft:preflight -- --league=<actual-beta-league-id>`, run a controlled production invite -> signup -> league smoke test, and keep realtime latency visible during the live draft.
 
+## September 8 Big Sean / AI-Operability Audit Response
+
+**PROVEN:** `npx @bigsteele/the-big-sean` first failed when run as `npx bigsteele/the-big-sean`, then succeeded as `npx @bigsteele/the-big-sean`. Initial deterministic AI Audit score was 33/100, grade F, Level 1 Automated. The score was primarily about machine-operability and agent readiness, not the fantasy beta draft flow itself.
+
+**Root causes of the 33/100 score:** the app exposed most work as human pages and Server Actions rather than documented machine APIs; no static OpenAPI file existed; Assistant GM tools were not published as model tool schemas; no agent loop or MCP server was discoverable; prompts were embedded inline rather than conventional prompt artifacts; the postgame model call requested JSON via prompt text instead of provider-enforced structured output; no AI eval artifact was discoverable; and no retrieval path over the existing Assistant GM knowledge base was wired as a tool.
+
+**Implemented 2026-09-08:** added authenticated read-only machine API surfaces for health, capabilities, Assistant GM tool execution, bounded Assistant GM agent runs, league state, roster, lineup, draft, draft-available rankings, waivers, players, player detail, matchup, trades, history, schedule, entitlement, invitations, and knowledge search. Added static `apps/web/public/openapi.json` plus dynamic `/api/openapi`.
+
+**Implemented 2026-09-08:** added Assistant GM model tool JSON schemas for every declared read tool, a bounded policy-gated agent loop, and a local MCP stdio server discoverable through `mcp.json`. The MCP server exposes `get_openapi`, `get_health`, `list_capabilities`, and `call_machine_api`; authenticated calls require an operator-provided session cookie or bearer token in environment and do not commit credentials.
+
+**Implemented 2026-09-08:** moved Assistant GM prompt policy and postgame talk prompt/schema into versioned prompt artifacts and tests. Updated postgame talk generation to use OpenAI Responses structured outputs (`text.format` JSON schema) with deterministic template fallback unchanged. Added beta AI eval coverage and deterministic knowledge-base retrieval over `docs/assistant-gm/knowledge-base`.
+
+**Measured result:** deterministic AI Audit improved from 33/100 F Level 1 to 75/100 C Level 3 Agentic. Remaining score gaps are intentionally not quick-patched before beta: pgvector/vector retrieval, durable queue/event pipeline, orchestration/MCP client use, more provider webhooks, a second model provider/router, and machine write surfaces beyond already-confirmed canonical UI/RPC paths.
+
 ## P0 — Reconcile Current Implementation
 
 - [x] Inspect current `main`. Evidence: `main`, `origin/main`, and local `HEAD` are `70a73984a6644830942b364de4a727b7b564f6f0` on 2026-08-26.

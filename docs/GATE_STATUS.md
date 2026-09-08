@@ -27,6 +27,14 @@ This update covers the September 8 release-hardening sprint for the real 10-mana
 - **PROVEN:** Verification passed after release-hardening changes: `npm test --workspace @fantasy-all-sports/web`, `npm run test:a11y --workspace @fantasy-all-sports/web`, `npm run typecheck`, root `npm test`, `npm run build --workspace @fantasy-all-sports/web`, and root `npm run build`.
 - **DATE CLARIFICATION:** NFL Week 1 begins Wednesday, September 9, 2026 at 7:20 PM CDT (`2026-09-10T00:20:00+00:00`). A September 8 draft can use Week 1 as the first live scoring period. A late-evening September 9 draft after kickoff still triggers the canonical late-start rule risk, and current late-start implementation remains mostly not implemented.
 
+## September 8 AI-Operability Audit Evidence
+
+- **PROVEN:** Initial deterministic Big Steele AI Audit score was 33/100, grade F, Level 1 Automated. The audit measured machine-operability and agent readiness, not deployed fantasy gameplay correctness.
+- **PROVEN:** The low score was driven by missing machine-readable API description, low machine/API reach across human workflows, hidden Assistant GM tool contracts, no discoverable MCP server, no agent loop, inline prompts, no provider-enforced structured output, no discoverable eval artifact, and no retrieval tool over Big Exec's existing knowledge base.
+- **PROVEN:** New beta-safe machine surfaces and contracts were added without granting autonomous write authority: static OpenAPI, authenticated read-only `/api/*` endpoints for core league/draft/team-management reads, Assistant GM model tool definitions, bounded read-tool agent runner, local MCP stdio server, prompt files, structured postgame output schema, AI eval artifact/tests, and deterministic Assistant GM knowledge retrieval.
+- **PROVEN:** Deterministic AI Audit rerun after these changes scored 75/100, grade C, Level 3 Agentic.
+- **UNVERIFIED / INTENTIONALLY DEFERRED:** Remaining audit gaps are not treated as beta-draft blockers: pgvector/vector retrieval, durable queue/event pipeline, orchestration/MCP client use, extra provider webhooks, second model provider/router, and broad autonomous write surfaces.
+
 ## QA Environment Caveat — applies to every 2026-08-30 and 2026-08-31 QA run
 
 - **PROVEN:** `scripts/qa-full-draft.mjs`, `scripts/qa-transactions-run.mjs`, `scripts/qa-roster-integrity-visual.mjs`, and the 10-manager regression all resolve the app under test as `QA_APP_URL` defaulting to `http://localhost:3000`, and resolve the database as `NEXT_PUBLIC_SUPABASE_URL` defaulting to production project `njjiqdqhmcbxblwhfade`.

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "big-exec": {
+      "command": "node",
+      "args": ["scripts/big-exec-mcp-server.mjs"],
+      "env": {
+        "BIG_EXEC_APP_URL": "https://www.bigexecfs.com"
+      }
+    }
+  }
+}
