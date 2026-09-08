@@ -52,7 +52,7 @@ export async function loadOpsDashboard(query: string) {
     tableCount(admin, 'trades'),
     admin.from('athletes').select('updated_at', { count: 'exact' }).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('athlete_game_stats').select('updated_at,created_at', { count: 'exact' }).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
-    admin.from('real_games').select('starts_at,status,updated_at', { count: 'exact' }).order('starts_at', { ascending: false }).limit(1).maybeSingle()
+    admin.from('real_games').select('starts_at,state,updated_at', { count: 'exact' }).order('starts_at', { ascending: false }).limit(1).maybeSingle()
   ]);
 
   const results: OpsSearchResult[] = [];
@@ -116,7 +116,7 @@ export async function loadOpsDashboard(query: string) {
     health: {
       athletes: { updatedAt: latestAthlete.data?.updated_at ?? null, status: staleStatus(latestAthlete.data?.updated_at, 24, 72) },
       stats: { updatedAt: latestStats.data?.updated_at ?? latestStats.data?.created_at ?? null, status: staleStatus(latestStats.data?.updated_at ?? latestStats.data?.created_at, 3, 24) },
-      games: { updatedAt: latestGame.data?.updated_at ?? latestGame.data?.starts_at ?? null, status: staleStatus(latestGame.data?.updated_at ?? latestGame.data?.starts_at, 24, 72), latestStatus: latestGame.data?.status ?? null }
+      games: { updatedAt: latestGame.data?.updated_at ?? latestGame.data?.starts_at ?? null, status: staleStatus(latestGame.data?.updated_at ?? latestGame.data?.starts_at, 24, 72), latestStatus: latestGame.data?.state ?? null }
     }
   };
 }
@@ -208,7 +208,7 @@ export async function loadOpsDataHealth() {
   const [providers, teams, games, stats] = await Promise.all([
     admin.from('athlete_provider_ids').select('provider', { count: 'exact' }).limit(1000),
     admin.from('real_teams').select('id', { count: 'exact', head: true }),
-    admin.from('real_games').select('status,starts_at,updated_at').order('starts_at', { ascending: false }).limit(16),
+    admin.from('real_games').select('state,starts_at,updated_at').order('starts_at', { ascending: false }).limit(16),
     admin.from('athlete_game_stats').select('updated_at,created_at').order('updated_at', { ascending: false }).limit(16)
   ]);
   const providerCounts = new Map<string, number>();

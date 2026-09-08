@@ -4,6 +4,7 @@ export {
   balldontlieDefenseFantasyPoints,
   balldontliePlayerFantasyPoints,
   balldontliePlayerName,
+  normalizeBalldontlieGame,
   normalizeNflPosition,
   normalizeNflTeamAlias,
   numberValue,
@@ -60,6 +61,40 @@ export type BalldontlieNflFantasyProjection = {
   projections?: Record<string, unknown> | null;
   stats?: Record<string, unknown> | null;
 } & Record<string, unknown>;
+
+export type BalldontlieNflGame = {
+  id: number;
+  visitor_team?: BalldontlieNflTeam | null;
+  home_team?: BalldontlieNflTeam | null;
+  summary?: string | null;
+  venue?: string | null;
+  week?: number | null;
+  date?: string | null;
+  season?: number;
+  postseason?: boolean;
+  status?: string | null;
+  status_state?: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'delayed' | 'suspended' | 'abandoned' | 'unknown';
+  home_team_score?: number | null;
+  visitor_team_score?: number | null;
+  updated_at?: string | null;
+} & Record<string, unknown>;
+
+export type NormalizedBalldontlieNflGame = {
+  providerGameId: string;
+  season: number;
+  week: number | null;
+  homeTeamProviderId: string | null;
+  homeTeamAbbreviation: string | null;
+  awayTeamProviderId: string | null;
+  awayTeamAbbreviation: string | null;
+  scheduledKickoffAt: string | null;
+  state: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'delayed' | 'suspended' | 'unknown';
+  status: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  providerUpdatedAt: string | null;
+  raw: BalldontlieNflGame;
+};
 
 type Page<T> = {
   data?: T[];
@@ -158,5 +193,23 @@ export class BalldontlieNflClient {
 
   getFantasyProjections(season: number) {
     return this.listAll<BalldontlieNflFantasyProjection>('/nfl/v1/fantasy/projections', { season, per_page: 100 });
+  }
+
+  getGames(params: {
+    season?: number;
+    week?: number;
+    seasonTypes?: number[];
+    dates?: string[];
+    teamIds?: number[];
+    perPage?: number;
+  } = {}) {
+    return this.listAll<BalldontlieNflGame>('/nfl/v1/games', {
+      seasons: params.season === undefined ? undefined : [params.season],
+      weeks: params.week === undefined ? undefined : [params.week],
+      season_types: params.seasonTypes,
+      dates: params.dates,
+      team_ids: params.teamIds,
+      per_page: params.perPage ?? 100,
+    });
   }
 }

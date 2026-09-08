@@ -1,4 +1,27 @@
-import type { BalldontlieNflPlayer } from './balldontlie';
+type BalldontlieNflTeamLike = {
+  id: number;
+  abbreviation?: string;
+};
+
+type BalldontlieNflPlayerLike = {
+  id?: number;
+  first_name?: string;
+  last_name?: string;
+};
+
+type BalldontlieNflGameLike = {
+  id: number;
+  visitor_team?: BalldontlieNflTeamLike | null;
+  home_team?: BalldontlieNflTeamLike | null;
+  week?: number | null;
+  date?: string | null;
+  season?: number;
+  status?: string | null;
+  status_state?: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'delayed' | 'suspended' | 'abandoned' | 'unknown';
+  home_team_score?: number | null;
+  visitor_team_score?: number | null;
+  updated_at?: string | null;
+};
 
 const statAliases: Record<string, string[]> = {
   passingYards: ['passing_yards', 'pass_yards', 'yards_passing'],
@@ -52,8 +75,28 @@ export function normalizeNflTeamAlias(value?: string | null) {
   return alias ?? '';
 }
 
-export function balldontliePlayerName(player?: BalldontlieNflPlayer | null) {
+export function balldontliePlayerName(player?: BalldontlieNflPlayerLike | null) {
   return [player?.first_name, player?.last_name].filter(Boolean).join(' ').trim();
+}
+
+export function normalizeBalldontlieGame(game: BalldontlieNflGameLike) {
+  const providerState = game.status_state ?? 'unknown';
+  return {
+    providerGameId: String(game.id),
+    season: Number(game.season),
+    week: typeof game.week === 'number' ? game.week : null,
+    homeTeamProviderId: game.home_team?.id ? String(game.home_team.id) : null,
+    homeTeamAbbreviation: game.home_team?.abbreviation ?? null,
+    awayTeamProviderId: game.visitor_team?.id ? String(game.visitor_team.id) : null,
+    awayTeamAbbreviation: game.visitor_team?.abbreviation ?? null,
+    scheduledKickoffAt: game.date ?? null,
+    state: providerState === 'abandoned' ? 'unknown' : providerState,
+    status: game.status ?? null,
+    homeScore: typeof game.home_team_score === 'number' ? game.home_team_score : null,
+    awayScore: typeof game.visitor_team_score === 'number' ? game.visitor_team_score : null,
+    providerUpdatedAt: typeof game.updated_at === 'string' ? game.updated_at : null,
+    raw: game,
+  };
 }
 
 export function balldontliePlayerFantasyPoints(row: Record<string, unknown>) {

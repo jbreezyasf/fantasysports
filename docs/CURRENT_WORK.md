@@ -8,6 +8,39 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 ---
 
+## September 8 Beta Draft Release-Hardening Sprint
+
+**Scope:** Prepare the deployed Big Exec Pro Football app for the real 10-manager friend beta draft without redesigning the product, rebuilding existing systems, or treating unavailable 2026 live player statistics as a pre-launch blocker.
+
+**Production baseline inspected 2026-09-08:** local `main`, `origin/main`, and Vercel production deployment `dpl_BwMW5BUSi2X71piSakxsRj5tnotQ` all pointed at commit `13117c6459fecbbdaa11560bff43390df2b17097`. Production URL tested: `https://www.bigexecfs.com`. Supabase project inspected: `njjiqdqhmcbxblwhfade`.
+
+**PROVEN 2026-09-08:** Production draft infrastructure exists for Draft Night: `drafts`, `draft_picks`, `draft_queues`, `draft_corrections`, queue/timer/autopick/pause/undo RPCs, active `big-exec-process-draft-autopicks` cron, and realtime publication entries for `drafts`, `draft_picks`, and `draft_queues`.
+
+**PROVEN 2026-09-08:** Controlled QA actor auth was repaired only for the QA Manager01 account, then `QA_APP_URL=https://www.bigexecfs.com npm run qa:auth:save` saved all ten QA actor sessions without printing credentials.
+
+**PROVEN 2026-09-08:** Production-deployed full draft dress rehearsal passed against `https://www.bigexecfs.com`. Evidence: `qa-artifacts/2026-09-08_deployed-full-draft/DRAFT_QA.md`, league `add82581-5e75-4c90-b112-adab7471e4f8`, draft `ea5b1afd-bcb9-4d92-bbfb-3f28527856a1`. Results: 150/150 made picks, 150 unique drafted assets, 10 legal completed rosters, one autopick observed, duplicate drafted asset rejected, pause/resume enforced, commissioner undo executed, desktop/mobile Draft Room screenshots captured, zero console/network errors in captures, and no manual database repair.
+
+**PROVEN 2026-09-08:** Post-draft team experience passed against the deployed app. Evidence: `qa-artifacts/2026-09-08_deployed-post-draft-transactions/TRANSACTIONS_QA.md`. Results: lineup slots set, cross-manager lineup write blocked, waiver hold and competing waiver outcome created, accepted trade moved both assets atomically, invalid trade rejected, trade deadline rejected new trade, private trade messages protected, and desktop/mobile screenshots captured. One expected non-participant private-trade route returned 404.
+
+**PROVEN with latency caveat 2026-09-08:** Deployed realtime/reconnect QA ran against `https://www.bigexecfs.com`. Evidence: `qa-artifacts/2026-09-08_deployed-draft-realtime/DRAFT_REALTIME_QA.md`, 10 pass, 0 fail, 1 slow. Realtime beat the 15-second polling fallback and reconnect recovered state, but one propagation check exceeded the strict 8-second target (commissioner desktop 10,275ms, manager mobile 13,789ms). Treat this as a draft-day monitoring risk, not an unrecoverable realtime divergence.
+
+**PROVEN 2026-09-08:** Added read-only commands:
+
+- `npm run beta:draft:preflight -- --league=<league-id>` reports PASS/WARN/FAIL for league, draft, player-pool, infrastructure, and invitation-count checks without printing private emails or secrets.
+- `npm run ops:draft:health -- --league=<league-id>` reports draft status, current pick, current manager, deadline, pause state, last pick, total picks, last autopick, recent correction/undo, roster-count anomalies, duplicate drafted assets, and expired-deadline anomaly.
+
+**PROVEN 2026-09-08:** Fresh QA league `7dd3f39b-53b5-4420-bc37-b9635c9e31fa` preflight ended exactly `BETA DRAFT PREFLIGHT: PASS`. Current production metadata did not identify a real friend beta league by name without a supplied league id; actual beta-league preflight remains pending.
+
+**PROVEN 2026-09-08:** Added BALDONTLIE NFL games ingestion using the existing provider path and official `GET /nfl/v1/games` parameters (`seasons[]`, `weeks[]`, `season_types[]`, cursor pagination). Production now contains 272 2026 regular-season `real_games` rows. Week 1 has 16 rows, first kickoff `2026-09-10T00:20:00+00:00`, last kickoff `2026-09-15T00:15:00+00:00`. Repeat full sync inserted 0 rows, updated 272 rows, and left duplicate provider ids at 0.
+
+**PROVEN 2026-09-08:** Fixed `/ops` data-health reads to use canonical `real_games.state` instead of nonexistent `real_games.status`.
+
+**Late-start correction 2026-09-08:** NFL Week 1 begins Wednesday, September 9, 2026 at 7:20 PM CDT (`2026-09-10T00:20:00+00:00`). A draft on September 8 can use Week 1 as the first live period. A late-evening September 9 draft after kickoff still triggers the canonical late-start risk. Current late-start implementation remains mostly not implemented and must not be silently changed before draft night.
+
+**Verification passed 2026-09-08:** `npm test --workspace @fantasy-all-sports/web`, `npm run test:a11y --workspace @fantasy-all-sports/web`, `npm run typecheck`, `npm test`, `npm run build --workspace @fantasy-all-sports/web`, and root `npm run build`.
+
+**Remaining before the real beta draft:** identify the actual beta league id, run `npm run beta:draft:preflight -- --league=<actual-beta-league-id>`, run a controlled production invite -> signup -> league smoke test, and keep realtime latency visible during the live draft.
+
 ## P0 — Reconcile Current Implementation
 
 - [x] Inspect current `main`. Evidence: `main`, `origin/main`, and local `HEAD` are `70a73984a6644830942b364de4a727b7b564f6f0` on 2026-08-26.

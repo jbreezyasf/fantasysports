@@ -3,6 +3,7 @@ import {
   balldontlieDefenseFantasyPoints,
   balldontliePlayerFantasyPoints,
   balldontliePlayerName,
+  normalizeBalldontlieGame,
   normalizeNflPosition,
   normalizeNflTeamAlias,
   readStat,
@@ -52,5 +53,33 @@ describe('balldontlie NFL normalization', () => {
       defensive_touchdowns: 1,
       points_allowed: 13,
     })).toBe(20);
+  });
+
+  it('normalizes BALDONTLIE NFL games for canonical storage', () => {
+    const normalized = normalizeBalldontlieGame({
+      id: 101,
+      season: 2026,
+      week: 1,
+      date: '2026-09-09T00:20:00.000Z',
+      status: '9/9 - 8:20 PM EDT',
+      status_state: 'scheduled',
+      home_team: { id: 26, abbreviation: 'SEA' },
+      visitor_team: { id: 19, abbreviation: 'NE' },
+      home_team_score: null,
+      visitor_team_score: null,
+      updated_at: '2026-09-08T12:00:00.000Z',
+    });
+
+    expect(normalized).toMatchObject({
+      providerGameId: '101',
+      season: 2026,
+      week: 1,
+      homeTeamProviderId: '26',
+      awayTeamProviderId: '19',
+      scheduledKickoffAt: '2026-09-09T00:20:00.000Z',
+      state: 'scheduled',
+      homeScore: null,
+      awayScore: null,
+    });
   });
 });
