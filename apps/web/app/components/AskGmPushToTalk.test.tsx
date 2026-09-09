@@ -17,7 +17,7 @@ describe('AskGmPushToTalk', () => {
     ['speaking', 'Speaking Assistant GM response.', 'Stop Assistant GM speech'],
     ['error', 'Ask GM is unavailable.', 'Cancel and return from Assistant GM error']
   ] as const)('renders accessible %s state', (state, text, actionLabel) => {
-    const html = renderToStaticMarkup(<AskGmPushToTalk initialState={state} />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState={state} defaultOpen />);
 
     expect(html).toContain(`data-state="${state}"`);
     expect(html).toContain(text);
@@ -28,7 +28,7 @@ describe('AskGmPushToTalk', () => {
   });
 
   it('offers explicit retry in the error state', () => {
-    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="error" />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="error" defaultOpen />);
 
     expect(html).toContain('Retry push to talk with Assistant GM');
     expect(html).toContain('Type Assistant GM request instead');
@@ -37,7 +37,7 @@ describe('AskGmPushToTalk', () => {
   });
 
   it('keeps the text response available while speech controls are shown', () => {
-    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." defaultOpen />);
 
     expect(html).toContain('Assistant GM response: You are winning by two.');
     expect(html).toContain('Replay last Assistant GM response');
@@ -47,20 +47,19 @@ describe('AskGmPushToTalk', () => {
   it('keeps typed Ask GM in the header when voice input is disabled', () => {
     const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled={false} />);
 
-    expect(html).toContain('Assistant GM push to talk');
-    expect(html).toContain('Assistant GM voice input is off');
-    expect(html).toContain('Type your Assistant GM question');
+    expect(html).toContain('Open Assistant GM');
+    expect(html).toContain('askGmBubble');
   });
 
   it('mounts Ask GM in the header when the flag is enabled', () => {
     const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled />);
 
-    expect(html).toContain('Assistant GM push to talk');
-    expect(html).toContain('Start push to talk with Assistant GM');
+    expect(html).toContain('Open Assistant GM');
+    expect(html).toContain('askGmBubble');
   });
 
   it('keeps header Ask GM non-modal when critical controls are active', () => {
-    const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled criticalControlsActive />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" defaultOpen capabilities={{ criticalControlsActive: true }} />);
 
     expect(html).toContain('role="region"');
     expect(html).not.toContain('role="dialog"');
@@ -89,7 +88,7 @@ const commissionerOnly: AssistantGmPolicyDecision = {
 
 describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
   it('renders a conversation transcript alongside the spoken response', () => {
-    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." defaultOpen />);
 
     expect(html).toContain('aria-label="Assistant GM conversation transcript"');
     expect(html).toContain('askGmTurns');
@@ -97,20 +96,20 @@ describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
   });
 
   it('exposes a focusable transcript region for programmatic focus restoration', () => {
-    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." defaultOpen />);
 
     expect(html).toMatch(/class="askGmHistory"[^>]*tabindex="-1"/);
   });
 
   it('makes the error alert a focus target so failures are not silent', () => {
-    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="error" />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="error" defaultOpen />);
 
     expect(html).toMatch(/class="askGmError"[^>]*tabindex="-1"/);
     expect(html).toContain('role="alert"');
   });
 
   it('offers a typed submit path in every state', () => {
-    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" />);
+    const html = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" defaultOpen />);
 
     expect(html).toContain('Send typed Assistant GM question');
     expect(html).toContain('class="askGmTypedSubmit"');
@@ -118,9 +117,9 @@ describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
   });
 
   it('stays non-modal while a time-critical gameplay control is live', () => {
-    const calm = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" />);
+    const calm = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" defaultOpen />);
     const duringDraft = renderToStaticMarkup(
-      <AskGmPushToTalk initialState="idle" capabilities={{ criticalControlsActive: true }} />
+      <AskGmPushToTalk initialState="idle" defaultOpen capabilities={{ criticalControlsActive: true }} />
     );
 
     expect(calm).toContain('role="dialog"');
@@ -132,7 +131,7 @@ describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk policy={entitlementRequired} />);
 
     expect(html).toContain('Executive League Season Pass required');
-    expect(html).not.toContain('Start push to talk with Assistant GM');
+    expect(html).not.toContain('Open Assistant GM');
   });
 
   it('never shows an upgrade prompt for a role denial', () => {

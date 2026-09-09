@@ -2,6 +2,7 @@
 
 import { createClient } from '../../lib/supabase/server';
 import { createAssistantGmGateway, type AssistantGmGatewayResponse } from '../../lib/assistant-gm/gateway';
+import { searchAssistantGmKnowledgeBase, type KnowledgeRetrievalResult } from '../../lib/assistant-gm/knowledgeRetrieval';
 import type { AssistantGmToolContext, AssistantGmToolRequest, AssistantGmToolResponse } from '../../lib/assistant-gm/tools';
 import type { BigExecCapabilityId, CapabilityAudience } from '../../lib/executive/capabilities';
 import type { EntitlementSupabase } from '../../lib/executive/entitlements';
@@ -64,6 +65,58 @@ function currentWeek(question: string) {
   if (!match) return 1;
   const week = Number(match[1]);
   return Number.isInteger(week) && week >= 1 && week <= 18 ? week : 1;
+}
+
+function shouldTryKnowledgeBase(question: string) {
+  const normalized = question.toLowerCase();
+  const asksForStableAnswer = /\b(how|what|why|when|where|explain|help|rule|rules|requirement|requirements|policy|policies|work|works)\b/.test(normalized);
+  const mentionsProductArea = /\b(account|assistant gm|ask gm|draft|franchise|invite|invitation|league|lineup|matchup|password|playoff|playoffs|privacy|roster|scoring|season|trade|waiver|waivers|free agent|free agency)\b/.test(normalized);
+  const asksForCurrentLeagueState = /\b(my|our|current|available|who|which|standings|record|start|bench|pick up|add|drop|rank)\b/.test(normalized);
+
+  return asksForStableAnswer && mentionsProductArea && !asksForCurrentLeagueState;
+}
+
+function cleanKnowledgeExcerpt(excerpt: string) {
+  return excerpt
+    .replace(/^#+\s*/g, '')
+    .replace(/\s+#+\s*/g, ' ')
+    .replace(/\*\*Voice answer:\*\*/gi, '')
+    .replace(/\*\*Tool note:\*\*/gi, 'Tool note:')
+    .replace(/[`*_]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function bestKnowledgeSnippet(result: KnowledgeRetrievalResult, question: string) {
+  const terms = question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(term => term.length >= 3);
+  const blocks = result.excerpt.split(/\s+##\s+/).filter(Boolean);
+  const scored = blocks
+    .map(block => ({
+      block,
+      hasVoiceAnswer: /\*\*Voice answer:\*\*/i.test(block),
+      score: terms.reduce((sum, term) => sum + (block.toLowerCase().includes(term) ? 1 : 0), 0)
+    }))
+    .sort((a, b) => b.score - a.score || Number(b.hasVoiceAnswer) - Number(a.hasVoiceAnswer));
+  const best = scored[0]?.block || result.excerpt;
+  const voiceAnswer = best.match(/\*\*Voice answer:\*\*\s*([^#]+?)(?=\s+\*\*Tool note:\*\*|$)/i)?.[1];
+  const cleaned = cleanKnowledgeExcerpt(voiceAnswer || best);
+  return cleaned.length > 260 ? `${cleaned.slice(0, 257).trim()}...` : cleaned;
+}
+
+function composeKnowledgeAnswer(question: string, results: KnowledgeRetrievalResult[]): HeaderAssistantGmAnswer | null {
+  const userFacingResults = results.filter(result => result.source.includes('/faq/'));
+  const [primary, secondary] = userFacingResults.length ? userFacingResults : results;
+  if (!primary) return null;
+
+  const text = `${primary.title}: ${bestKnowledgeSnippet(primary, question)}`;
+  const detail = secondary
+    ? `Knowledge base sources: ${primary.source}; ${secondary.source}. This is a stable help answer, not a league-state read or transaction.`
+    : `Knowledge base source: ${primary.source}. This is a stable help answer, not a league-state read or transaction.`;
+
+  return { ok: true, text, detail };
 }
 
 function planQuestion(question: string, leagueId: string, draftId: string | null): AskPlan {
@@ -227,6 +280,11 @@ export async function askHeaderAssistantGm(leagueId: string, question: string): 
   ]);
   if (!member) return { ok: false, message: 'Assistant GM can only read leagues you belong to.' };
   if (!season) return { ok: false, message: 'Assistant GM could not find the current league season.' };
+
+  if (shouldTryKnowledgeBase(trimmed)) {
+    const knowledgeAnswer = composeKnowledgeAnswer(trimmed, searchAssistantGmKnowledgeBase(trimmed, 2));
+    if (knowledgeAnswer) return knowledgeAnswer;
+  }
 
   const { data: draft } = await supabase.from('drafts').select('id').eq('league_season_id', season.id).maybeSingle();
   const plan = planQuestion(trimmed, leagueId, draft?.id ?? null);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { microphonePermissionCopy } from '../../lib/voice/speechToText';
 import {
   createBoundedSpeechCapture,
@@ -71,6 +71,8 @@ export type AskGmPushToTalkProps = {
   captureLimitMs?: number;
   /** Capture metrics sink. Never receives transcript content. */
   onSpeechTelemetry?: (event: SpeechCaptureTelemetryEvent) => void;
+  /** Keeps static tests and focused QA able to render the full panel directly. */
+  defaultOpen?: boolean;
 };
 
 export type AskGmAnswer =
@@ -81,13 +83,13 @@ function seedState(input: {
   initialState: AskGmPhase;
   initialResponse: string;
   capabilities?: Partial<AskGmCapabilities>;
+  defaultOpen?: boolean;
 }): AskGmState {
   const base = createAskGmState({ voiceInput: true, spokenOutput: true, ...input.capabilities });
 
   return {
     ...base,
-    // The panel is inline in the header, so it starts open at the seeded phase.
-    open: true,
+    open: input.defaultOpen ?? (input.initialState !== 'idle' || Boolean(input.initialResponse)),
     phase: input.initialState,
     lastAnswer: input.initialResponse ? { text: input.initialResponse } : null,
     canReplay: Boolean(input.initialResponse),
@@ -110,13 +112,15 @@ export default function AskGmPushToTalk({
   voiceInputEnabled = true,
   cloudSpeechEnabled = false,
   captureLimitMs,
-  onSpeechTelemetry
+  onSpeechTelemetry,
+  defaultOpen = false
 }: AskGmPushToTalkProps) {
   const [state, dispatch] = useReducer(
     askGmReducer,
-    { initialState, initialResponse, capabilities },
+    { initialState, initialResponse, capabilities, defaultOpen },
     seedState
   );
+  const [dockPosition, setDockPosition] = useState<AskGmDockPosition>('bottom-right');
 
   const captureRef = useRef<BoundedSpeechCapture | null>(null);
   const ttsRef = useRef<TextToSpeechAdapter | null>(null);
@@ -128,6 +132,24 @@ export default function AskGmPushToTalk({
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const send = useCallback((event: AskGmEvent) => dispatch(event), []);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('big-exec-ask-gm-position');
+      if (isAskGmDockPosition(saved)) setDockPosition(saved);
+    } catch {
+      // Non-essential preference storage; the control still works without it.
+    }
+  }, []);
+
+  const setSavedDockPosition = useCallback((next: AskGmDockPosition) => {
+    setDockPosition(next);
+    try {
+      window.localStorage.setItem('big-exec-ask-gm-position', next);
+    } catch {
+      // Preference persistence is best-effort only.
+    }
+  }, []);
 
   const upgrade = useMemo(
     () => (policy ? describeAssistantGmUpgradePrompt(policy) : { show: false, headline: '', body: '', surface: null }),
@@ -266,6 +288,37 @@ export default function AskGmPushToTalk({
     send({ type: 'cancel' });
   }
 
+  function closePanel() {
+    captureRef.current?.cancel();
+    ttsRef.current?.stop();
+    captureRef.current = null;
+    setGmAudioSpeaking(false);
+    send({ type: 'close' });
+  }
+
+  function movePanel() {
+    const order: AskGmDockPosition[] = ['bottom-right', 'bottom-left', 'top-left', 'top-right'];
+    const currentIndex = order.indexOf(dockPosition);
+    const next = order[(currentIndex + 1) % order.length];
+    setSavedDockPosition(next);
+    announceToScreenReader({
+      key: `ask-gm-moved-${next}`,
+      message: `Assistant GM moved to ${next.replace('-', ' ')}.`,
+      priority: 'polite',
+      channel: 'gm'
+    });
+  }
+
+  function resetPanelPosition() {
+    setSavedDockPosition('bottom-right');
+    announceToScreenReader({
+      key: 'ask-gm-position-reset',
+      message: 'Assistant GM moved to bottom right.',
+      priority: 'polite',
+      channel: 'gm'
+    });
+  }
+
   function stopSpeech() {
     ttsRef.current?.stop();
     setGmAudioSpeaking(false);
@@ -301,33 +354,72 @@ export default function AskGmPushToTalk({
   // upgrade prompt appears only when a purchase is actually the remedy.
   if (policy && !policy.allowed) {
     return (
-      <div className="askGmControl askGmControl--unavailable" aria-label="Assistant GM unavailable">
-        <p className="askGmUnavailable" role="status">
-          {policy.message}
-        </p>
-        {upgrade.show ? (
-          <div className="askGmUpgrade" role="note">
-            <strong className="askGmUpgradeHeadline">{upgrade.headline}</strong>
-            <span>{upgrade.body}</span>
-          </div>
-        ) : null}
+      <div className="askGmDock" data-position={dockPosition}>
+        <div className="askGmControl askGmControl--unavailable" aria-label="Assistant GM unavailable">
+          <p className="askGmUnavailable" role="status">
+            {policy.message}
+          </p>
+          {upgrade.show ? (
+            <div className="askGmUpgrade" role="note">
+              <strong className="askGmUpgradeHeadline">{upgrade.headline}</strong>
+              <span>{upgrade.body}</span>
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   }
 
   const phase = state.phase;
 
+  if (!state.open) {
+    return (
+      <div className="askGmDock" data-position={dockPosition}>
+        <button
+          ref={askButtonRef}
+          type="button"
+          className="askGmBubble"
+          onClick={() => send({ type: 'open' })}
+          aria-label="Open Assistant GM"
+        >
+          <CoachHeadIcon />
+          <VisuallyHidden>Assistant GM</VisuallyHidden>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div
-      ref={rootRef}
-      className="askGmControl"
-      data-state={phase}
-      role={askGmDialogRole(state)}
-      aria-label="Assistant GM push to talk"
-    >
-      <div className="askGmStatus" role="status" aria-live="polite" aria-atomic="true">
-        <span aria-hidden="true" className="askGmDot" />
-        <span>{stateText[phase]}</span>
+    <div className="askGmDock" data-position={dockPosition}>
+      <div
+        ref={rootRef}
+        className="askGmControl"
+        data-state={phase}
+        role={askGmDialogRole(state)}
+        aria-label="Assistant GM push to talk"
+      >
+      <div className="askGmPanelHeader">
+        <div className="askGmCoachMark" aria-hidden="true">
+          <CoachHeadIcon />
+        </div>
+        <div className="askGmPanelTitle">
+          <strong>Assistant GM</strong>
+          <div className="askGmStatus" role="status" aria-live="polite" aria-atomic="true">
+            <span aria-hidden="true" className="askGmDot" />
+            <span>{stateText[phase]}</span>
+          </div>
+        </div>
+        <div className="askGmPanelControls" aria-label="Assistant GM window controls">
+          <button type="button" className="askGmIconButton" onClick={movePanel} aria-label="Move Assistant GM">
+            <MoveIcon />
+          </button>
+          <button type="button" className="askGmIconButton" onClick={resetPanelPosition} aria-label="Reset Assistant GM position">
+            <ResetIcon />
+          </button>
+          <button type="button" className="askGmIconButton" onClick={closePanel} aria-label="Close Assistant GM">
+            <CloseIcon />
+          </button>
+        </div>
       </div>
       <p className="srOnly" id="ask-gm-permission">
         {microphonePermissionCopy()}
@@ -458,6 +550,48 @@ export default function AskGmPushToTalk({
 
       <VisuallyHidden>Assistant GM spoken responses keep text visible and can be stopped or replayed.</VisuallyHidden>
       <VisuallyHidden>No always-listening behavior is active. Listening starts only after pressing Ask GM.</VisuallyHidden>
+      </div>
     </div>
+  );
+}
+
+type AskGmDockPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+
+function isAskGmDockPosition(value: string | null): value is AskGmDockPosition {
+  return value === 'bottom-right' || value === 'bottom-left' || value === 'top-right' || value === 'top-left';
+}
+
+function CoachHeadIcon() {
+  return (
+    <svg className="askGmCoachIcon" viewBox="0 0 64 64" focusable="false" aria-hidden="true">
+      <path d="M14 26c1-10 8-17 19-17 9 0 16 5 18 13 4 1 7 5 7 10 0 6-4 10-10 10h-2c-4 8-11 13-20 13-10 0-18-6-21-15 6-1 9-4 9-8v-6Z" />
+      <path d="M18 23c3-8 9-12 18-12 7 0 13 3 16 9-8-1-16-1-24 1-4 1-7 1-10 2Z" className="askGmCoachCap" />
+      <path d="M24 34h11M23 28h8M41 28h5" />
+      <path d="M46 35h9" className="askGmCoachMic" />
+    </svg>
+  );
+}
+
+function MoveIcon() {
+  return (
+    <svg className="askGmWindowIcon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+      <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg className="askGmWindowIcon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+      <path d="M5 12a7 7 0 1 0 2-5M5 5v5h5" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg className="askGmWindowIcon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
   );
 }

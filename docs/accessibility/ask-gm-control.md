@@ -4,9 +4,11 @@
 
 BE-VOICE-100 is implemented by evolving the existing BE-VOICE-051 push-to-talk entry point rather than adding a second Ask GM surface. It remains behind the legacy `voice_gm` feature flag or the newer Assistant GM voice-input flag.
 
+As of 2026-09-09, the visible shell is a floating gold Assistant GM bubble with an original dark coach-head mark. Opening the bubble reveals the same transcript, typed input, push-to-talk controls, stop/replay, and Tell me more affordances.
+
 ## Reconciliation note
 
-`docs/executive/REPO_INVENTORY.md` recorded BE-VOICE-100 as *"Existing UI start: `apps/web/app/components/AskGmPushToTalk.tsx`; needs real gateway integration, transcript, Tell me more, focus restoration."* This task closed those four gaps in place. `AskGmPushToTalk` is still the single mounted Ask GM control, still mounted from `BigExecAppHeader`.
+`docs/executive/REPO_INVENTORY.md` recorded BE-VOICE-100 as *"Existing UI start: `apps/web/app/components/AskGmPushToTalk.tsx`; needs real gateway integration, transcript, Tell me more, focus restoration."* This task closed those four gaps in place. `AskGmPushToTalk` is still the single mounted Ask GM control, still mounted by `BigExecAppHeader`, but it now renders as a fixed-position sibling so it remains available when the desktop header is hidden on mobile.
 
 ## Files
 
@@ -26,6 +28,8 @@ The component owns only the adapter wiring: `lib/voice/speechToText` for capture
 
 As of the 2026-09-05 finish branch, `BigExecAppHeader` wires `onAsk` to `askHeaderAssistantGm`, a server action that authenticates the user, verifies league membership, resolves the current league season, routes common roster/lineup/standings/draft/waiver/trade/history questions to the read-only Assistant GM gateway, and returns a visible/spoken answer. The action does not expose write tools.
 
+As of 2026-09-09, stable help/rules questions are routed to the local markdown Assistant GM knowledge base before live league-state tools. That retrieval path is deterministic file search over `docs/assistant-gm/knowledge-base`, not a paid model call.
+
 ## States
 
 `idle`, `listening`, `processing`, `speaking`, `error`. Every transition emits an announcement through the shared queue on the `gm` channel, so state is announced as well as visible, and phase is conveyed by text rather than colour alone.
@@ -40,6 +44,8 @@ As of the 2026-09-05 finish branch, `BigExecAppHeader` wires `onAsk` to `askHead
 ## Gameplay obstruction
 
 The panel is modal (`role="dialog"`) only when no time-critical gameplay control is live. When `criticalControlsActive` is set — a running draft clock or an imminent lineup lock — it renders as a non-modal `role="region"` and never traps focus, so it cannot obstruct pick controls.
+
+The panel can be moved through keyboard-accessible controls. `Move Assistant GM` cycles the dock among the four screen corners, `Reset Assistant GM position` returns it to bottom right, and each move is announced on the `gm` live-announcement channel. This is the accessible equivalent of a draggable bubble for users who cannot use pointer drag.
 
 ## Entitlement
 
