@@ -4,7 +4,7 @@
 create table if not exists public.ops_staff_roles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  role text not null check (role in ('super_admin','ops_manager','support','content_manager','read_only')),
+  role text not null check (role in ('super_admin','ops_manager','support','content_manager','it_staff','read_only')),
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id),
   disabled_at timestamptz

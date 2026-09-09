@@ -11,6 +11,7 @@ Status: Implemented in working tree, pending database migration application and 
 - **PROVEN:** Staff access is explicit through `OPS_SUPER_ADMIN_EMAILS`, `OPS_SUPER_ADMIN_USER_IDS`, or active `ops_staff_roles` rows.
 - **PROVEN:** Phase 1 portal views are read-only for fantasy data.
 - **PROVEN:** The only portal write path added is `ops_audit_events` insertion for internal portal views.
+- **PROVEN:** The permission model now includes `it_staff` for future delegated technical work. This role can access troubleshooting context, upload technical artifacts when a future upload surface exists, propose changes, and inspect rollback evidence. It cannot manage staff and is not granted ultimate delete authority.
 
 ## Routes
 
@@ -19,6 +20,18 @@ Status: Implemented in working tree, pending database migration application and 
 - `/ops/leagues/[leagueId]`: league visibility for franchises, members, current season, draft, matchup, standings, roster count, lineup count, waiver, trade, and feed status.
 - `/ops/data-health`: data freshness view for athletes, provider IDs, real teams, real games, and athlete game stats.
 - `/ops/audit`: read-only ops audit trail.
+- `/admin/beta-feedback`: owner-only beta feedback intelligence, support triage, and product-work review.
+
+## Staff Roles
+
+- `super_admin`: owner-level internal control.
+- `ops_manager`: support and beta operations oversight.
+- `support`: user, league, and league-data support visibility.
+- `content_manager`: content and feedback proposal drafting.
+- `it_staff`: limited technical troubleshooting, artifact upload permission for future tools, change proposal permission, rollback evidence visibility, and audit visibility.
+- `read_only`: visibility-only operations access.
+
+IT staff and future developers must work through logged tools. Change-capable tools should preserve enough previous state to roll back, and destructive permanent delete authority must remain owner-only unless the product/security spec is explicitly changed.
 
 ## Files
 
@@ -54,6 +67,8 @@ The migration has not been applied to production in this implementation pass.
 - No Assistant GM prompt/model/personality editing.
 - No data repair or manual sync override buttons.
 - No broad staff management UI beyond the foundational role table.
+- No IT-staff upload/change tooling yet. The role and permissions are present as a foundation only.
+- No ultimate-delete delegation for IT staff or developers.
 
 ## Verification
 
