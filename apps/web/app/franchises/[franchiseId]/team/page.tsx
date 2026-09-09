@@ -14,7 +14,7 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
-  const { data: franchise } = await supabase.from('franchises').select('id,name,abbreviation,league_id,primary_color,secondary_color').eq('id', franchiseId).maybeSingle();
+  const { data: franchise } = await supabase.from('franchises').select('id,name,abbreviation,league_id,primary_color,secondary_color,avatar_key').eq('id', franchiseId).maybeSingle();
   if (!franchise) notFound();
   const { data: currentLeagueSeason } = await supabase.from('league_seasons').select('id,trade_deadline_at,roster_integrity_mode,roster_integrity_bulk_drop_limit,roster_integrity_bulk_window_hours').eq('league_id', franchise.league_id).eq('is_current', true).maybeSingle();
   if (!currentLeagueSeason) notFound();
@@ -75,7 +75,7 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
     <section className="leagueHero franchiseStadiumHero" style={{'--stadium-primary':primary,'--stadium-secondary':secondary} as React.CSSProperties}>
       <div className="stadiumColorWash" aria-hidden="true" />
       <div className="leagueTopline"><span className="backLink">WEEK {week} • TEAM HQ</span><span className="leagueRole">{stadium?.environment_key?.replaceAll('_',' ').toUpperCase() ?? 'HOME STADIUM'}</span></div>
-      <div className="leagueHeroContent franchiseIdentity"><FranchiseCrest className="franchiseCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={primary} secondary={secondary}/><div><p className="eyebrow">BIG EXEC • FRONT OFFICE</p><h1>{franchise.name}</h1><p className="leagueTagline">Set the starting nine inside your franchise home.</p><div className="leagueMetaRow"><span>{franchise.abbreviation ?? 'BEX'}</span><span>WEEK {week}</span><span>STARTER STADIUM</span></div></div></div>
+      <div className="leagueHeroContent franchiseIdentity"><FranchiseCrest className="franchiseCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={primary} secondary={secondary} avatarKey={franchise.avatar_key}/><div><p className="eyebrow">BIG EXEC • FRONT OFFICE</p><h1>{franchise.name}</h1><p className="leagueTagline">Set the starting nine inside your franchise home.</p><div className="leagueMetaRow"><span>{franchise.abbreviation ?? 'BEX'}</span><span>WEEK {week}</span><span>STARTER STADIUM</span></div></div></div>
       <a className="stadiumHeroAction" href={`/franchises/${franchiseId}/stadium`}>View stadium <span aria-hidden="true">→</span></a>
     </section>
     <section className="panel"><p className="eyebrow">LINEUP CONTROL</p><h2>Set your starters.</h2><p className="lede">Click a player option under a slot to promote them directly into the starting lineup. Each real player locks when their game begins once the current-season live schedule is connected.</p>{query.error && <p className="errorNotice" role="alert">{query.error}</p>}{query.lineup_status==='set'&&<p className="successNotice" role="status">{lineupMoveConfirmation(query.lineup_asset??'Selected player',query.lineup_slot??'lineup slot',week)}</p>}<div className="actions">{week > 1 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week-1}`}>← Week {week-1}</a>}{week < 18 && <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week+1}`}>Week {week+1} →</a>}<a className="secondary" href={`/franchises/${franchiseId}/stadium`}>View My Stadium</a></div></section>

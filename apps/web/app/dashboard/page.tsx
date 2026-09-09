@@ -25,7 +25,7 @@ export default async function DashboardPage() {
     supabase.from('franchise_owners').select('franchise_id').eq('user_id',user.id).is('ends_on',null).limit(1)
   ]);
   const ownedFranchiseId=ownershipResult.data?.[0]?.franchise_id;
-  const {data:featuredFranchise}=ownedFranchiseId?await supabase.from('franchises').select('id,name,abbreviation,primary_color,secondary_color,league_id').eq('id',ownedFranchiseId).maybeSingle():{data:null};
+  const {data:featuredFranchise}=ownedFranchiseId?await supabase.from('franchises').select('id,name,abbreviation,primary_color,secondary_color,avatar_key,league_id').eq('id',ownedFranchiseId).maybeSingle():{data:null};
 
   const leagues = (memberResult.data ?? []).map(member => Array.isArray(member.fantasy_leagues) ? member.fantasy_leagues[0] : member.fantasy_leagues).filter((league): league is NonNullable<typeof league> => Boolean(league));
   const profile = profileResult.data;

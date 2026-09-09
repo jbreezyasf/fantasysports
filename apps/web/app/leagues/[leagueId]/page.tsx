@@ -17,7 +17,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
 
   const { data: league } = await supabase.from('fantasy_leagues').select('id,name,created_at,draft_min_franchises,max_franchises').eq('id', leagueId).maybeSingle();
   if (!league) notFound();
-  const { data: franchises } = await supabase.from('franchises').select('id,name,abbreviation,primary_color,secondary_color,established_year').eq('league_id', leagueId).order('created_at');
+  const { data: franchises } = await supabase.from('franchises').select('id,name,abbreviation,primary_color,secondary_color,avatar_key,established_year').eq('league_id', leagueId).order('created_at');
   const { data: member } = await supabase.from('league_members').select('role').eq('league_id', leagueId).eq('user_id', user.id).maybeSingle();
   const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null);
   const { data: activeOwners } = await supabase.from('franchise_owners').select('franchise_id,user_id').is('ends_on', null);
@@ -171,7 +171,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
             const canRemove = canRemoveManagers && !mine && ownerByFranchiseId.get(franchise.id);
             const card = <article className={`franchiseCard ${mine ? 'myFranchise' : ''}`} style={{ '--team-primary': franchise.primary_color ?? '#d9b43b', '--team-secondary': franchise.secondary_color ?? '#f5f1e8' } as React.CSSProperties}>
               <div className="franchiseCardTop"><span>{mine ? 'YOUR FRANCHISE' : `SEAT ${String(index + 1).padStart(2,'0')}`}</span><b>{franchise.abbreviation ?? 'BEX'}</b></div>
-              <FranchiseCrest className="franchiseMonogram franchiseCardCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary_color} secondary={franchise.secondary_color} decorative/><strong>{franchise.name}</strong><p>EST. {franchise.established_year ?? new Date().getFullYear()}</p>{mine && <em>ENTER TEAM HQ →</em>}
+              <FranchiseCrest className="franchiseMonogram franchiseCardCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary_color} secondary={franchise.secondary_color} avatarKey={franchise.avatar_key} decorative/><strong>{franchise.name}</strong><p>EST. {franchise.established_year ?? new Date().getFullYear()}</p>{mine && <em>ENTER TEAM HQ →</em>}
               {canRemove && <form action={removePreDraftFranchise} className="franchiseRemoveForm"><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="franchise_id" value={franchise.id}/><button className="miniAction" type="submit" aria-label={`Remove ${franchise.name} and reopen this franchise seat`}>Remove</button></form>}
             </article>;
             return mine ? <a key={franchise.id} href={`/franchises/${franchise.id}/team`}>{card}</a> : <div key={franchise.id}>{card}</div>;

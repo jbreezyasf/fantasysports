@@ -40,6 +40,7 @@ type Franchise = {
   abbreviation: string;
   primary: string;
   secondary: string;
+  avatarKey?: string | null;
   establishedYear?: number | null;
 };
 
@@ -174,7 +175,7 @@ export function StadiumLegacyExperience({
           <div className="legacyAtmosphere" aria-hidden="true" />
           <div className="legacyScoreboard" aria-hidden="true">
             <span>HOME OF</span>
-            <FranchiseCrest className="legacyScoreboardCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary} secondary={franchise.secondary} />
+            <FranchiseCrest className="legacyScoreboardCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary} secondary={franchise.secondary} avatarKey={franchise.avatarKey} />
             <strong>{franchise.abbreviation}</strong>
           </div>
           <div className="legacyRafterLine" aria-hidden="true">
@@ -213,7 +214,7 @@ export function StadiumLegacyExperience({
         <Image src="/environments/big-exec-front-office-v1.jpg" alt={`${franchise.name} front office trophy room`} fill sizes="(max-width: 760px) 100vw, 1040px" />
         <div className="officeSceneWash" aria-hidden="true" />
         <div className="officeDesk">
-          <FranchiseCrest className="officeCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary} secondary={franchise.secondary} />
+          <FranchiseCrest className="officeCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary} secondary={franchise.secondary} avatarKey={franchise.avatarKey} />
           <strong>{franchise.name}</strong>
           <span>{unlockedFeatures.length} unlocked stadium features</span>
         </div>

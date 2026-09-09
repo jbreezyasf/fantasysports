@@ -40,7 +40,7 @@ export default async function StadiumPage({ params }: { params: Promise<{ franch
 
   const { data: franchise, error: franchiseError } = await supabase
     .from('franchises')
-    .select('id,name,abbreviation,league_id,primary_color,secondary_color,established_year')
+    .select('id,name,abbreviation,league_id,primary_color,secondary_color,avatar_key,established_year')
     .eq('id', franchiseId)
     .maybeSingle();
 
@@ -169,7 +169,7 @@ export default async function StadiumPage({ params }: { params: Promise<{ franch
     </section>
 
     <StadiumLegacyExperience
-      franchise={{ id: franchise.id, name: franchise.name, abbreviation: abbr, primary, secondary, establishedYear: franchise.established_year }}
+      franchise={{ id: franchise.id, name: franchise.name, abbreviation: abbr, primary, secondary, avatarKey: franchise.avatar_key, establishedYear: franchise.established_year }}
       stadiumName={`${abbr} Neon Dome`}
       achievements={achievements}
       unlockedFeatures={unlockedFeatures}

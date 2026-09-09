@@ -12,7 +12,7 @@ export async function createLeague(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
   const { data, error } = await supabase.rpc('create_pro_football_league', {
-    p_name: String(formData.get('league_name') ?? ''), p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C')
+    p_name: String(formData.get('league_name') ?? ''), p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C'), p_avatar_key: String(formData.get('avatar_key') ?? 'classic')
   });
   if (error) redirect('/leagues/new?error=' + encodeURIComponent(error.message));
   redirect(`/leagues/${(data as { league_id: string }).league_id}`);
@@ -95,7 +95,7 @@ export async function acceptLeagueInvite(formData: FormData) {
   const { data: shareClaimToken, error: shareClaimError } = await supabase.rpc('claim_share_league_invite', { p_invite_token: token });
   if (shareClaimError) redirect(`/invite/${originalToken}?error=` + encodeURIComponent(shareClaimError.message));
   if (typeof shareClaimToken === 'string' && shareClaimToken) token = shareClaimToken;
-  const { data, error } = await supabase.rpc('accept_league_invite', { p_invite_token: token, p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C') });
+  const { data, error } = await supabase.rpc('accept_league_invite', { p_invite_token: token, p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C'), p_avatar_key: String(formData.get('avatar_key') ?? 'classic') });
   if (error) redirect(`/invite/${originalToken}?error=` + encodeURIComponent(error.message));
   redirect(`/leagues/${(data as { league_id: string }).league_id}?joined=1`);
 }
