@@ -36,6 +36,11 @@ export type FeedbackAnalysis = {
   feature_candidate: boolean;
   cluster_key: string;
   implementation_proposal: Record<string, unknown> | null;
+  support_recommended: boolean;
+  support_reason: string | null;
+  support_summary: string | null;
+  support_response_draft: string | null;
+  support_disposition: 'none' | 'recommended';
   analysis_version: 'heuristic-v1';
 };
 
@@ -109,6 +114,17 @@ export function analyzeBetaFeedback(input: RawFeedback): FeedbackAnalysis {
     auto_deploy: false,
   } : null;
 
+  const supportRecommended = input.outcome === 'failed' || category === 'accessibility' || category === 'data_scoring' || category === 'assistant_gm' || churnRisk >= 4;
+  const supportReason = supportRecommended
+    ? `This report may need a direct customer response because it is ${category.replaceAll('_',' ')}, has outcome ${input.outcome.replaceAll('_',' ')}, or carries elevated churn risk.`
+    : null;
+  const supportSummary = supportRecommended
+    ? `Player reported a ${taskLabel} problem. Reported result: ${input.outcome.replaceAll('_',' ')}. Core issue: ${problem}`.slice(0, 1200)
+    : null;
+  const supportResponseDraft = supportRecommended
+    ? `Thanks for reporting this. We have your feedback about the ${taskLabel} experience. We are reviewing what happened and comparing it with the result you expected. We will not assume the cause until we verify it. If this affects your ability to keep playing, our support team should treat it as a priority.`
+    : null;
+
   return {
     category,
     problem_statement: problem.slice(0, 1200),
@@ -120,6 +136,11 @@ export function analyzeBetaFeedback(input: RawFeedback): FeedbackAnalysis {
     feature_candidate: featureCandidate,
     cluster_key: clusterKey,
     implementation_proposal: implementationProposal,
+    support_recommended: supportRecommended,
+    support_reason: supportReason,
+    support_summary: supportSummary,
+    support_response_draft: supportResponseDraft,
+    support_disposition: supportRecommended ? 'recommended' : 'none',
     analysis_version: 'heuristic-v1',
   };
 }
