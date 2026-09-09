@@ -1,18 +1,18 @@
-# FAQ — Assistant GM, Voice, Accessibility, and Executive
+# FAQ — Front Office Advisor, Voice, Accessibility, and Executive
 
-## FAQ-BE-160 — What is the Assistant GM?
+## FAQ-BE-160 — What is the Front Office Advisor?
 
-**Voice answer:** The Assistant GM helps you understand Big Exec, retrieve authorized league information, and make fantasy decisions. It can explain and recommend, but Big Exec's deterministic systems remain authoritative.
+**Voice answer:** The Front Office Advisor helps you understand Big Exec, retrieve authorized league information, and make fantasy decisions. It can explain and recommend, but Big Exec's deterministic systems remain authoritative.
 
 ## FAQ-BE-161 — Can I talk instead of typing?
 
-**Voice answer:** Yes. Use Ask GM to speak, review the transcript, and hear the response. You can also type, stop the audio, or replay the last answer.
+**Voice answer:** Yes. Use Ask Advisor to speak, review the transcript, and hear the response. You can also type, stop the audio, or replay the last answer.
 
 ## FAQ-BE-162 — Is voice a paid feature?
 
 **Voice answer:** Accessibility voice is not premium. Speech input, spoken output needed for access, transcripts, and supported accessible core tasks remain available without an Executive purchase.
 
-## FAQ-BE-163 — What is Assistant GM Pro+?
+## FAQ-BE-163 — What is Front Office Advisor Pro+?
 
 **Voice answer:** Pro+ adds deeper and proactive franchise intelligence, including the Executive Draft War Room, full-lineup review, waiver strategy, trade analysis, Front Office Briefs, opponent scouting, season planning, and advanced scenarios.
 

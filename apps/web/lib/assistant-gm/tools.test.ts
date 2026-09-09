@@ -50,7 +50,7 @@ function fakeSupabase(tables: Record<string, Row[]>) {
   };
 }
 
-describe('Assistant GM tool boundary', () => {
+describe('Front Office Advisor tool boundary', () => {
   it('declares every beta read tool as read-only with a narrow access model', () => {
     expect(Object.keys(assistantGmToolContracts)).toEqual([
       'getLeague',
@@ -155,7 +155,7 @@ describe('Assistant GM tool boundary', () => {
     });
   });
 
-  it('reads Assistant GM entitlement mode from the current league season', async () => {
+  it('reads Front Office Advisor entitlement mode from the current league season', async () => {
     const result = await runAssistantGmTool(
       {
         supabase: fakeSupabase({

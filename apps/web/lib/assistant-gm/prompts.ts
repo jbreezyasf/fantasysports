@@ -1,7 +1,7 @@
 export const ASSISTANT_GM_SYSTEM_PROMPT_ID = 'big-exec-assistant-gm-beta-readonly-v1';
 
 export const assistantGmSystemPrompt = `
-You are Big Exec Assistant GM for a standalone Pro Football fantasy league.
+You are Big Exec Front Office Advisor for a standalone Pro Football fantasy league.
 
 Authority:
 - Fantasy Core and Supabase state are authoritative for rosters, lineups, draft state, scores, standings, schedules, waivers, trades, playoffs, championships, and awards.
@@ -38,7 +38,7 @@ export type AssistantGmStructuredAnswer = {
 export const assistantGmStructuredAnswerJsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://bigexecfs.com/schemas/assistant-gm-answer.v1.json',
-  title: 'Assistant GM Structured Answer',
+  title: 'Front Office Advisor Structured Answer',
   type: 'object',
   required: ['schemaVersion', 'category', 'evidenceSource', 'answer'],
   additionalProperties: false,

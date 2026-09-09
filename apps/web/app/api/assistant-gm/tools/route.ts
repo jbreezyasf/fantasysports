@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using Assistant GM tools.' }, { status: 401 });
+  if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using Front Office Advisor tools.' }, { status: 401 });
 
   const { data: season } = await supabase
     .from('league_seasons')

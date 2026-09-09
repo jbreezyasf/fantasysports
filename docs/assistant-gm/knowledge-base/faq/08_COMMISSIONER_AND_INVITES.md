@@ -32,7 +32,7 @@
 
 ## FAQ-BE-147 — Who buys the Executive League Season Pass?
 
-**Voice answer:** The commissioner purchases the pass for a specific league, sport, and season. Every authorized manager in that league receives Assistant GM Pro+.
+**Voice answer:** The commissioner purchases the pass for a specific league, sport, and season. Every authorized manager in that league receives Front Office Advisor Pro+.
 
 ## FAQ-BE-148 — Can a commissioner reopen a passed trade deadline?
 
@@ -40,5 +40,5 @@
 
 ## FAQ-BE-149 — Can a commissioner change official scores however they want?
 
-**Voice answer:** Commissioner powers must follow Big Exec's authorized correction and audit rules. The Assistant GM cannot invent or silently alter official scoring.
+**Voice answer:** Commissioner powers must follow Big Exec's authorized correction and audit rules. The Front Office Advisor cannot invent or silently alter official scoring.
 

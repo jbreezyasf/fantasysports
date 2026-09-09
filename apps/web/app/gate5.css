@@ -167,7 +167,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
   .actions a,.actions button,.actions form,.arenaMatchupHero .actions>*{width:100%}
   .leagueMetaRow,.draftPositionRail{flex-wrap:wrap;overflow-x:visible}
 }
-/* BE-VOICE-100 Ask GM transcript, Tell me more, and policy states */
+/* BE-VOICE-100 Front Office Advisor transcript, Tell me more, and policy states */
 .askGmControl{align-items:stretch}
 .askGmHistory{max-width:100%;max-height:150px;overflow-y:auto;margin:0;padding:4px 0}
 .askGmHistory:focus-visible{outline:2px solid #f0d77c;outline-offset:2px}

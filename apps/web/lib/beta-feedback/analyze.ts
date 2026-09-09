@@ -61,7 +61,7 @@ export function analyzeBetaFeedback(input: RawFeedback): FeedbackAnalysis {
 
   if (input.task_area === 'accessibility' || hasAny(text, ['screen reader','voiceover','talkback','low vision','blind','keyboard','focus','contrast','accessible','accessibility'])) {
     category = 'accessibility'; confidence = 0.92;
-  } else if (input.task_area === 'assistant_gm' || hasAny(text, ['assistant gm','ask gm','coach','voice assistant','gm'])) {
+  } else if (input.task_area === 'assistant_gm' || hasAny(text, ['front office advisor','assistant gm','ask advisor','ask gm','coach','voice assistant','gm'])) {
     category = 'assistant_gm'; confidence = 0.88;
   } else if (hasAny(text, ['score wrong','scoring wrong','points wrong','stat wrong','standings wrong','record wrong','data wrong'])) {
     category = 'data_scoring'; confidence = 0.9;
@@ -101,7 +101,7 @@ export function analyzeBetaFeedback(input: RawFeedback): FeedbackAnalysis {
   if (category === 'accessibility') proposedAction = `Run the affected ${taskLabel} path against Big Exec accessibility acceptance criteria and prioritize any proven barrier to completing core fantasy play.`;
   if (category === 'performance') proposedAction = `Measure the affected ${taskLabel} path before optimization and compare latency/error evidence with the report.`;
   if (category === 'data_scoring') proposedAction = `Validate the report against Fantasy Core authoritative data and deterministic scoring rules before proposing any scoring change.`;
-  if (category === 'assistant_gm') proposedAction = `Check Assistant GM transcript/tool behavior against authoritative league state and the knowledge base; do not let model output alter fantasy truth.`;
+  if (category === 'assistant_gm') proposedAction = `Check Front Office Advisor transcript/tool behavior against authoritative league state and the knowledge base; do not let model output alter fantasy truth.`;
   if (featureCandidate) proposedAction = `Validate how many managers share this unmet need, confirm it fits the canonical product, and prepare a feature proposal for owner approval rather than creating an implementation task automatically.`;
   if (category === 'positive') proposedAction = `Preserve the successful ${taskLabel} behavior and use this feedback as evidence against unnecessary redesign.`;
 

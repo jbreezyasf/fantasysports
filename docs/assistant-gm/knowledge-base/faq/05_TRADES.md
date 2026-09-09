@@ -36,7 +36,7 @@
 
 **Tool required:** Pro+ Trade Advisor for personalized analysis. Label recommendation versus fact.
 
-## FAQ-BE-088 — Can the Assistant GM accept a trade for me?
+## FAQ-BE-088 — Can the Front Office Advisor accept a trade for me?
 
 **Voice answer:** Not autonomously. Trade analysis may be available before voice trade transactions. Any future supported acceptance still requires the exact deal to be displayed, confirmed, and revalidated.
 

@@ -29,7 +29,7 @@ const userRequest: UserOriginatedAssistantGmRequest = {
   createdAt: '2026-09-01T12:00:00.000Z'
 };
 
-describe('Assistant GM explicit autonomy guard', () => {
+describe('Front Office Advisor explicit autonomy guard', () => {
   it.each([
     ['lineup_set', 'unsolicited lineup change'],
     ['waiver_claim', 'unsolicited waiver claim'],
@@ -43,7 +43,7 @@ describe('Assistant GM explicit autonomy guard', () => {
     })).toEqual({
       ok: false,
       code: 'missing_user_request',
-      message: 'Assistant GM cannot commit a transaction without a user-originated request.'
+      message: 'Front Office Advisor cannot commit a transaction without a user-originated request.'
     });
   });
 
@@ -51,7 +51,7 @@ describe('Assistant GM explicit autonomy guard', () => {
     expect(validateAssistantGmAutonomy({ actionType: 'roster_drop', userRequest })).toEqual({
       ok: false,
       code: 'unsupported_autonomy_action',
-      message: 'Assistant GM cannot perform standalone roster drops in beta.'
+      message: 'Front Office Advisor cannot perform standalone roster drops in beta.'
     });
   });
 
@@ -59,7 +59,7 @@ describe('Assistant GM explicit autonomy guard', () => {
     expect(validateAssistantGmAutonomy({ actionType, userRequest })).toEqual({
       ok: false,
       code: 'unsupported_autonomy_action',
-      message: 'Assistant GM cannot perform payment or account actions.'
+      message: 'Front Office Advisor cannot perform payment or account actions.'
     });
   });
 
@@ -72,7 +72,7 @@ describe('Assistant GM explicit autonomy guard', () => {
     })).toEqual({
       ok: false,
       code: 'request_scope_mismatch',
-      message: 'Assistant GM request scope does not match this user and league.'
+      message: 'Front Office Advisor request scope does not match this user and league.'
     });
   });
 
@@ -85,7 +85,7 @@ describe('Assistant GM explicit autonomy guard', () => {
     })).toEqual({
       ok: false,
       code: 'invalid_confirmation',
-      message: 'Confirm this Assistant GM action before submitting it.'
+      message: 'Confirm this Front Office Advisor action before submitting it.'
     });
   });
 

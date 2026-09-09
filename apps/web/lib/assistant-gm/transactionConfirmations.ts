@@ -73,7 +73,7 @@ const staleStateMessages: Record<AssistantGmStaleStateReason, string> = {
 };
 
 export function missingTransactionConfirmation<TResult>(): TransactionConfirmationCommitResult<TResult> {
-  return { ok: false, code: 'missing_confirmation', message: 'Confirm this Assistant GM action before submitting it.' };
+  return { ok: false, code: 'missing_confirmation', message: 'Confirm this Front Office Advisor action before submitting it.' };
 }
 
 function stableJson(value: unknown): string {
@@ -125,23 +125,23 @@ export function validateTransactionConfirmation<TChanges>(
   confirmation: AssistantGmTransactionConfirmation<TChanges> | null | undefined,
   context: TransactionConfirmationValidationContext<TChanges>
 ): TransactionConfirmationValidationResult {
-  if (!confirmation) return { ok: false, code: 'missing_confirmation', message: 'Confirm this Assistant GM action before submitting it.' };
+  if (!confirmation) return { ok: false, code: 'missing_confirmation', message: 'Confirm this Front Office Advisor action before submitting it.' };
   if (!confirmation.actionId || !confirmation.createdAt || !confirmation.expiresAt || !confirmation.proposalHash) {
-    return { ok: false, code: 'invalid_confirmation', message: 'The Assistant GM confirmation is incomplete. Review the action again.' };
+    return { ok: false, code: 'invalid_confirmation', message: 'The Front Office Advisor confirmation is incomplete. Review the action again.' };
   }
 
   const createdAt = Date.parse(confirmation.createdAt);
   const expiresAt = Date.parse(confirmation.expiresAt);
   const now = context.now ?? new Date();
   if (!Number.isFinite(createdAt) || !Number.isFinite(expiresAt) || expiresAt <= createdAt) {
-    return { ok: false, code: 'invalid_confirmation', message: 'The Assistant GM confirmation timing is invalid. Review the action again.' };
+    return { ok: false, code: 'invalid_confirmation', message: 'The Front Office Advisor confirmation timing is invalid. Review the action again.' };
   }
   if (now.getTime() > expiresAt) {
-    return { ok: false, code: 'expired', message: 'That Assistant GM confirmation expired. Review the current state and confirm again.' };
+    return { ok: false, code: 'expired', message: 'That Front Office Advisor confirmation expired. Review the current state and confirm again.' };
   }
 
   if (confirmation.userId !== context.userId || confirmation.leagueId !== context.leagueId || confirmation.actionType !== context.actionType) {
-    return { ok: false, code: 'scope_mismatch', message: 'That Assistant GM confirmation is not valid for this user, league, or action.' };
+    return { ok: false, code: 'scope_mismatch', message: 'That Front Office Advisor confirmation is not valid for this user, league, or action.' };
   }
 
   if (confirmation.stateVersionHash !== context.stateVersionHash) {
@@ -154,7 +154,7 @@ export function validateTransactionConfirmation<TChanges>(
     stateVersionHash: context.stateVersionHash
   });
   if (confirmation.proposalHash !== expectedHash || stableJson(confirmation.proposedChanges) !== stableJson(context.proposedChanges)) {
-    return { ok: false, code: 'proposal_changed', message: 'The proposed Assistant GM transaction changed. Confirm the revised action before submitting.' };
+    return { ok: false, code: 'proposal_changed', message: 'The proposed Front Office Advisor transaction changed. Confirm the revised action before submitting.' };
   }
 
   return { ok: true };

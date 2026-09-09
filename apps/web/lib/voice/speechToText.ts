@@ -39,7 +39,7 @@ type SpeechWindow = Window & {
 };
 
 export function microphonePermissionCopy() {
-  return 'Microphone access starts only after you press Ask GM. You can cancel listening at any time.';
+  return 'Microphone access starts only after you press Ask Advisor. You can cancel listening at any time.';
 }
 
 export function createBrowserSpeechToText(win: SpeechWindow | undefined = typeof window === 'undefined' ? undefined : window as SpeechWindow): SpeechToTextAdapter {

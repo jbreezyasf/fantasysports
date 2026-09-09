@@ -70,7 +70,7 @@ const assistantOn = {
   accessibility_spoken_updates: true
 };
 
-describe('Assistant GM gateway', () => {
+describe('Front Office Advisor gateway', () => {
   it('requires authentication before any tool work', async () => {
     const toolRunner = vi.fn();
     const gateway = createAssistantGmGateway({ supabase: fakeSupabase() as any, flags: assistantOn, toolRunner });
@@ -85,7 +85,7 @@ describe('Assistant GM gateway', () => {
     expect(toolRunner).not.toHaveBeenCalled();
   });
 
-  it('denies standard Assistant GM when the master switch is off', async () => {
+  it('denies standard Front Office Advisor when the master switch is off', async () => {
     const recordUsage = vi.fn();
     const gateway = createAssistantGmGateway({ supabase: fakeSupabase() as any, flags: { ...assistantOn, assistant_gm: false }, recordUsage });
 
@@ -99,7 +99,7 @@ describe('Assistant GM gateway', () => {
     expect(recordUsage).toHaveBeenCalledWith(expect.objectContaining({ status: 'denied', capabilityId: 'roster.read' }));
   });
 
-  it('does not require the Assistant GM master switch for free accessibility capability checks', async () => {
+  it('does not require the Front Office Advisor master switch for free accessibility capability checks', async () => {
     const gateway = createAssistantGmGateway({ supabase: fakeSupabase() as any, flags: { ...assistantOn, assistant_gm: false } });
 
     await expect(gateway.handle({

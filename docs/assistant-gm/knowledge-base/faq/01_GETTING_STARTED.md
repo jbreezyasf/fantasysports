@@ -18,7 +18,7 @@
 
 ## FAQ-BE-004 — Do I need to know football already?
 
-**Voice answer:** No. The standard Assistant GM can explain the game and Big Exec controls. In an Executive league, Assistant GM Pro+ can also review your full franchise and recommend what to do next.
+**Voice answer:** No. The standard Front Office Advisor can explain the game and Big Exec controls. In an Executive league, Front Office Advisor Pro+ can also review your full franchise and recommend what to do next.
 
 ## FAQ-BE-005 — What is a franchise?
 
@@ -42,5 +42,5 @@
 
 ## FAQ-BE-010 — Is Big Exec free?
 
-**Voice answer:** Core fantasy gameplay and accessibility are available without an Executive purchase. A commissioner can buy the Executive League Season Pass to give every manager in that league Assistant GM Pro+ and premium league intelligence.
+**Voice answer:** Core fantasy gameplay and accessibility are available without an Executive purchase. A commissioner can buy the Executive League Season Pass to give every manager in that league Front Office Advisor Pro+ and premium league intelligence.
 

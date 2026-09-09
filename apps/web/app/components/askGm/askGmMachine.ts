@@ -1,7 +1,7 @@
 /**
- * BE-VOICE-100 — Ask GM interaction state machine.
+ * BE-VOICE-100 — Ask Advisor interaction state machine.
  *
- * This module holds all Ask GM interaction behavior as a pure reducer so the
+ * This module holds all Ask Advisor interaction behavior as a pure reducer so the
  * states, announcements, and focus moves are testable without a DOM. The React
  * control renders a snapshot of this state and applies the emitted focus request.
  *
@@ -115,8 +115,8 @@ const ownErrorCopy: Record<AskGmErrorCode, string> = {
   transcription_failed: '',
   assistant_failed: '',
   tool_timeout: '',
-  speech_failed: 'Assistant GM could not speak the answer. The written answer is below.',
-  not_permitted: 'Assistant GM is not available here.'
+  speech_failed: 'Front Office Advisor could not speak the answer. The written answer is below.',
+  not_permitted: 'Front Office Advisor is not available here.'
 };
 
 export function askGmErrorMessage(code: AskGmErrorCode) {
@@ -184,7 +184,7 @@ export function askGmReducer(state: AskGmState, event: AskGmEvent): AskGmState {
         phase: 'idle',
         error: null,
         focusRequest: next.inputMode === 'typed' ? 'typedInput' : 'pushToTalk',
-        announcement: announce('Assistant GM ready.')
+        announcement: announce('Front Office Advisor ready.')
       };
     }
 
@@ -198,7 +198,7 @@ export function askGmReducer(state: AskGmState, event: AskGmEvent): AskGmState {
         canStop: false,
         // Focus always returns to the control that opened the panel.
         focusRequest: 'trigger',
-        announcement: announce('Assistant GM closed.')
+        announcement: announce('Front Office Advisor closed.')
       };
     }
 

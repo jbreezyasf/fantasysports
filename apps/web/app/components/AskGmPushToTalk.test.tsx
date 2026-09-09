@@ -11,11 +11,11 @@ vi.mock('next/navigation', () => ({
 
 describe('AskGmPushToTalk', () => {
   it.each([
-    ['idle', 'Ask GM is ready.', 'Start push to talk with Assistant GM'],
-    ['listening', 'Listening. Speak your question now.', 'Cancel Assistant GM listening'],
-    ['processing', 'Processing your question.', 'Cancel Assistant GM processing'],
-    ['speaking', 'Speaking Assistant GM response.', 'Stop Assistant GM speech'],
-    ['error', 'Ask GM is unavailable.', 'Cancel and return from Assistant GM error']
+    ['idle', 'Ask Advisor is ready.', 'Start push to talk with Front Office Advisor'],
+    ['listening', 'Listening. Speak your question now.', 'Cancel Front Office Advisor listening'],
+    ['processing', 'Processing your question.', 'Cancel Front Office Advisor processing'],
+    ['speaking', 'Speaking Front Office Advisor response.', 'Stop Front Office Advisor speech'],
+    ['error', 'Ask Advisor is unavailable.', 'Cancel and return from Front Office Advisor error']
   ] as const)('renders accessible %s state', (state, text, actionLabel) => {
     const html = renderToStaticMarkup(<AskGmPushToTalk initialState={state} defaultOpen />);
 
@@ -24,41 +24,41 @@ describe('AskGmPushToTalk', () => {
     expect(html).toContain('role="status"');
     expect(html).toContain(actionLabel);
     expect(html).toContain('No always-listening behavior is active');
-    expect(html).toContain('Type your Assistant GM question');
+    expect(html).toContain('Type your Front Office Advisor question');
   });
 
   it('offers explicit retry in the error state', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk initialState="error" defaultOpen />);
 
-    expect(html).toContain('Retry push to talk with Assistant GM');
-    expect(html).toContain('Type Assistant GM request instead');
-    expect(html).toContain('Cancel and return from Assistant GM error');
+    expect(html).toContain('Retry push to talk with Front Office Advisor');
+    expect(html).toContain('Type Front Office Advisor request instead');
+    expect(html).toContain('Cancel and return from Front Office Advisor error');
     expect(html).toContain('I did not understand that');
   });
 
   it('keeps the text response available while speech controls are shown', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." defaultOpen />);
 
-    expect(html).toContain('Assistant GM response: You are winning by two.');
-    expect(html).toContain('Replay last Assistant GM response');
-    expect(html).toContain('Assistant GM spoken responses keep text visible');
+    expect(html).toContain('Front Office Advisor response: You are winning by two.');
+    expect(html).toContain('Replay last Front Office Advisor response');
+    expect(html).toContain('Front Office Advisor spoken responses keep text visible');
   });
 
-  it('keeps typed Ask GM in the header when voice input is disabled', () => {
+  it('keeps typed Ask Advisor in the header when voice input is disabled', () => {
     const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled={false} />);
 
-    expect(html).toContain('Open Assistant GM');
+    expect(html).toContain('Open Front Office Advisor');
     expect(html).toContain('askGmBubble');
   });
 
-  it('mounts Ask GM in the header when the flag is enabled', () => {
+  it('mounts Ask Advisor in the header when the flag is enabled', () => {
     const html = renderToStaticMarkup(<BigExecAppHeader leagueId="league-1" voiceGmEnabled />);
 
-    expect(html).toContain('Open Assistant GM');
+    expect(html).toContain('Open Front Office Advisor');
     expect(html).toContain('askGmBubble');
   });
 
-  it('keeps header Ask GM non-modal when critical controls are active', () => {
+  it('keeps header Ask Advisor non-modal when critical controls are active', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" defaultOpen capabilities={{ criticalControlsActive: true }} />);
 
     expect(html).toContain('role="region"');
@@ -72,7 +72,7 @@ const entitlementRequired: AssistantGmPolicyDecision = {
   capabilityId: 'pro_plus.lineup_review',
   intentClass: 'pro_plus',
   reason: 'entitlement_required',
-  message: 'Assistant GM Pro+ requires an active Executive league-season entitlement.',
+  message: 'Front Office Advisor Pro+ requires an active Executive league-season entitlement.',
   upgradeRequired: true
 };
 
@@ -82,7 +82,7 @@ const commissionerOnly: AssistantGmPolicyDecision = {
   capabilityId: 'invitations.read',
   intentClass: 'commissioner_only',
   reason: 'audience_denied',
-  message: 'Only the league commissioner can use that Assistant GM capability.',
+  message: 'Only the league commissioner can use that Front Office Advisor capability.',
   upgradeRequired: false
 };
 
@@ -90,9 +90,9 @@ describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
   it('renders a conversation transcript alongside the spoken response', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk initialState="speaking" initialResponse="You are winning by two." defaultOpen />);
 
-    expect(html).toContain('aria-label="Assistant GM conversation transcript"');
+    expect(html).toContain('aria-label="Front Office Advisor conversation transcript"');
     expect(html).toContain('askGmTurns');
-    expect(html).toContain('Assistant GM');
+    expect(html).toContain('Front Office Advisor');
   });
 
   it('exposes a focusable transcript region for programmatic focus restoration', () => {
@@ -111,7 +111,7 @@ describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
   it('offers a typed submit path in every state', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk initialState="idle" defaultOpen />);
 
-    expect(html).toContain('Send typed Assistant GM question');
+    expect(html).toContain('Send typed Front Office Advisor question');
     expect(html).toContain('class="askGmTypedSubmit"');
     expect(html).toContain('id="ask-gm-typed-fallback"');
   });
@@ -131,13 +131,13 @@ describe('AskGmPushToTalk BE-VOICE-100 additions', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk policy={entitlementRequired} />);
 
     expect(html).toContain('Executive League Season Pass required');
-    expect(html).not.toContain('Open Assistant GM');
+    expect(html).not.toContain('Open Front Office Advisor');
   });
 
   it('never shows an upgrade prompt for a role denial', () => {
     const html = renderToStaticMarkup(<AskGmPushToTalk policy={commissionerOnly} />);
 
-    expect(html).toContain('Only the league commissioner can use that Assistant GM capability.');
+    expect(html).toContain('Only the league commissioner can use that Front Office Advisor capability.');
     expect(html).not.toContain('Executive League Season Pass required');
   });
 });

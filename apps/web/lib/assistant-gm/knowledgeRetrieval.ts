@@ -14,7 +14,7 @@ function knowledgeRoot() {
     join(process.cwd(), '..', '..', 'docs', 'assistant-gm', 'knowledge-base')
   ];
   const found = candidates.find(existsSync);
-  if (!found) throw new Error('Assistant GM knowledge base not found.');
+  if (!found) throw new Error('Front Office Advisor knowledge base not found.');
   return found;
 }
 

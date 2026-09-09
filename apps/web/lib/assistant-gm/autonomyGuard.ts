@@ -42,19 +42,19 @@ export function validateAssistantGmAutonomy<TChanges>(input: {
   confirmationContext?: TransactionConfirmationValidationContext<TChanges>;
 }): AssistantGmAutonomyGuardResult {
   if (input.actionType === 'payment_action' || input.actionType === 'account_action') {
-    return { ok: false, code: 'unsupported_autonomy_action', message: 'Assistant GM cannot perform payment or account actions.' };
+    return { ok: false, code: 'unsupported_autonomy_action', message: 'Front Office Advisor cannot perform payment or account actions.' };
   }
   if (input.actionType === 'roster_drop') {
-    return { ok: false, code: 'unsupported_autonomy_action', message: 'Assistant GM cannot perform standalone roster drops in beta.' };
+    return { ok: false, code: 'unsupported_autonomy_action', message: 'Front Office Advisor cannot perform standalone roster drops in beta.' };
   }
   if (!isTransactionAction(input.actionType)) {
-    return { ok: false, code: 'unsupported_autonomy_action', message: 'Assistant GM cannot perform that action in beta.' };
+    return { ok: false, code: 'unsupported_autonomy_action', message: 'Front Office Advisor cannot perform that action in beta.' };
   }
   if (!input.userRequest) {
-    return { ok: false, code: 'missing_user_request', message: 'Assistant GM cannot commit a transaction without a user-originated request.' };
+    return { ok: false, code: 'missing_user_request', message: 'Front Office Advisor cannot commit a transaction without a user-originated request.' };
   }
   if (!input.confirmationContext || input.userRequest.userId !== input.confirmationContext.userId || input.userRequest.leagueId !== input.confirmationContext.leagueId) {
-    return { ok: false, code: 'request_scope_mismatch', message: 'Assistant GM request scope does not match this user and league.' };
+    return { ok: false, code: 'request_scope_mismatch', message: 'Front Office Advisor request scope does not match this user and league.' };
   }
   const confirmation = validateTransactionConfirmation(input.confirmation, input.confirmationContext);
   if (!confirmation.ok) return { ok: false, code: 'invalid_confirmation', message: confirmation.message };

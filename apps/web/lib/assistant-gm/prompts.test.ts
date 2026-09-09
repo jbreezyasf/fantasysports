@@ -5,7 +5,7 @@ import {
   assistantGmSystemPrompt
 } from './prompts';
 
-describe('Assistant GM prompt contract', () => {
+describe('Front Office Advisor prompt contract', () => {
   it('keeps fantasy truth authoritative and write actions confirmed', () => {
     expect(ASSISTANT_GM_SYSTEM_PROMPT_ID).toContain('readonly');
     expect(assistantGmSystemPrompt).toContain('Fantasy Core and Supabase state are authoritative');

@@ -40,7 +40,7 @@
 
 **Voice answer:** Big Exec is designed to keep all 10 managers competing through Week 17. A separate postseason and franchise achievements give eliminated managers something meaningful to win.
 
-## FAQ-BE-130 — Does the Assistant GM decide who makes the playoffs?
+## FAQ-BE-130 — Does the Front Office Advisor decide who makes the playoffs?
 
 **Voice answer:** No. Deterministic Big Exec rules calculate qualification and seeding. The GM can only explain those results.
 

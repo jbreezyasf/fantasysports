@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createAssistantGmActionAuditEntry, createMemoryAssistantGmActionAuditStore, recordAssistantGmActionAudit } from './actionAuditLog';
 
-describe('Assistant GM action audit log', () => {
+describe('Front Office Advisor action audit log', () => {
   it('records the fields required for debugging and dispute review', () => {
     const entry = createAssistantGmActionAuditEntry({
       userId: 'user-1',
@@ -19,7 +19,7 @@ describe('Assistant GM action audit log', () => {
     expect(entry).toMatchObject({
       userId: 'user-1',
       leagueId: 'league-1',
-      source: 'Assistant GM',
+      source: 'Front Office Advisor',
       requestedAction: 'Put Walker in my flex.',
       actionType: 'lineup_set',
       preparedAction: { slot: 'FLEX', athleteId: 'athlete-walker' },

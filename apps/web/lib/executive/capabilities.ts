@@ -60,7 +60,7 @@ export const bigExecCapabilities = [
   { ...proPlus, id: 'pro_plus.season_planner', label: 'Season planner and playoff preparation', audience: 'manager', action: 'read', assistantGmToolAllowed: true },
   { ...proPlus, id: 'pro_plus.scenario_simulator', label: 'Supported scenario simulator', audience: 'manager', action: 'read', assistantGmToolAllowed: true },
   { ...proPlus, id: 'pro_plus.franchise_memory', label: 'Authorized franchise memory over Big Exec history', audience: 'manager', action: 'read', assistantGmToolAllowed: true },
-  { ...proPlus, id: 'pro_plus.personality', label: 'Configurable Assistant GM Pro+ personality layer', audience: 'manager', action: 'read', assistantGmToolAllowed: true },
+  { ...proPlus, id: 'pro_plus.personality', label: 'Configurable Front Office Advisor Pro+ personality layer', audience: 'manager', action: 'read', assistantGmToolAllowed: true },
 
   { id: 'actions.lineup.commit', label: 'Commit confirmed lineup action through canonical lineup RPC', tier: 'free_standard', audience: 'manager', action: 'commit', releasePhase: 'beta', requiresExecutive: false, assistantGmToolAllowed: true },
   { id: 'actions.draft.commit', label: 'Commit confirmed draft pick through canonical draft RPC', tier: 'free_standard', audience: 'manager', action: 'commit', releasePhase: 'beta', requiresExecutive: false, assistantGmToolAllowed: true },
@@ -69,7 +69,7 @@ export const bigExecCapabilities = [
   { id: 'actions.trade.commit', label: 'Commit confirmed trade action', tier: 'free_standard', audience: 'manager', action: 'commit', releasePhase: 'post_beta', requiresExecutive: false, assistantGmToolAllowed: true },
 
   { id: 'payments.executive_checkout.commit', label: 'Start Executive League Season Pass checkout', tier: 'executive_pro_plus', audience: 'commissioner', action: 'commit', releasePhase: 'beta', requiresExecutive: false, assistantGmToolAllowed: false },
-  { id: 'ops.assistant_gm_usage.read', label: 'Read Assistant GM usage and cost metrics', tier: 'executive_pro_plus', audience: 'ops_staff', action: 'read', releasePhase: 'beta', requiresExecutive: false, assistantGmToolAllowed: false }
+  { id: 'ops.assistant_gm_usage.read', label: 'Read Front Office Advisor usage and cost metrics', tier: 'executive_pro_plus', audience: 'ops_staff', action: 'read', releasePhase: 'beta', requiresExecutive: false, assistantGmToolAllowed: false }
 ] as const satisfies readonly BigExecCapability[];
 
 export type BigExecCapabilityId = typeof bigExecCapabilities[number]['id'];
@@ -98,4 +98,3 @@ export function canUseCapability(id: BigExecCapabilityId, context: CapabilityCon
   if (capability.audience !== 'league_member' && capability.audience !== context.audience) return false;
   return !capability.requiresExecutive || context.isExecutiveLeague;
 }
-

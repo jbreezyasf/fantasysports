@@ -15,7 +15,7 @@ class FakeRecognition {
 
 describe('browser speech-to-text adapter', () => {
   it('explains microphone permission and cancellation', () => {
-    expect(microphonePermissionCopy()).toContain('starts only after you press Ask GM');
+    expect(microphonePermissionCopy()).toContain('starts only after you press Ask Advisor');
     expect(microphonePermissionCopy()).toContain('cancel listening');
   });
 

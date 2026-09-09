@@ -30,7 +30,7 @@ import {
 } from '../../lib/assistant-gm/capabilityPolicy';
 
 /**
- * BE-VOICE-100 — accessible Ask GM control.
+ * BE-VOICE-100 — accessible Ask Advisor control.
  *
  * Evolves the BE-VOICE-051 push-to-talk entry point. Interaction state now lives
  * in `askGm/askGmMachine` so states, announcements, and focus moves are testable,
@@ -43,11 +43,11 @@ import {
  */
 
 const stateText: Record<AskGmPhase, string> = {
-  idle: 'Ask GM is ready.',
+  idle: 'Ask Advisor is ready.',
   listening: 'Listening. Speak your question now.',
   processing: 'Processing your question.',
-  speaking: 'Speaking Assistant GM response.',
-  error: 'Ask GM is unavailable.'
+  speaking: 'Speaking Front Office Advisor response.',
+  error: 'Ask Advisor is unavailable.'
 };
 
 export type AskGmPushToTalkProps = {
@@ -303,7 +303,7 @@ export default function AskGmPushToTalk({
     setSavedDockPosition(next);
     announceToScreenReader({
       key: `ask-gm-moved-${next}`,
-      message: `Assistant GM moved to ${next.replace('-', ' ')}.`,
+      message: `Front Office Advisor moved to ${next.replace('-', ' ')}.`,
       priority: 'polite',
       channel: 'gm'
     });
@@ -313,7 +313,7 @@ export default function AskGmPushToTalk({
     setSavedDockPosition('bottom-right');
     announceToScreenReader({
       key: 'ask-gm-position-reset',
-      message: 'Assistant GM moved to bottom right.',
+      message: 'Front Office Advisor moved to bottom right.',
       priority: 'polite',
       channel: 'gm'
     });
@@ -355,7 +355,7 @@ export default function AskGmPushToTalk({
   if (policy && !policy.allowed) {
     return (
       <div className="askGmDock" data-position={dockPosition}>
-        <div className="askGmControl askGmControl--unavailable" aria-label="Assistant GM unavailable">
+        <div className="askGmControl askGmControl--unavailable" aria-label="Front Office Advisor unavailable">
           <p className="askGmUnavailable" role="status">
             {policy.message}
           </p>
@@ -380,10 +380,10 @@ export default function AskGmPushToTalk({
           type="button"
           className="askGmBubble"
           onClick={() => send({ type: 'open' })}
-          aria-label="Open Assistant GM"
+          aria-label="Open Front Office Advisor"
         >
           <CoachHeadIcon />
-          <VisuallyHidden>Assistant GM</VisuallyHidden>
+          <VisuallyHidden>Front Office Advisor</VisuallyHidden>
         </button>
       </div>
     );
@@ -396,27 +396,27 @@ export default function AskGmPushToTalk({
         className="askGmControl"
         data-state={phase}
         role={askGmDialogRole(state)}
-        aria-label="Assistant GM push to talk"
+        aria-label="Front Office Advisor push to talk"
       >
       <div className="askGmPanelHeader">
         <div className="askGmCoachMark" aria-hidden="true">
           <CoachHeadIcon />
         </div>
         <div className="askGmPanelTitle">
-          <strong>Assistant GM</strong>
+          <strong>Front Office Advisor</strong>
           <div className="askGmStatus" role="status" aria-live="polite" aria-atomic="true">
             <span aria-hidden="true" className="askGmDot" />
             <span>{stateText[phase]}</span>
           </div>
         </div>
-        <div className="askGmPanelControls" aria-label="Assistant GM window controls">
-          <button type="button" className="askGmIconButton" onClick={movePanel} aria-label="Move Assistant GM">
+        <div className="askGmPanelControls" aria-label="Front Office Advisor window controls">
+          <button type="button" className="askGmIconButton" onClick={movePanel} aria-label="Move Front Office Advisor">
             <MoveIcon />
           </button>
-          <button type="button" className="askGmIconButton" onClick={resetPanelPosition} aria-label="Reset Assistant GM position">
+          <button type="button" className="askGmIconButton" onClick={resetPanelPosition} aria-label="Reset Front Office Advisor position">
             <ResetIcon />
           </button>
-          <button type="button" className="askGmIconButton" onClick={closePanel} aria-label="Close Assistant GM">
+          <button type="button" className="askGmIconButton" onClick={closePanel} aria-label="Close Front Office Advisor">
             <CloseIcon />
           </button>
         </div>
@@ -426,7 +426,7 @@ export default function AskGmPushToTalk({
       </p>
       {!voiceInputEnabled && (
         <p className="srOnly" role="status">
-          Assistant GM voice input is off. Typed Ask GM is available.
+          Front Office Advisor voice input is off. Typed Ask Advisor is available.
         </p>
       )}
 
@@ -436,7 +436,7 @@ export default function AskGmPushToTalk({
         </p>
       )}
       {state.lastAnswer && (
-        <p className="askGmResponse" aria-label={`Assistant GM response: ${state.lastAnswer.text}`}>
+        <p className="askGmResponse" aria-label={`Front Office Advisor response: ${state.lastAnswer.text}`}>
           {state.lastAnswer.text}
         </p>
       )}
@@ -444,11 +444,11 @@ export default function AskGmPushToTalk({
       {/* Conversation transcript. The written record is always present, so a
           spoken answer is never the only copy of the response. */}
       {state.turns.length > 0 && (
-        <div ref={transcriptRef} className="askGmHistory" tabIndex={-1} aria-label="Assistant GM conversation transcript">
+        <div ref={transcriptRef} className="askGmHistory" tabIndex={-1} aria-label="Front Office Advisor conversation transcript">
           <ol className="askGmTurns">
             {state.turns.map((turn, index) => (
               <li key={index} className={`askGmTurn is-${turn.role}`}>
-                <span className="askGmTurnRole">{turn.role === 'manager' ? 'You' : 'Assistant GM'}</span>
+                <span className="askGmTurnRole">{turn.role === 'manager' ? 'You' : 'Front Office Advisor'}</span>
                 <span className="askGmTurnText">{turn.text}</span>
               </li>
             ))}
@@ -458,16 +458,16 @@ export default function AskGmPushToTalk({
 
       <form className="askGmTypedSubmit" onSubmit={submitTyped}>
         <label className="askGmTypedFallback">
-          <span className="srOnly">Type your Assistant GM question</span>
+          <span className="srOnly">Type your Front Office Advisor question</span>
           <input
             ref={typedInputRef}
             id="ask-gm-typed-fallback"
             value={state.draftText}
             onChange={event => send({ type: 'changeDraft', text: event.target.value })}
-            placeholder="Type Ask GM question"
+            placeholder="Type Ask Advisor question"
           />
         </label>
-        <button type="submit" className="secondary askGmButton" disabled={!state.draftText.trim()} aria-label="Send typed Assistant GM question">
+        <button type="submit" className="secondary askGmButton" disabled={!state.draftText.trim()} aria-label="Send typed Front Office Advisor question">
           Ask
         </button>
       </form>
@@ -479,29 +479,29 @@ export default function AskGmPushToTalk({
           className="secondary askGmButton"
           onClick={startListening}
           aria-describedby="ask-gm-permission"
-          aria-label="Start push to talk with Assistant GM"
+          aria-label="Start push to talk with Front Office Advisor"
         >
-          Ask GM
+          Ask Advisor
         </button>
       )}
       {phase === 'listening' && (
         <div className="askGmActions">
-          <button type="button" className="primary askGmButton" onClick={finishListening} aria-label="Finish speaking to Assistant GM">
+          <button type="button" className="primary askGmButton" onClick={finishListening} aria-label="Finish speaking to Front Office Advisor">
             Finish
           </button>
-          <button type="button" className="secondary askGmButton" onClick={cancel} aria-label="Cancel Assistant GM listening">
+          <button type="button" className="secondary askGmButton" onClick={cancel} aria-label="Cancel Front Office Advisor listening">
             Cancel
           </button>
         </div>
       )}
       {phase === 'processing' && (
-        <button type="button" className="secondary askGmButton" onClick={cancel} aria-label="Cancel Assistant GM processing">
+        <button type="button" className="secondary askGmButton" onClick={cancel} aria-label="Cancel Front Office Advisor processing">
           Cancel
         </button>
       )}
       {phase === 'speaking' && (
         <div className="askGmActions">
-          <button type="button" className="secondary askGmButton" onClick={stopSpeech} aria-label="Stop Assistant GM speech">
+          <button type="button" className="secondary askGmButton" onClick={stopSpeech} aria-label="Stop Front Office Advisor speech">
             Stop
           </button>
           <button
@@ -509,7 +509,7 @@ export default function AskGmPushToTalk({
             className="secondary askGmButton"
             onClick={replaySpeech}
             disabled={!state.lastAnswer}
-            aria-label="Replay last Assistant GM response"
+            aria-label="Replay last Front Office Advisor response"
           >
             Replay
           </button>
@@ -527,15 +527,15 @@ export default function AskGmPushToTalk({
                 className="primary askGmButton"
                 onClick={startListening}
                 aria-describedby="ask-gm-permission"
-                aria-label="Retry push to talk with Assistant GM"
+                aria-label="Retry push to talk with Front Office Advisor"
               >
                 Retry
               </button>
             )}
-            <a className="secondary askGmButton" href="#ask-gm-typed-fallback" aria-label="Type Assistant GM request instead">
+            <a className="secondary askGmButton" href="#ask-gm-typed-fallback" aria-label="Type Front Office Advisor request instead">
               Type instead
             </a>
-            <button type="button" className="secondary askGmButton" onClick={cancel} aria-label="Cancel and return from Assistant GM error">
+            <button type="button" className="secondary askGmButton" onClick={cancel} aria-label="Cancel and return from Front Office Advisor error">
               Cancel
             </button>
           </div>
@@ -543,13 +543,13 @@ export default function AskGmPushToTalk({
       )}
 
       {state.canTellMeMore && (
-        <button type="button" className="secondary askGmButton" onClick={tellMeMore} aria-label="Ask Assistant GM to tell me more">
+        <button type="button" className="secondary askGmButton" onClick={tellMeMore} aria-label="Ask Front Office Advisor to tell me more">
           Tell me more
         </button>
       )}
 
-      <VisuallyHidden>Assistant GM spoken responses keep text visible and can be stopped or replayed.</VisuallyHidden>
-      <VisuallyHidden>No always-listening behavior is active. Listening starts only after pressing Ask GM.</VisuallyHidden>
+      <VisuallyHidden>Front Office Advisor spoken responses keep text visible and can be stopped or replayed.</VisuallyHidden>
+      <VisuallyHidden>No always-listening behavior is active. Listening starts only after pressing Ask Advisor.</VisuallyHidden>
       </div>
     </div>
   );

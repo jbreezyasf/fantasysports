@@ -70,7 +70,7 @@ function currentWeek(question: string) {
 function shouldTryKnowledgeBase(question: string) {
   const normalized = question.toLowerCase();
   const asksForStableAnswer = /\b(how|what|why|when|where|explain|help|rule|rules|requirement|requirements|policy|policies|work|works)\b/.test(normalized);
-  const mentionsProductArea = /\b(account|assistant gm|ask gm|draft|franchise|invite|invitation|league|lineup|matchup|password|playoff|playoffs|privacy|roster|scoring|season|trade|waiver|waivers|free agent|free agency)\b/.test(normalized);
+  const mentionsProductArea = /\b(account|front office advisor|assistant gm|ask advisor|ask gm|draft|franchise|invite|invitation|league|lineup|matchup|password|playoff|playoffs|privacy|roster|scoring|season|trade|waiver|waivers|free agent|free agency)\b/.test(normalized);
   const asksForCurrentLeagueState = /\b(my|our|current|available|who|which|standings|record|start|bench|pick up|add|drop|rank)\b/.test(normalized);
 
   return asksForStableAnswer && mentionsProductArea && !asksForCurrentLeagueState;
@@ -244,7 +244,7 @@ function composeAnswer(question: string, response: AssistantGmGatewayResponse): 
     return {
       ok: true,
       text: `Trade room: ${trades.length} recent trade records are visible for this season. ${trades.slice(0, 3).map(row => `${text(row.status, 'unknown')} trade from ${String(row.proposed_by_franchise_id ?? 'one franchise')} to ${String(row.proposed_to_franchise_id ?? 'another franchise')}`).join('; ') || 'No recent trade activity is visible.'}`,
-      detail: 'Assistant GM does not accept, reject, propose, or alter trades from this header control.'
+      detail: 'Front Office Advisor does not accept, reject, propose, or alter trades from this header control.'
     };
   }
 
@@ -268,18 +268,18 @@ function composeAnswer(question: string, response: AssistantGmGatewayResponse): 
 
 export async function askHeaderAssistantGm(leagueId: string, question: string): Promise<HeaderAssistantGmAnswer> {
   const trimmed = question.trim();
-  if (!trimmed) return { ok: false, message: 'Type or say a question for Assistant GM.' };
+  if (!trimmed) return { ok: false, message: 'Type or say a question for Front Office Advisor.' };
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, message: 'Sign in before using Assistant GM.' };
+  if (!user) return { ok: false, message: 'Sign in before using Front Office Advisor.' };
 
   const [{ data: member }, { data: season }] = await Promise.all([
     supabase.from('league_members').select('role').eq('league_id', leagueId).eq('user_id', user.id).maybeSingle(),
     supabase.from('league_seasons').select('id').eq('league_id', leagueId).eq('is_current', true).maybeSingle()
   ]);
-  if (!member) return { ok: false, message: 'Assistant GM can only read leagues you belong to.' };
-  if (!season) return { ok: false, message: 'Assistant GM could not find the current league season.' };
+  if (!member) return { ok: false, message: 'Front Office Advisor can only read leagues you belong to.' };
+  if (!season) return { ok: false, message: 'Front Office Advisor could not find the current league season.' };
 
   if (shouldTryKnowledgeBase(trimmed)) {
     const knowledgeAnswer = composeKnowledgeAnswer(trimmed, searchAssistantGmKnowledgeBase(trimmed, 2));

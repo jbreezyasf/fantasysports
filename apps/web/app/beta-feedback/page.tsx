@@ -6,7 +6,7 @@ import styles from './styles.module.css';
 const TASKS = [
   ['create_join_league','Create or join a league'],['invite_people','Invite people'],['draft','Draft'],
   ['lineup','Set my lineup'],['matchup_score','Check matchup or score'],['waivers','Add or drop players'],
-  ['trade','Trade'],['assistant_gm','Use Assistant GM'],['standings','View standings'],
+  ['trade','Trade'],['assistant_gm','Use Front Office Advisor'],['standings','View standings'],
   ['locker_room','Locker Room or league chat'],['accessibility','Accessibility or voice'],['other','Something else'],
 ] as const;
 

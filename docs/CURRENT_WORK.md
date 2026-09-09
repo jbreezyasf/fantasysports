@@ -51,7 +51,7 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Progress 2026-09-09:** Added the first persisted franchise avatar/mark selection flow from the PRD's "original franchise mark/avatar" requirement. `supabase/migrations/20260909043603_franchise_avatar_options.sql` adds `franchises.avatar_key` with constrained options (`classic`, `crown`, `tower`, `orbit`) and updates `create_pro_football_league` plus `accept_league_invite` to accept a defaulted `p_avatar_key`, preserving existing callers while storing new selections. `FranchiseIdentityFields` now previews four original deterministic crest options generated from franchise name, abbreviation, and colors; the selected mark is rendered on League HQ, Team HQ, Stadium/Owner's Office, and matchup scoreboards. The migration was applied to production through `npm run db:apply -- supabase/migrations/20260909043603_franchise_avatar_options.sql`. Production QA created a temporary league with commissioner avatar `tower`, claimed a share invite as Manager01 with avatar `orbit`, verified both `franchises.avatar_key` values, verified old five-parameter league creation still defaults to `classic`, and cleaned up all temporary leagues. Added `supabase/migrations/20260909044749_harden_share_invite_execute_grants.sql` after advisors flagged newly introduced share-invite/removal SECURITY DEFINER RPCs as anon-executable through default PUBLIC grants; catalog verification now shows anon execute false and authenticated execute true for `create_league_share_invite`, `claim_share_league_invite`, `commissioner_remove_pre_draft_franchise`, `create_pro_football_league`, and `accept_league_invite`, and anon API probes return permission denied for the share/removal RPCs. Added regression coverage in `apps/web/app/components/FranchiseIdentityFields.test.tsx` and `apps/web/app/leagues/franchiseAvatarOptions.test.ts`.
 
-**Progress 2026-09-09:** Updated Ask GM from a header-inline control to a floating gold bubble with an original dark coach-head mark, while preserving the existing accessible transcript, typed input, push-to-talk, stop/replay, Tell me more, and non-modal critical-control behavior. `BigExecAppHeader` now mounts the floating control as a fixed-position sibling so it remains available when the responsive desktop header is hidden. The panel can be moved by keyboard-accessible controls across four screen corners and reset to bottom right, with movement announced on the `gm` live-announcement channel. Also wired stable help/rules questions in `askHeaderAssistantGm` to the existing deterministic markdown knowledge-base retrieval before live league-state tools; this path reads `docs/assistant-gm/knowledge-base` locally and does not call a paid model provider. Verification passed: `npm test --workspace @fantasy-all-sports/web -- AskGmPushToTalk.test.tsx knowledgeRetrieval.test.ts` and `npm run typecheck --workspace @fantasy-all-sports/web`. Remaining evidence: authenticated browser QA for the floating panel, mobile visual QA, VoiceOver/TalkBack device testing, and any future provider-cost routing beyond the current deterministic path.
+**Progress 2026-09-09:** Updated Ask Advisor from a header-inline control to a floating gold bubble with an original dark coach-head mark, while preserving the existing accessible transcript, typed input, push-to-talk, stop/replay, Tell me more, and non-modal critical-control behavior. `BigExecAppHeader` now mounts the floating control as a fixed-position sibling so it remains available when the responsive desktop header is hidden. The panel can be moved by keyboard-accessible controls across four screen corners and reset to bottom right, with movement announced on the `gm` live-announcement channel. Also wired stable help/rules questions in `askHeaderAssistantGm` to the existing deterministic markdown knowledge-base retrieval before live league-state tools; this path reads `docs/assistant-gm/knowledge-base` locally and does not call a paid model provider. Verification passed: `npm test --workspace @fantasy-all-sports/web -- AskGmPushToTalk.test.tsx knowledgeRetrieval.test.ts` and `npm run typecheck --workspace @fantasy-all-sports/web`. Remaining evidence: authenticated browser QA for the floating panel, mobile visual QA, VoiceOver/TalkBack device testing, and any future provider-cost routing beyond the current deterministic path.
 
 **Progress 2026-09-09:** Added a limited future `it_staff` ops role for delegated technical support and developer work. The role can access the ops portal, user/league troubleshooting context, data-health, audit, technical issue context, future technical artifact uploads, change proposals, and rollback evidence. It does not receive `staff.manage` and no destructive delete permission is defined or granted. Added `supabase/migrations/20260909065000_ops_it_staff_role.sql` to update existing `ops_staff_roles` role constraints, updated the original ops foundation migration for fresh installs, documented the log/reversible-work/no-ultimate-delete rule in `docs/ops-portal-phase1.md`, and added permission tests.
 
@@ -59,17 +59,19 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Tonight-readiness inspection 2026-09-09:** Reviewed `/Users/harmonyclawcole/Downloads/BIG_EXEC_RESEARCH_AND_PLAN.md` as reference material, not as overriding instruction. Production candidate beta league `Football Junkies Beta` (`41856741-5074-43c1-a8ba-3ff389cd7a7b`) was identified from current database state: 1 member, 1 franchise, current 2026 season, no draft. `npm run beta:draft:preflight -- --league=<Football Junkies Beta>` failed because only the commissioner seat is occupied and no draft exists/configured; infrastructure and player-pool checks passed, including draft queues, realtime publication, autopick cron/function, pause/undo functions, 976 eligible QB/RB/WR/TE/K rows, and 879 BALDONTLIE draft-value rows. The league has one pending reusable share invite with `remaining_claims=9`; a controlled QA manager claimed it and accepted a temporary franchise, then the temporary franchise, membership, and personal invite were cleaned up via a narrow service-role cleanup because the QA commissioner is not the real league commissioner. Post-cleanup verification returned the beta league to 1 member / 1 franchise / no temporary QA franchise, and the reusable share invite still has 9 remaining claims. Production unauthenticated invite URL smoke redirected to login with the Football Junkies Beta invite message and create-account path, with zero console/page errors. Vercel production project health endpoint returned `ok:true`; latest production deployment was `dpl_CUhxhSYDYZ95MncoDgMYL8NFYukf`; no production error/fatal runtime logs appeared in the last 30 minutes. Live scoring remains a separate blocker: production has 272 2026 `real_games` rows and 16 Week 1 rows, but `athlete_game_stats.ingested_at >= 2026-09-01` and `fantasy_player_scores.calculated_at >= 2026-09-01` both count 0, so current-season player stat ingestion/scoring is not proven.
 
+**Rename 2026-09-09:** Renamed the manager-facing advisor product language from Assistant GM / Ask GM to **Front Office Advisor** / **Ask Advisor** while preserving the existing `assistant-gm` route paths, feature flags, storage keys, and task-area ids as internal compatibility contracts. Updated the floating advisor control, accessibility labels, spoken/typed copy, policy denials, gateway/API messages, OpenAPI descriptions, feedback label/analyzer terms, core prompt title/copy, FAQ knowledge-base copy, and focused tests. The help router and beta-feedback analyzer still recognize the older Assistant GM / Ask GM phrases so existing users and historical feedback keep working.
+
 ## September 8 Big Sean / AI-Operability Audit Response
 
 **PROVEN:** `npx @bigsteele/the-big-sean` first failed when run as `npx bigsteele/the-big-sean`, then succeeded as `npx @bigsteele/the-big-sean`. Initial deterministic AI Audit score was 33/100, grade F, Level 1 Automated. The score was primarily about machine-operability and agent readiness, not the fantasy beta draft flow itself.
 
-**Root causes of the 33/100 score:** the app exposed most work as human pages and Server Actions rather than documented machine APIs; no static OpenAPI file existed; Assistant GM tools were not published as model tool schemas; no agent loop or MCP server was discoverable; prompts were embedded inline rather than conventional prompt artifacts; the postgame model call requested JSON via prompt text instead of provider-enforced structured output; no AI eval artifact was discoverable; and no retrieval path over the existing Assistant GM knowledge base was wired as a tool.
+**Root causes of the 33/100 score:** the app exposed most work as human pages and Server Actions rather than documented machine APIs; no static OpenAPI file existed; Front Office Advisor tools were not published as model tool schemas; no agent loop or MCP server was discoverable; prompts were embedded inline rather than conventional prompt artifacts; the postgame model call requested JSON via prompt text instead of provider-enforced structured output; no AI eval artifact was discoverable; and no retrieval path over the existing Front Office Advisor knowledge base was wired as a tool.
 
-**Implemented 2026-09-08:** added authenticated read-only machine API surfaces for health, capabilities, Assistant GM tool execution, bounded Assistant GM agent runs, league state, roster, lineup, draft, draft-available rankings, waivers, players, player detail, matchup, trades, history, schedule, entitlement, invitations, and knowledge search. Added static `apps/web/public/openapi.json` plus dynamic `/api/openapi`.
+**Implemented 2026-09-08:** added authenticated read-only machine API surfaces for health, capabilities, Front Office Advisor tool execution, bounded Front Office Advisor agent runs, league state, roster, lineup, draft, draft-available rankings, waivers, players, player detail, matchup, trades, history, schedule, entitlement, invitations, and knowledge search. Added static `apps/web/public/openapi.json` plus dynamic `/api/openapi`.
 
-**Implemented 2026-09-08:** added Assistant GM model tool JSON schemas for every declared read tool, a bounded policy-gated agent loop, and a local MCP stdio server discoverable through `mcp.json`. The MCP server exposes `get_openapi`, `get_health`, `list_capabilities`, and `call_machine_api`; authenticated calls require an operator-provided session cookie or bearer token in environment and do not commit credentials.
+**Implemented 2026-09-08:** added Front Office Advisor model tool JSON schemas for every declared read tool, a bounded policy-gated agent loop, and a local MCP stdio server discoverable through `mcp.json`. The MCP server exposes `get_openapi`, `get_health`, `list_capabilities`, and `call_machine_api`; authenticated calls require an operator-provided session cookie or bearer token in environment and do not commit credentials.
 
-**Implemented 2026-09-08:** moved Assistant GM prompt policy and postgame talk prompt/schema into versioned prompt artifacts and tests. Updated postgame talk generation to use OpenAI Responses structured outputs (`text.format` JSON schema) with deterministic template fallback unchanged. Added beta AI eval coverage and deterministic knowledge-base retrieval over `docs/assistant-gm/knowledge-base`.
+**Implemented 2026-09-08:** moved Front Office Advisor prompt policy and postgame talk prompt/schema into versioned prompt artifacts and tests. Updated postgame talk generation to use OpenAI Responses structured outputs (`text.format` JSON schema) with deterministic template fallback unchanged. Added beta AI eval coverage and deterministic knowledge-base retrieval over `docs/assistant-gm/knowledge-base`.
 
 **Measured result:** deterministic AI Audit improved from 33/100 F Level 1 to 75/100 C Level 3 Agentic. Remaining score gaps are intentionally not quick-patched before beta: pgvector/vector retrieval, durable queue/event pipeline, orchestration/MCP client use, more provider webhooks, a second model provider/router, and machine write surfaces beyond already-confirmed canonical UI/RPC paths.
 
@@ -102,7 +104,7 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Progress 2026-08-31:** Added focused Roster Integrity visual QA harness `npm run qa:roster-integrity:visual` and fixed a current-season bug in the Free Agency page where `/leagues/<id>/players` used `maybeSingle()` across all league seasons and 404ed for multi-season QA leagues. Follow-up UI work added a Free Agency waiver-wire section with authenticated waiver claim/withdraw controls. Latest evidence run: `qa-artifacts/2026-08-30_roster-integrity-visual_2026-08-31T05-39-47/` with 20 checks, 16 PASS, 0 FAIL, 4 BLOCKED/UNVERIFIED, and 16 screenshots. PROVEN in authenticated Playwright/local-app QA: commissioner settings for Automatic/Commissioner Review/Open modes on desktop/mobile; manager review request desktop/mobile; commissioner pending queue and approval; manager retry after one-time override; bulk-drop fourth replacement block; authenticated waiver claim submission from the Free Agency waiver section; explicit finished-roster lock and manager block; regular-manager redirect/denial for commissioner settings across all nine manager contexts. Final cleanup verified Automatic mode, 3-drop threshold, 24-hour window, core protection ON, eliminated lock enforcement ON, no locked QA franchises, no pending reviews, no active overrides, no QA audit rows, no open waiver holds, and no temporary visual roster entries. Remaining gaps are not closed: no standalone release UI to test visually, no current QA score ranks for visual core-asset proof, and direct anon/authenticated Supabase JS RPC permission tests were blocked by missing local Supabase URL/anon env vars.
 
-**Progress 2026-08-31:** Started the Accessibility + Voice Assistant GM beta backlog. Completed BE-A11Y-000 audit-only repository inventory in `docs/accessibility/repo-inventory.md`, mapping actual Next.js/Supabase/Turborepo architecture, core fantasy feature locations, current AI/postgame-talk implementation, tests, CI, accessibility support, and backlog architecture conflicts. Completed BE-A11Y-001 audit-only static accessibility baseline in `docs/accessibility/baseline-audit.md`, identifying shared failures across skip/focus management, status announcements, realtime updates, timer announcements, repeated generic controls, structured data semantics, consequential-action confirmation, navigation mismatch, and missing automated a11y coverage. No production code was changed.
+**Progress 2026-08-31:** Started the Accessibility + Voice Front Office Advisor beta backlog. Completed BE-A11Y-000 audit-only repository inventory in `docs/accessibility/repo-inventory.md`, mapping actual Next.js/Supabase/Turborepo architecture, core fantasy feature locations, current AI/postgame-talk implementation, tests, CI, accessibility support, and backlog architecture conflicts. Completed BE-A11Y-001 audit-only static accessibility baseline in `docs/accessibility/baseline-audit.md`, identifying shared failures across skip/focus management, status announcements, realtime updates, timer announcements, repeated generic controls, structured data semantics, consequential-action confirmation, navigation mismatch, and missing automated a11y coverage. No production code was changed.
 
 **Progress 2026-08-31:** Completed BE-A11Y-002 QA documentation in `docs/accessibility/test-matrix.md`. The matrix maps iOS VoiceOver, iOS Screen Curtain, iOS Larger Text/Reduce Motion, Android TalkBack/font-display scaling/reduced animations, desktop keyboard, and browser accessibility-tree coverage to the actual current Big Exec routes and components. All matrix items are marked Not Run because this task defined the permanent QA plan but did not execute device assistive-technology sessions.
 
@@ -120,31 +122,31 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Progress 2026-09-02:** Completed BE-EXEC-000 audit-only repository, deployment, and production schema inventory in `docs/executive/REPO_INVENTORY.md` after PR #8 merged to `main`. Evidence: local `main`, `origin/main`, and latest GitHub production deployment metadata all point at `d0f175cde9342bec5d89a28cd9cf336d82c63a78`; CI run `33595010702` passed; read-only Supabase catalog queries confirmed production table/RLS/RPC/cron/realtime shape and that Executive entitlement/Stripe/usage-ledger tables do not exist. No production code or schema was changed. Recommended next task: BE-EXEC-001 capability matrix and tests proving accessibility voice/fallback support is never payment-gated.
 
-**Progress 2026-09-02:** Implemented BE-EXEC-001 capability matrix foundation in `apps/web/lib/executive/capabilities.ts` with tests in `apps/web/lib/executive/capabilities.test.ts`. The matrix distinguishes Free/Standard, free accessibility, Executive/Pro+, commissioner-only, manager-accessible, read/prepare/commit, Beta/post-Beta, and Assistant GM tool eligibility. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- capabilities.test.ts` with 6 tests. The tests pin the core monetization rule that accessibility voice input, spoken output, typed fallback, and transaction confirmation remain usable in non-Executive leagues.
+**Progress 2026-09-02:** Implemented BE-EXEC-001 capability matrix foundation in `apps/web/lib/executive/capabilities.ts` with tests in `apps/web/lib/executive/capabilities.test.ts`. The matrix distinguishes Free/Standard, free accessibility, Executive/Pro+, commissioner-only, manager-accessible, read/prepare/commit, Beta/post-Beta, and Front Office Advisor tool eligibility. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- capabilities.test.ts` with 6 tests. The tests pin the core monetization rule that accessibility voice input, spoken output, typed fallback, and transaction confirmation remain usable in non-Executive leagues.
 
-**Progress 2026-09-02:** Completed BE-EXEC-002 architecture decision record in `docs/executive/ADR_ASSISTANT_GM.md`. The ADR freezes the server-only Assistant GM gateway, structured tool boundary, provider adapter strategy, request-based STT/TTS default, degraded mode, bounded retention, cost telemetry, league-season entitlement evaluation, notification approach, and privacy posture. It explicitly preserves canonical fantasy RPCs and blocks Stripe implementation until real Stripe configuration exists.
+**Progress 2026-09-02:** Completed BE-EXEC-002 architecture decision record in `docs/executive/ADR_ASSISTANT_GM.md`. The ADR freezes the server-only Front Office Advisor gateway, structured tool boundary, provider adapter strategy, request-based STT/TTS default, degraded mode, bounded retention, cost telemetry, league-season entitlement evaluation, notification approach, and privacy posture. It explicitly preserves canonical fantasy RPCs and blocks Stripe implementation until real Stripe configuration exists.
 
 **Progress 2026-09-02:** Implemented BE-EXEC-010 local entitlement migration in `supabase/migrations/20260902065522_executive_entitlement_foundation.sql`. The migration adds `league_season_entitlements` scoped to production tables `fantasy_leagues`, `league_seasons`, and `competition_seasons`, with lifecycle statuses, purchaser/payment references, idempotency indexes, RLS, authenticated member read policy, no anon access, authenticated SELECT-only grant, and service-role write authority. Verification caveat: `supabase db push --linked --dry-run` remains blocked by pre-existing remote/local migration-history drift, and local migration listing is blocked because local Supabase is not running.
 
 **Progress 2026-09-02:** Implemented BE-EXEC-011 entitlement service foundation in `apps/web/lib/executive/entitlements.ts` with tests in `apps/web/lib/executive/entitlements.test.ts`. The service provides `getLeagueSeasonEntitlement`, `isExecutiveLeague`, `activateExecutiveEntitlement`, `revokeExecutiveEntitlement`, and `expireExecutiveEntitlements`; tests prove active access for members, cross-league denial, inactive-status denial, service-role-only activation/revocation/expiration, and Stripe checkout-session idempotency. Verification passed: `npm test --workspace @fantasy-all-sports/web` (38 files, 181 tests), `npm run typecheck --workspace @fantasy-all-sports/web`, and `npm run build --workspace @fantasy-all-sports/web`.
 
-**Progress 2026-09-02:** Implemented BE-EXEC-012 feature flag and kill-switch foundation in `apps/web/lib/executive/featureFlags.ts` with tests in `apps/web/lib/executive/featureFlags.test.ts`; added the new Executive/Assistant GM env switches to `.env.example` and `turbo.json`. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- featureFlags.test.ts capabilities.test.ts` with 12 tests. The new flags cover `assistant_gm`, `assistant_gm_pro_plus`, voice input, cloud TTS, proactive briefs, write tools, draft/lineup/waiver action subfeatures, and `executive_checkout`; tests prove accessibility spoken updates remain independent of Executive/Pro+ and paid-provider switches.
+**Progress 2026-09-02:** Implemented BE-EXEC-012 feature flag and kill-switch foundation in `apps/web/lib/executive/featureFlags.ts` with tests in `apps/web/lib/executive/featureFlags.test.ts`; added the new Executive/Front Office Advisor env switches to `.env.example` and `turbo.json`. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- featureFlags.test.ts capabilities.test.ts` with 12 tests. The new flags cover `assistant_gm`, `assistant_gm_pro_plus`, voice input, cloud TTS, proactive briefs, write tools, draft/lineup/waiver action subfeatures, and `executive_checkout`; tests prove accessibility spoken updates remain independent of Executive/Pro+ and paid-provider switches.
 
 **Progress 2026-09-02:** Implemented the safe BE-EXEC-013 Stripe configuration contract in `apps/web/lib/executive/stripeConfig.ts` with tests in `apps/web/lib/executive/stripeConfig.test.ts`; added empty server env placeholders for `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BIG_EXEC_EXECUTIVE_STRIPE_PRICE_LOOKUP_KEY`, and `BIG_EXEC_EXECUTIVE_STRIPE_PRICE_ID` to `.env.example` and `turbo.json`. No checkout, webhook, Stripe dependency, or invented live/test price ID was added. Focused Executive verification passed: `npm test --workspace @fantasy-all-sports/web -- lib/executive` with 21 tests.
 
-**Progress 2026-09-02:** Implemented BE-GM-100 server-only Assistant GM gateway foundation in `apps/web/lib/assistant-gm/gateway.ts` with tests in `apps/web/lib/assistant-gm/gateway.test.ts`. The gateway verifies a user id, enforces Assistant GM/Pro+ flags, checks league-season Executive entitlement through the entitlement service, enforces capability/audience policy, rejects undeclared or cross-league tool requests, calls the existing `runAssistantGmTool` read boundary, classifies deterministic tool responses, and exposes a usage-event callback without adding persistent storage yet. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- gateway.test.ts` and `npm run typecheck --workspace @fantasy-all-sports/web`.
+**Progress 2026-09-02:** Implemented BE-GM-100 server-only Front Office Advisor gateway foundation in `apps/web/lib/assistant-gm/gateway.ts` with tests in `apps/web/lib/assistant-gm/gateway.test.ts`. The gateway verifies a user id, enforces Front Office Advisor/Pro+ flags, checks league-season Executive entitlement through the entitlement service, enforces capability/audience policy, rejects undeclared or cross-league tool requests, calls the existing `runAssistantGmTool` read boundary, classifies deterministic tool responses, and exposes a usage-event callback without adding persistent storage yet. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- gateway.test.ts` and `npm run typecheck --workspace @fantasy-all-sports/web`.
 
 **Progress 2026-09-02:** Implemented BE-GM-101 structured read-tool expansion in `apps/web/lib/assistant-gm/tools.ts` and `apps/web/lib/assistant-gm/tools.test.ts`. Added read-only tool contracts for `getTradeContext`, `getInvitationState`, `getHistory`, and `getEntitlement` using the existing Supabase table model and current-season helper. Invitation state is commissioner-only; entitlement mode reads the new `league_season_entitlements` table when present. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- tools.test.ts` and `npm run typecheck --workspace @fantasy-all-sports/web`.
 
-**Progress 2026-09-02:** Implemented BE-GM-102 response classification schema in `apps/web/lib/assistant-gm/responseSchema.ts` with tests in `apps/web/lib/assistant-gm/responseSchema.test.ts`, and wired the Assistant GM gateway to the shared category type. The schema distinguishes authoritative fact, projection, recommendation, explanation, and unsupported/unavailable responses with consistent UI labels and spoken prefixes.
+**Progress 2026-09-02:** Implemented BE-GM-102 response classification schema in `apps/web/lib/assistant-gm/responseSchema.ts` with tests in `apps/web/lib/assistant-gm/responseSchema.test.ts`, and wired the Front Office Advisor gateway to the shared category type. The schema distinguishes authoritative fact, projection, recommendation, explanation, and unsupported/unavailable responses with consistent UI labels and spoken prefixes.
 
 **Progress 2026-09-02:** Implemented BE-GM-103 deterministic entity resolution foundation in `apps/web/lib/assistant-gm/entityResolution.ts` with tests in `apps/web/lib/assistant-gm/entityResolution.test.ts`. It resolves player/franchise candidates inside the current league context, refuses ambiguous similar names, reports unavailable players instead of calling them available, and parses supported positions, roster slots, and week references without guessing missing current-week context. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- responseSchema.test.ts entityResolution.test.ts` and `npm run typecheck --workspace @fantasy-all-sports/web`.
 
 **Progress 2026-09-02:** Implemented BE-GM-104 conversation state and retention foundation with local migration `supabase/migrations/20260902070954_assistant_gm_conversation_retention.sql` plus helpers/tests in `apps/web/lib/assistant-gm/conversationState.ts` and `apps/web/lib/assistant-gm/conversationState.test.ts`. The migration adds bounded `assistant_gm_conversations` summary/preference storage with user/league/season scope, RLS, owner/member read/insert/update policy, no anon access, and service-role access for future retention jobs. The helper layer trims retained summaries, strips raw audio-like fields, supports reset/delete state, and builds a cross-league-safe scope key. Focused verification passed: `npm test --workspace @fantasy-all-sports/web -- conversationState.test.ts` and `npm run typecheck --workspace @fantasy-all-sports/web`. Migration remains local/unapplied because production migration drift still blocks normal dry-run.
 
-**Progress 2026-09-03:** Implemented BE-GM-105 central Standard/Pro+ capability enforcement in `apps/web/lib/assistant-gm/capabilityPolicy.ts` with tests in `apps/web/lib/assistant-gm/capabilityPolicy.test.ts`, and documented it in `docs/accessibility/assistant-gm-capability-policy.md`. The policy maps 45 namespaced Assistant GM intents to declared capabilities and classifies each request as standard, accessibility, Pro+, commissioner-only, or unsupported. Denial order is unknown intent, unauthenticated, master kill switch, Pro+ kill switch, audience, entitlement, then release phase; audience is checked before entitlement so a manager is never shown an Executive upgrade prompt for a commissioner-only capability. `describeAssistantGmUpgradePrompt` is the single source of upgrade copy and shows only for `entitlement_required`, which satisfies the backlog rule against scattering payment checks through UI components. `createAssistantGmPolicySession` re-resolves entitlement per league scope and holds no session-wide value. `apps/web/lib/assistant-gm/gateway.ts` was refactored to consume the policy instead of running its own kill-switch/entitlement/audience checks, maps policy reasons to its existing wire codes, and attaches the decision as `policy`. Verification passed: `npm test --workspace @fantasy-all-sports/web` (45 files, 231 tests, up from 212), `npm run build --workspace @fantasy-all-sports/web`, then serial `npm run typecheck --workspace @fantasy-all-sports/web`. Tests prove accessibility voice input, spoken output, typed fallback, and transaction confirmation stay allowed with both Assistant GM flags off and no entitlement, and cover a manager moving between Free and Executive leagues in the same session including no leak back to the Free league and mid-session activation. No UI surface consumes the policy yet and no production code path is exposed; BE-VOICE-100 is the first planned consumer.
+**Progress 2026-09-03:** Implemented BE-GM-105 central Standard/Pro+ capability enforcement in `apps/web/lib/assistant-gm/capabilityPolicy.ts` with tests in `apps/web/lib/assistant-gm/capabilityPolicy.test.ts`, and documented it in `docs/accessibility/assistant-gm-capability-policy.md`. The policy maps 45 namespaced Front Office Advisor intents to declared capabilities and classifies each request as standard, accessibility, Pro+, commissioner-only, or unsupported. Denial order is unknown intent, unauthenticated, master kill switch, Pro+ kill switch, audience, entitlement, then release phase; audience is checked before entitlement so a manager is never shown an Executive upgrade prompt for a commissioner-only capability. `describeAssistantGmUpgradePrompt` is the single source of upgrade copy and shows only for `entitlement_required`, which satisfies the backlog rule against scattering payment checks through UI components. `createAssistantGmPolicySession` re-resolves entitlement per league scope and holds no session-wide value. `apps/web/lib/assistant-gm/gateway.ts` was refactored to consume the policy instead of running its own kill-switch/entitlement/audience checks, maps policy reasons to its existing wire codes, and attaches the decision as `policy`. Verification passed: `npm test --workspace @fantasy-all-sports/web` (45 files, 231 tests, up from 212), `npm run build --workspace @fantasy-all-sports/web`, then serial `npm run typecheck --workspace @fantasy-all-sports/web`. Tests prove accessibility voice input, spoken output, typed fallback, and transaction confirmation stay allowed with both Front Office Advisor flags off and no entitlement, and cover a manager moving between Free and Executive leagues in the same session including no leak back to the Free league and mid-session activation. No UI surface consumes the policy yet and no production code path is exposed; BE-VOICE-100 is the first planned consumer.
 
-**Progress 2026-09-04:** Implemented BE-VOICE-100 accessible Ask GM control by evolving the existing `apps/web/app/components/AskGmPushToTalk.tsx` rather than adding a second Ask GM surface. Initial work created a parallel `askGm/AskGmControl.tsx`; discovering the already-mounted BE-VOICE-051 component and the `docs/executive/REPO_INVENTORY.md` row recording BE-VOICE-100 as "existing UI start ... needs real gateway integration, transcript, Tell me more, focus restoration", the duplicate was deleted and the work reconciled into the existing component. Interaction state now lives in a pure reducer `apps/web/app/components/askGm/askGmMachine.ts` with tests in `askGmMachine.test.ts`, because the repository has no React Testing Library and behavioral coverage cannot live in `renderToStaticMarkup` assertions. Added the four recorded gaps: `onAsk`/`onTellMeMore` assistant seam replacing the previous placeholder `setTimeout` that dropped every question into the error state; a focusable manager/assistant transcript; Tell me more gated on answer detail; and per-transition focus restoration applied directly rather than through `createFocusRestorer`, which refuses `tabIndex -1` targets. The control is the first consumer of the BE-GM-105 policy and renders `describeAssistantGmUpgradePrompt` output instead of inspecting entitlement itself. The panel is modal only when no time-critical gameplay control is live; with `criticalControlsActive` it renders non-modal so it cannot obstruct draft pick controls. Error copy reuses `lib/voice/voiceErrors.ts` rather than duplicating strings. Documented in `docs/accessibility/ask-gm-control.md` with a supersession note added to `docs/accessibility/ask-gm-push-to-talk.md`. Verification passed: `npm test --workspace @fantasy-all-sports/web` (46 files, 261 tests, up from 231), `npm run build --workspace @fantasy-all-sports/web`, then serial `npm run typecheck --workspace @fantasy-all-sports/web`; all nine pre-existing BE-VOICE-050..055 component tests still pass. Superseded 2026-09-05: the finish branch wires `onAsk` from the authenticated header to the read-only Assistant GM gateway. Remaining limits are cloud STT/TTS provider selection, production deployment, authenticated browser QA, and VoiceOver/TalkBack device testing.
+**Progress 2026-09-04:** Implemented BE-VOICE-100 accessible Ask Advisor control by evolving the existing `apps/web/app/components/AskGmPushToTalk.tsx` rather than adding a second Ask Advisor surface. Initial work created a parallel `askGm/AskGmControl.tsx`; discovering the already-mounted BE-VOICE-051 component and the `docs/executive/REPO_INVENTORY.md` row recording BE-VOICE-100 as "existing UI start ... needs real gateway integration, transcript, Tell me more, focus restoration", the duplicate was deleted and the work reconciled into the existing component. Interaction state now lives in a pure reducer `apps/web/app/components/askGm/askGmMachine.ts` with tests in `askGmMachine.test.ts`, because the repository has no React Testing Library and behavioral coverage cannot live in `renderToStaticMarkup` assertions. Added the four recorded gaps: `onAsk`/`onTellMeMore` assistant seam replacing the previous placeholder `setTimeout` that dropped every question into the error state; a focusable manager/assistant transcript; Tell me more gated on answer detail; and per-transition focus restoration applied directly rather than through `createFocusRestorer`, which refuses `tabIndex -1` targets. The control is the first consumer of the BE-GM-105 policy and renders `describeAssistantGmUpgradePrompt` output instead of inspecting entitlement itself. The panel is modal only when no time-critical gameplay control is live; with `criticalControlsActive` it renders non-modal so it cannot obstruct draft pick controls. Error copy reuses `lib/voice/voiceErrors.ts` rather than duplicating strings. Documented in `docs/accessibility/ask-gm-control.md` with a supersession note added to `docs/accessibility/ask-gm-push-to-talk.md`. Verification passed: `npm test --workspace @fantasy-all-sports/web` (46 files, 261 tests, up from 231), `npm run build --workspace @fantasy-all-sports/web`, then serial `npm run typecheck --workspace @fantasy-all-sports/web`; all nine pre-existing BE-VOICE-050..055 component tests still pass. Superseded 2026-09-05: the finish branch wires `onAsk` from the authenticated header to the read-only Front Office Advisor gateway. Remaining limits are cloud STT/TTS provider selection, production deployment, authenticated browser QA, and VoiceOver/TalkBack device testing.
 
 **Progress 2026-09-04:** Implemented BE-VOICE-101 by extending the existing BE-VOICE-052 browser adapter rather than replacing it, after an inventory pass confirmed the `docs/executive/REPO_INVENTORY.md` row "Existing browser adapter: `apps/web/lib/voice/speechToText.ts`; needs provider abstraction/telemetry/limits". Added `apps/web/lib/voice/speechProvider.ts` with tests in `speechProvider.test.ts`; `speechToText.ts` is unchanged and is wrapped, not modified. The module adds a `SpeechToTextProvider` abstraction with `selectSpeechToTextProvider`, a bounded request-based capture with a 15s default and 30s hard maximum enforced by a cap timer that stops the adapter even if the provider never fires an end event, an `exactEntity` option returning `requiresConfirmation` for player names/emails/numbers, and a telemetry event carrying provider id, event class, duration, transcript length, and error class. Per ADR section 8 telemetry deliberately excludes transcript content, and a test asserts spoken content never appears in a serialized payload. Per the ADR non-decision "No cloud STT/TTS provider is selected", no cloud provider was implemented; selection requires both `cloudEnabled` and the provider reporting available, so a flagged-on but unconfigured provider is never chosen. No permanent recording state: no audio is buffered, the interim transcript is cleared on final delivery, cap, cancel, and error, and cancel discards it without delivering a result. `AskGmPushToTalk` was rewired from the raw adapter to provider selection plus bounded capture so the abstraction is actually used rather than shipped unwired. Verification passed: `npm test --workspace @fantasy-all-sports/web` (47 files, 282 tests, up from 261), `npm run build --workspace @fantasy-all-sports/web`, then serial `npm run typecheck --workspace @fantasy-all-sports/web`. Documented in `docs/accessibility/speech-provider-abstraction.md` with an extension note added to `docs/accessibility/speech-to-text-adapter.md`. Not proven: only the browser provider exists; telemetry is emitted to an injected sink and is not yet persisted to the restricted usage ledger (BE-OPS-400); `exactEntity` is plumbed but no caller sets it yet because the invitation/email confirmation path is BE-VOICE-104; browser microphone permission denial is not separately classified from other capture failures; no device assistive-technology session has been run.
 
@@ -158,7 +160,7 @@ The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the 
 
 **Progress 2026-09-04:** Fixed the autopick illegal-roster defect with user authorization. `supabase/migrations/20260904100000_autopick_roster_requirements.sql` adds `draft_roster_needs` and `draft_autopick_candidate` and replaces `process_expired_draft_picks`: queue-first is unchanged; the fallback takes the best available asset overall until a franchise's remaining picks equal its unmet deficit, then restricts to needed positions, with FLEX counted as a third RB/WR/TE and both `roster_config` shapes read with safe defaults. Applied to production atomically via a new `npm run db:apply` (guardrailed wrapper for the repository's established `supabase db query --linked --file` path, since `db push` is blocked by drift); a verbatim pre-fix definition was captured for rollback first; the SQL was parsed offline with Postgres's parser via libpg-query beforehand. Verification: `draft_roster_needs` reported exactly the missing position for each of the seven illegal rosters from the defective draft (checked over authenticated RPC via new `npm run qa:roster:needs` before reset); after reset, a 100% autopick draft via new `npm run qa:draft:autopick-fast` produced 10/10 legal rosters (`qa-artifacts/2026-09-04_draft-autopick-completion-fixed/`, 7/7) versus 7/10 illegal before; the existing `npm run qa:draft:run` regression passed all assertions against the replaced function (`qa-artifacts/2026-09-04_full-draft-post-autopick-fix/`); grants verified from the catalog (nothing anon/public). `npm test` 50 files/291 tests and typecheck pass. Still open: autopick throughput bounded by the 60s cron versus the 30s clock; scoring data gap makes best-available degrade to position order; migration not recorded in remote history.
 
-**Progress 2026-09-05:** Started from a clean worktree at `origin/main` (`d0f175cde9342bec5d89a28cd9cf336d82c63a78`) on branch `finish/big-exec-voice-tts-animation`, merged PR #10 (`feature/executive-assistant-gm-capability-policy`) cleanly, and completed the non-human blocker called out in that PR: `AskGmPushToTalk` now receives live answers from the authenticated product header. Added `apps/web/app/components/assistantGmActions.ts`, a read-only server action that authenticates the user, verifies league membership, resolves the current season, maps common roster/lineup/standings/draft/waiver/trade/history questions to declared Assistant GM tools, and returns a visible/spoken answer. Updated `AskGmPushToTalk` so async `onAsk`/`onTellMeMore` results dispatch real answers, trigger browser TTS when spoken output is available, preserve text on TTS failure, and let the typed input submit as a keyboard-friendly form. Updated league/franchise/draft/matchup/recap layouts so the header appears under either the legacy `BIG_EXEC_VOICE_GM` flag or the newer `BIG_EXEC_ASSISTANT_GM_VOICE_INPUT` flag; draft layouts pass `criticalControlsActive` so the Ask GM panel remains non-modal around time-sensitive draft controls. Added component coverage for the typed submit path and header non-modal state. Verification passed: `npm test --workspace @fantasy-all-sports/web` (50 files, 292 tests), `npm run test:a11y --workspace @fantasy-all-sports/web` (2 files, 8 tests), `npm run build --workspace @fantasy-all-sports/web`, and serial `npm run typecheck --workspace @fantasy-all-sports/web`. Not proven because it requires external/human conditions: production deployment, authenticated browser/microphone/TTS QA, VoiceOver/TalkBack device testing, cloud STT/TTS provider selection, Stripe checkout/webhook, and any Assistant GM write action.
+**Progress 2026-09-05:** Started from a clean worktree at `origin/main` (`d0f175cde9342bec5d89a28cd9cf336d82c63a78`) on branch `finish/big-exec-voice-tts-animation`, merged PR #10 (`feature/executive-assistant-gm-capability-policy`) cleanly, and completed the non-human blocker called out in that PR: `AskGmPushToTalk` now receives live answers from the authenticated product header. Added `apps/web/app/components/assistantGmActions.ts`, a read-only server action that authenticates the user, verifies league membership, resolves the current season, maps common roster/lineup/standings/draft/waiver/trade/history questions to declared Front Office Advisor tools, and returns a visible/spoken answer. Updated `AskGmPushToTalk` so async `onAsk`/`onTellMeMore` results dispatch real answers, trigger browser TTS when spoken output is available, preserve text on TTS failure, and let the typed input submit as a keyboard-friendly form. Updated league/franchise/draft/matchup/recap layouts so the header appears under either the legacy `BIG_EXEC_VOICE_GM` flag or the newer `BIG_EXEC_ASSISTANT_GM_VOICE_INPUT` flag; draft layouts pass `criticalControlsActive` so the Ask Advisor panel remains non-modal around time-sensitive draft controls. Added component coverage for the typed submit path and header non-modal state. Verification passed: `npm test --workspace @fantasy-all-sports/web` (50 files, 292 tests), `npm run test:a11y --workspace @fantasy-all-sports/web` (2 files, 8 tests), `npm run build --workspace @fantasy-all-sports/web`, and serial `npm run typecheck --workspace @fantasy-all-sports/web`. Not proven because it requires external/human conditions: production deployment, authenticated browser/microphone/TTS QA, VoiceOver/TalkBack device testing, cloud STT/TTS provider selection, Stripe checkout/webhook, and any Front Office Advisor write action.
 
 ---
 
@@ -359,7 +361,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-014
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-014
 
 - [x] Implement large-text responsive CSS safeguards for core fantasy surfaces. Evidence: `apps/web/app/gate5.css`.
 - [x] Document covered surfaces, implementation notes, and remaining device verification. Evidence: `docs/accessibility/text-scaling-responsive.md`.
@@ -367,7 +369,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-015
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-015
 
 - [x] Verify current repository has no essential drag/drop interactions in `apps/` or `packages/`. Evidence: `rg -n "drag|draggable|onDrag|onDrop|DnD|dnd|sortable|pointerdown|pointermove|DataTransfer|react-dnd|@dnd-kit" apps packages -g '!node_modules' -g '!*.next/*'` returned no matches.
 - [x] Document the non-drag canonical interaction pattern and actual existing form/button/select locations. Evidence: `docs/accessibility/non-drag-interactions.md`.
@@ -375,7 +377,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-020
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-020
 
 - [x] Add current-section semantics and meaningful labels to desktop and mobile league navigation. Evidence: `apps/web/app/components/BigExecAppHeader.tsx`, `apps/web/app/components/BigExecMobileNav.tsx`, `apps/web/app/components/BigExecMobileNavClient.tsx`.
 - [x] Bring recap pages into the shared skip-link/main-content authenticated shell. Evidence: `apps/web/app/recaps/[recapId]/layout.tsx`.
@@ -385,7 +387,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-021
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-021
 
 - [x] Add accessible starter-slot, bench-player, and move-button semantics to the team page. Evidence: `apps/web/app/franchises/[franchiseId]/team/page.tsx`.
 - [x] Add lineup move success confirmation using the existing canonical `setLineup` server action. Evidence: `apps/web/app/team/actions.ts`.
@@ -396,7 +398,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-022
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-022
 
 - [x] Add FLEX and available-only filters to player search. Evidence: `apps/web/app/leagues/[leagueId]/players/page.tsx`.
 - [x] Add result-count/sort-order announcement and coherent result labels. Evidence: `apps/web/app/leagues/[leagueId]/players/playerSearchAccessibility.ts`.
@@ -408,7 +410,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-023
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-023
 
 - [x] Add two-step waiver claim review before final submission. Evidence: `apps/web/app/leagues/[leagueId]/players/page.tsx`.
 - [x] Announce add asset, drop asset, FAAB status, priority model, clear time, and source franchise where present. Evidence: `apps/web/app/leagues/[leagueId]/players/waiverAccessibility.ts`.
@@ -420,7 +422,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-024
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-024
 
 - [x] Add accessible draft-state, on-clock, and recent-pick summaries. Evidence: `apps/web/app/drafts/[draftId]/page.tsx`, `apps/web/app/drafts/[draftId]/draftAccessibility.ts`.
 - [x] Replace every-second clock live text with queued 30/15/5-second announcements. Evidence: `apps/web/app/drafts/[draftId]/DraftClock.tsx`.
@@ -432,7 +434,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-025
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-025
 
 - [x] Add textual matchup summary, result state, and scoreboard accessible label. Evidence: `apps/web/app/matchups/[matchupId]/page.tsx`, `apps/web/app/matchups/[matchupId]/matchupAccessibility.ts`.
 - [x] Add throttled screen-reader score summary announcements through the shared announcer. Evidence: `apps/web/app/matchups/[matchupId]/MatchupScoreAnnouncer.tsx`.
@@ -444,7 +446,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-026
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-026
 
 - [x] Add table roles, hidden headers, and row labels to League HQ standings. Evidence: `apps/web/app/leagues/[leagueId]/page.tsx`.
 - [x] Add table roles, hidden headers, row labels, and hidden tiebreaker cells to Schedule standings. Evidence: `apps/web/app/leagues/[leagueId]/schedule/page.tsx`.
@@ -455,7 +457,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-027
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-027
 
 - [x] Add full sender/time/message/reaction/reply labels to Locker Room events. Evidence: `apps/web/app/leagues/[leagueId]/locker-room/page.tsx`, `apps/web/app/leagues/[leagueId]/locker-room/lockerRoomAccessibility.ts`.
 - [x] Add accessible reply-to-composer action without inventing threaded reply storage. Evidence: `apps/web/app/leagues/[leagueId]/locker-room/page.tsx`.
@@ -467,7 +469,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 
 ---
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-028
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-028
 
 - [x] Add multi-address review, duplicate/pending/invalid-address status, character-by-character readback, and remove controls to commissioner invite flow. Evidence: `apps/web/app/leagues/[leagueId]/InviteManagersForm.tsx`, `apps/web/app/leagues/[leagueId]/invitationAccessibility.ts`.
 - [x] Extend invite creation to accept a reviewed list while preserving canonical `create_league_invite` RPC usage. Evidence: `apps/web/app/leagues/actions.ts`.
@@ -477,100 +479,100 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [ ] Add revoke only after canonical invite revocation support exists.
 - [ ] Record real-device invitation flow results in `docs/accessibility/test-matrix.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-030
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-030
 
 - [x] Add stack-appropriate accessibility test tooling to the existing Vitest setup. Evidence: `apps/web/app/accessibility-automation/axeTestUtils.ts`, `apps/web/package.json`, `package-lock.json`.
 - [x] Prove the tooling fails on injected defects for accessible names, form labels, ARIA roles/states, and dialog names. Evidence: `apps/web/app/accessibility-automation/axeTooling.test.ts`.
 - [x] Document local commands, coverage, and jsdom/browser limits. Evidence: `docs/accessibility/accessibility-test-tooling.md`.
 - [x] Add P0 screen regression fixtures in BE-A11Y-031.
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-031
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-031
 
 - [x] Add source-anchored P0 regression coverage for roster/lineup, player search, waivers, draft, matchup/live scoring, and standings. Evidence: `apps/web/app/accessibility-automation/p0ScreenRegression.test.ts`.
 - [x] Cover removal of key labels, roles, states, live announcements, and transaction review/confirmation content. Evidence: `apps/web/app/accessibility-automation/p0ScreenRegression.test.ts`.
 - [x] Document coverage and server-component/Supabase rendering constraint. Evidence: `docs/accessibility/p0-screen-regression-suite.md`.
 - [x] Add the accessibility regression command to CI in BE-A11Y-032.
 
-## Accessibility + Voice Assistant GM Beta — BE-A11Y-032
+## Accessibility + Voice Front Office Advisor Beta — BE-A11Y-032
 
 - [x] Add dedicated root and web accessibility test commands. Evidence: `package.json`, `apps/web/package.json`.
 - [x] Add explicit accessibility regression step to GitHub Actions CI. Evidence: `.github/workflows/ci.yml`.
 - [x] Document CI gate behavior and failure output locations. Evidence: `docs/accessibility/ci-accessibility-gate.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-040
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-040
 
-- [x] Add narrow structured Assistant GM read-tool boundary with explicit request/response shape. Evidence: `apps/web/lib/assistant-gm/tools.ts`.
+- [x] Add narrow structured Front Office Advisor read-tool boundary with explicit request/response shape. Evidence: `apps/web/lib/assistant-gm/tools.ts`.
 - [x] Enforce league membership and owned-franchise authorization before returning protected state. Evidence: `apps/web/lib/assistant-gm/tools.ts`.
-- [x] Keep all current Assistant GM tools read-only and map them to existing Supabase tables/helpers instead of duplicating game or transaction logic. Evidence: `apps/web/lib/assistant-gm/tools.ts`, `docs/accessibility/assistant-gm-tool-boundary.md`.
+- [x] Keep all current Front Office Advisor tools read-only and map them to existing Supabase tables/helpers instead of duplicating game or transaction logic. Evidence: `apps/web/lib/assistant-gm/tools.ts`, `docs/accessibility/assistant-gm-tool-boundary.md`.
 - [x] Add boundary tests for declared tools, read-only contracts, authorized reads, and unauthorized rejection. Evidence: `apps/web/lib/assistant-gm/tools.test.ts`.
 - [x] Add deterministic grounding rules in BE-GM-041.
 - [ ] Wire the boundary to an LLM/Assistant UI only after read-intent, feature flag, and confirmation model tasks are complete.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-041
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-041
 
 - [x] Add no-fabrication grounding policy for score, roster, waiver balance, availability, standings, draft status, injury state, and league rules. Evidence: `apps/web/lib/assistant-gm/grounding.ts`.
 - [x] Require explicit successful tool results before factual answer rendering. Evidence: `apps/web/lib/assistant-gm/grounding.ts`.
 - [x] Add unavailable/missing-data tests. Evidence: `apps/web/lib/assistant-gm/grounding.test.ts`.
 - [x] Document required tool map and failure message behavior. Evidence: `docs/accessibility/assistant-gm-grounding-rules.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-042
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-042
 
 - [x] Add deterministic roster/lineup read-intent renderer for lineup, bench, injuries, empty slots, and game-time questions. Evidence: `apps/web/lib/assistant-gm/rosterLineupIntents.ts`.
 - [x] Derive answers entirely from structured `getRoster` and `getLineup` responses. Evidence: `apps/web/lib/assistant-gm/rosterLineupIntents.ts`.
 - [x] Refuse to invent game-time state when no verified kickoff data is present. Evidence: `apps/web/lib/assistant-gm/rosterLineupIntents.test.ts`.
 - [x] Document supported intents and current game-time data limit. Evidence: `docs/accessibility/assistant-gm-roster-lineup-intents.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-043
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-043
 
 - [x] Add deterministic matchup and standings read-intent renderer. Evidence: `apps/web/lib/assistant-gm/matchupStandingsIntents.ts`.
 - [x] Distinguish projection language from factual current-score language. Evidence: `apps/web/lib/assistant-gm/matchupStandingsIntents.test.ts`.
 - [x] Refuse to invent remaining-player or projection state when verified data is absent. Evidence: `apps/web/lib/assistant-gm/matchupStandingsIntents.test.ts`.
 - [x] Document supported intents and current projection/game-status data limits. Evidence: `docs/accessibility/assistant-gm-matchup-standings-intents.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-044
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-044
 
 - [x] Add deterministic player detail, comparison, best-available, and available-by-position answer rendering. Evidence: `apps/web/lib/assistant-gm/playerSearchIntents.ts`.
 - [x] Trigger clarification for ambiguous player searches. Evidence: `apps/web/lib/assistant-gm/playerSearchIntents.test.ts`.
 - [x] Ensure rostered players are not presented as available and source labels are included for recommendations. Evidence: `apps/web/lib/assistant-gm/playerSearchIntents.test.ts`.
 - [x] Document supported player intents and current parser boundary. Evidence: `docs/accessibility/assistant-gm-player-search-intents.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-045
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-045
 
 - [x] Add deterministic draft read-intent renderer for availability, best available by position, next pick, position need, recent picks, and availability verification. Evidence: `apps/web/lib/assistant-gm/draftIntents.ts`.
 - [x] Include current-pick freshness checks so stale draft-state answers are blocked. Evidence: `apps/web/lib/assistant-gm/draftIntents.test.ts`.
 - [x] Refuse silent substitution when a requested player is no longer available. Evidence: `apps/web/lib/assistant-gm/draftIntents.test.ts`.
 - [x] Document supported draft intents and freshness behavior. Evidence: `docs/accessibility/assistant-gm-draft-intents.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-046
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-046
 
 - [x] Add deterministic waiver read-intent renderer for FAAB/rules, pending claims, recommendations, and best available players. Evidence: `apps/web/lib/assistant-gm/waiverIntents.ts`.
 - [x] Require waiver facts from waiver rule/state tools and avoid invented FAAB balances. Evidence: `apps/web/lib/assistant-gm/waiverIntents.test.ts`.
 - [x] Label add advice as recommendation, not a transaction. Evidence: `apps/web/lib/assistant-gm/waiverIntents.test.ts`.
 - [x] Document supported waiver intents and transaction deferral. Evidence: `docs/accessibility/assistant-gm-waiver-intents.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-047
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-047
 
 - [x] Add deterministic Sunday briefing composer for lineup, injury, bye, projection, bench, and waiver checks. Evidence: `apps/web/lib/assistant-gm/sundayBriefing.ts`.
-- [x] Keep each briefing item traceable to a structured Assistant GM tool result. Evidence: `apps/web/lib/assistant-gm/sundayBriefing.test.ts`.
+- [x] Keep each briefing item traceable to a structured Front Office Advisor tool result. Evidence: `apps/web/lib/assistant-gm/sundayBriefing.test.ts`.
 - [x] Label recommendations and confirm no transaction is made. Evidence: `apps/web/lib/assistant-gm/sundayBriefing.test.ts`.
 - [x] Document supported checks, guardrails, and follow-up issue-key behavior. Evidence: `docs/accessibility/assistant-gm-sunday-briefing.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-VOICE-050
+## Accessibility + Voice Front Office Advisor Beta — BE-VOICE-050
 
 - [x] Add disabled-by-default voice and spoken-update feature flags. Evidence: `apps/web/lib/feature-flags/voiceFlags.ts`, `.env.example`.
 - [x] Allow each voice capability to be independently disabled and require `voice_gm` for voice subfeatures. Evidence: `apps/web/lib/feature-flags/voiceFlags.test.ts`.
 - [x] Add flags to Turbo build environment passthrough. Evidence: `turbo.json`.
 - [x] Document flag names, env vars, and guardrail behavior. Evidence: `docs/accessibility/voice-feature-flags.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-VOICE-051
+## Accessibility + Voice Front Office Advisor Beta — BE-VOICE-051
 
-- [x] Add flagged Ask GM push-to-talk entry point in authenticated product header. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`, `apps/web/app/components/BigExecAppHeader.tsx`.
+- [x] Add flagged Ask Advisor push-to-talk entry point in authenticated product header. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`, `apps/web/app/components/BigExecAppHeader.tsx`.
 - [x] Add idle/listening/processing/speaking/error visual and accessible states with cancel/dismiss controls. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
 - [x] Mount only when `voice_gm` is enabled and preserve no-always-listening behavior. Evidence: route layouts and `apps/web/lib/feature-flags/voiceFlags.ts`.
 - [x] Add rendering coverage for all states and flag-off/flag-on header behavior. Evidence: `apps/web/app/components/AskGmPushToTalk.test.tsx`.
 - [x] Document state behavior and remaining STT/TTS limits. Evidence: `docs/accessibility/ask-gm-push-to-talk.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-VOICE-052
+## Accessibility + Voice Front Office Advisor Beta — BE-VOICE-052
 
 - [x] Add browser speech-to-text adapter with support detection, start/stop/abort, transcript callbacks, and explicit unsupported-browser errors. Evidence: `apps/web/lib/voice/speechToText.ts`.
 - [x] Wire push-to-talk start/finish/cancel to the adapter so capture starts only after user action and can be canceled. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
@@ -578,29 +580,29 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Add adapter tests for permission copy, unsupported browsers, transcript results, and abort cancellation. Evidence: `apps/web/lib/voice/speechToText.test.ts`.
 - [x] Document adapter behavior and browser-support limits. Evidence: `docs/accessibility/speech-to-text-adapter.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-VOICE-053
+## Accessibility + Voice Front Office Advisor Beta — BE-VOICE-053
 
 - [x] Add browser text-to-speech adapter with support detection, speak, stop, replay, and preserved last response. Evidence: `apps/web/lib/voice/textToSpeech.ts`.
-- [x] Add stop/replay controls and persistent text response support to Ask GM. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Add stop/replay controls and persistent text response support to Ask Advisor. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
 - [x] Ensure TTS failure does not erase response text. Evidence: `apps/web/lib/voice/textToSpeech.test.ts`.
 - [x] Document adapter behavior and screen-reader collision follow-up. Evidence: `docs/accessibility/text-to-speech-adapter.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-VOICE-054
+## Accessibility + Voice Front Office Advisor Beta — BE-VOICE-054
 
 - [x] Add GM audio-state event and queue policy for speech/announcement collision handling. Evidence: `apps/web/app/components/ScreenReaderAnnouncer.tsx`, `apps/web/app/components/announcementQueue.ts`.
 - [x] Tag live-scoring announcements so they queue/throttle while GM speech is active. Evidence: `apps/web/app/matchups/[matchupId]/MatchupScoreAnnouncer.tsx`.
 - [x] Ensure assertive transaction/error announcements are not held by GM speech. Evidence: `apps/web/app/components/announcementQueue.test.ts`.
-- [x] Keep immediate stop speech behavior in Ask GM. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
+- [x] Keep immediate stop speech behavior in Ask Advisor. Evidence: `apps/web/app/components/AskGmPushToTalk.tsx`.
 - [x] Document audio priority and focus policy. Evidence: `docs/accessibility/gm-audio-collision-policy.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-VOICE-055
+## Accessibility + Voice Front Office Advisor Beta — BE-VOICE-055
 
 - [x] Add voice error/ambiguity taxonomy for speech not understood, ambiguous player, unavailable player, stale draft state, network failure, AI/tool timeout, and unsupported request. Evidence: `apps/web/lib/voice/voiceErrors.ts`.
 - [x] Ensure each failure exposes retry, type instead, and cancel/return. Evidence: `apps/web/lib/voice/voiceErrors.test.ts`, `apps/web/app/components/AskGmPushToTalk.tsx`.
 - [x] Prevent silent command substitution for unsupported requests. Evidence: `apps/web/lib/voice/voiceErrors.test.ts`.
 - [x] Document voice failure behavior. Evidence: `docs/accessibility/voice-error-ambiguity-ux.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-060
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-060
 
 - [x] Add `prepare -> confirm -> commit` transaction confirmation model. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
 - [x] Include action ID, user ID, league ID, action type, proposed changes, state version/hash, created time, and expiration time in the confirmation object. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
@@ -608,15 +610,15 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Reject expired, wrong-scope, modified-proposal, and changed-state confirmations. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
 - [x] Document that future writes must call existing canonical Supabase RPCs instead of creating duplicate game/transaction engines. Evidence: `docs/accessibility/assistant-gm-transaction-confirmations.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-061
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-061
 
-- [x] Add idempotent Assistant GM commit wrapper keyed by confirmation `actionId`. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Add idempotent Front Office Advisor commit wrapper keyed by confirmation `actionId`. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
 - [x] Add idempotency store interface for future durable storage-backed write paths. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
 - [x] Verify repeated commits execute once and return the prior result. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
 - [x] Verify invalid confirmations do not create idempotency records or execute writes. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
 - [x] Document that future production Voice GM writes must back the interface with durable storage and still call canonical RPCs. Evidence: `docs/accessibility/assistant-gm-transaction-confirmations.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-062
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-062
 
 - [x] Add state revalidation reasons for drafted player, unavailable waiver player, lineup eligibility change, FAAB change, roster change, and generic state change. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
 - [x] Reject stale confirmations when the current verified state hash differs from the prepared confirmation. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
@@ -624,7 +626,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Explicitly prevent silent player substitution in stale draft and waiver cases. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.test.ts`.
 - [x] Document the state revalidation boundary and future RPC reuse requirement. Evidence: `docs/accessibility/assistant-gm-transaction-confirmations.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-063
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-063
 
 - [x] Add Voice GM lineup move preparation over verified roster and lineup state. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.ts`.
 - [x] Resolve requested roster asset, determine legal destination slots, and explain invalid/ambiguous moves before preparing a transaction. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.test.ts`.
@@ -633,7 +635,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Call canonical Supabase RPC `set_lineup_slot` for the actual lineup mutation. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.test.ts`.
 - [x] Document the Voice GM lineup transaction flow and guardrails. Evidence: `docs/accessibility/assistant-gm-lineup-transactions.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-064
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-064
 
 - [x] Add Voice GM draft-pick preparation over verified draft state and available draft pool. Evidence: `apps/web/lib/assistant-gm/draftTransactions.ts`.
 - [x] Verify draft is live and requester is on the clock before preparing a pick. Evidence: `apps/web/lib/assistant-gm/draftTransactions.test.ts`.
@@ -643,7 +645,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Call canonical Supabase RPC `make_draft_pick` with `p_auto: false`; no draft tables are written directly. Evidence: `apps/web/lib/assistant-gm/draftTransactions.test.ts`.
 - [x] Document the Voice GM draft transaction flow and guardrails. Evidence: `docs/accessibility/assistant-gm-draft-transactions.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-065
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-065
 
 - [x] Add Voice GM waiver-claim preparation over verified waiver holds, roster state, and rules. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.ts`.
 - [x] Require complete claim review with add, drop, FAAB, and priority/rule context. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.test.ts`.
@@ -654,17 +656,17 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Call canonical Supabase RPC `submit_waiver_claim`; no waiver tables are written directly. Evidence: `apps/web/lib/assistant-gm/waiverTransactions.test.ts`.
 - [x] Document the Voice GM waiver transaction flow and guardrails. Evidence: `docs/accessibility/assistant-gm-waiver-transactions.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-066
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-066
 
-- [x] Add structured Assistant GM action audit-log entry model. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.ts`.
+- [x] Add structured Front Office Advisor action audit-log entry model. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.ts`.
 - [x] Include user, league, source, requested action, prepared action, confirmation timestamp, commit result, failure reason, state/version hash, action ID, and created time. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.test.ts`.
 - [x] Add audit store interface for future durable storage wiring. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.ts`.
 - [x] Strip unnecessary raw voice audio-like fields from audit payloads. Evidence: `apps/web/lib/assistant-gm/actionAuditLog.test.ts`.
 - [x] Document audit fields and privacy boundary. Evidence: `docs/accessibility/assistant-gm-action-audit-log.md`.
 
-## Accessibility + Voice Assistant GM Beta — BE-GM-067
+## Accessibility + Voice Front Office Advisor Beta — BE-GM-067
 
-- [x] Add explicit Assistant GM autonomy guard requiring a user-originated voice/text request plus valid confirmation before commit. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.ts`.
+- [x] Add explicit Front Office Advisor autonomy guard requiring a user-originated voice/text request plus valid confirmation before commit. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.ts`.
 - [x] Reject unsolicited lineup changes, waiver claims, draft picks, and trade resolution/acceptance attempts. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.test.ts`.
 - [x] Reject standalone roster drops in beta. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.test.ts`.
 - [x] Reject payment and account actions entirely. Evidence: `apps/web/lib/assistant-gm/autonomyGuard.test.ts`.
@@ -674,23 +676,23 @@ When one item is completed, update this file in the same PR/commit with the evid
 ## Repo Tightening — 2026-09-01
 
 - [x] Create tightening log for future cleanup audits. Evidence: `docs/TIGHTENING_LOG.md`.
-- [x] Centralize repeated Assistant GM missing-confirmation response and remove impossible null checks. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
+- [x] Centralize repeated Front Office Advisor missing-confirmation response and remove impossible null checks. Evidence: `apps/web/lib/assistant-gm/transactionConfirmations.ts`.
 - [x] Replace repeated missing-confirmation branches in lineup, draft, and waiver transaction helpers. Evidence: `apps/web/lib/assistant-gm/lineupTransactions.ts`, `apps/web/lib/assistant-gm/draftTransactions.ts`, `apps/web/lib/assistant-gm/waiverTransactions.ts`.
 - [x] Clear ignored local Turbo cache output while preserving source and QA evidence. Evidence: `docs/TIGHTENING_LOG.md`.
 
 ---
 
-## Approved Feature — Executive League + Assistant GM Pro+
+## Approved Feature — Executive League + Front Office Advisor Pro+
 
 **Canonical specs:**
 
 - `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_PRD.md`
 - `docs/product/EXECUTIVE_LEAGUE_ASSISTANT_GM_TASKS.md`
 
-**Commercial decision:** Big Exec Executive League Season Pass is $99 one-time per league, sport, and season. Assistant GM Pro+ is included for all managers and is not a separate Stripe product at launch. Accessibility voice remains free.
+**Commercial decision:** Big Exec Executive League Season Pass is $99 one-time per league, sport, and season. Front Office Advisor Pro+ is included for all managers and is not a separate Stripe product at launch. Accessibility voice remains free.
 
 - [ ] Run `BE-EXEC-000` read-only repository/deployment/schema inventory.
-- [ ] Reconcile the new PRD with the existing accessibility + Voice Assistant GM backlog.
+- [ ] Reconcile the new PRD with the existing accessibility + Voice Front Office Advisor backlog.
 - [ ] Do not start checkout until Stripe product/price configuration is provided.
 - [ ] Do not allow this workstream to displace unresolved standalone fantasy P0 gates.
 - [ ] Begin entitlement/GM foundation only after the inventory identifies exact current integration points.

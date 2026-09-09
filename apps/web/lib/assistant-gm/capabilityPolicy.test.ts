@@ -31,7 +31,7 @@ const manager = {
   flags: flagsOn
 } as const;
 
-describe('Assistant GM capability policy', () => {
+describe('Front Office Advisor capability policy', () => {
   it('maps every declared intent to a real capability', () => {
     for (const intentId of assistantGmIntentIds) {
       const capabilityId = assistantGmIntentCapabilities[intentId];
@@ -148,7 +148,7 @@ describe('Assistant GM capability policy', () => {
   });
 });
 
-describe('Assistant GM policy session across leagues', () => {
+describe('Front Office Advisor policy session across leagues', () => {
   const freeLeague: AssistantGmLeagueScope = {
     leagueId: 'league-free',
     leagueSeasonId: 'season-free',

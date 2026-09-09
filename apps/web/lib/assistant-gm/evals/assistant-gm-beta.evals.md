@@ -1,4 +1,4 @@
-# Assistant GM Beta Evals
+# Front Office Advisor Beta Evals
 
 These evals are enforced by `apps/web/lib/assistant-gm/assistantGmEvals.test.ts` and related intent tests.
 

@@ -5,7 +5,7 @@ export type AssistantGmActionAuditEntry = {
   id: string;
   userId: string;
   leagueId: string;
-  source: 'Assistant GM';
+  source: 'Front Office Advisor';
   requestedAction: string;
   actionType: AssistantGmTransactionActionType;
   preparedAction: unknown;
@@ -52,7 +52,7 @@ export function createAssistantGmActionAuditEntry(input: AuditInput): AssistantG
     id: randomUUID(),
     userId: input.userId,
     leagueId: input.leagueId,
-    source: 'Assistant GM',
+    source: 'Front Office Advisor',
     requestedAction: input.requestedAction,
     actionType: input.actionType,
     preparedAction: sanitizeAssistantGmAuditPayload(input.preparedAction ?? null),

@@ -21,14 +21,14 @@ export async function GET() {
       '/api/capabilities': {
         get: {
           operationId: 'listCapabilities',
-          summary: 'List Big Exec capabilities and Assistant GM tool contracts.',
+          summary: 'List Big Exec capabilities and Front Office Advisor tool contracts.',
           responses: { '200': { description: 'Capability inventory.' } }
         }
       },
       '/api/assistant-gm/tools': {
         post: {
           operationId: 'runAssistantGmReadTools',
-          summary: 'Run declared read-only Assistant GM tools for the signed-in user.',
+          summary: 'Run declared read-only Front Office Advisor tools for the signed-in user.',
           requestBody: {
             required: true,
             content: {
@@ -48,7 +48,7 @@ export async function GET() {
       '/api/assistant-gm/run': {
         post: {
           operationId: 'runAssistantGmAgentLoop',
-          summary: 'Run a bounded, policy-gated Assistant GM read-tool loop for the signed-in user.',
+          summary: 'Run a bounded, policy-gated Front Office Advisor read-tool loop for the signed-in user.',
           requestBody: {
             required: true,
             content: {
@@ -189,7 +189,7 @@ export async function GET() {
       '/api/leagues/{leagueId}/knowledge': {
         get: {
           operationId: 'searchBigExecKnowledge',
-          summary: 'Search sourced Big Exec Assistant GM knowledge-base documents.',
+          summary: 'Search sourced Big Exec Front Office Advisor knowledge-base documents.',
           parameters: [
             { name: 'leagueId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
             { name: 'q', in: 'query', required: true, schema: { type: 'string', minLength: 3, maxLength: 120 } }

@@ -20,7 +20,7 @@ const messages: Record<VoiceErrorCode, string> = {
   unavailable_player: 'That player is not verified as available. I will not switch to another player automatically.',
   stale_draft_state: 'The draft state changed. I need fresh draft data before continuing.',
   network_failure: 'The network request failed. Try again, type it instead, or cancel.',
-  tool_timeout: 'Assistant GM tools took too long to respond. Try again, type it instead, or cancel.',
+  tool_timeout: 'Front Office Advisor tools took too long to respond. Try again, type it instead, or cancel.',
   unsupported_request: 'That command is not supported. I will not execute another action instead.'
 };
 

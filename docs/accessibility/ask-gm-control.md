@@ -1,14 +1,14 @@
-# Ask GM Control (BE-VOICE-100)
+# Ask Advisor Control (BE-VOICE-100)
 
 ## Status
 
-BE-VOICE-100 is implemented by evolving the existing BE-VOICE-051 push-to-talk entry point rather than adding a second Ask GM surface. It remains behind the legacy `voice_gm` feature flag or the newer Assistant GM voice-input flag.
+BE-VOICE-100 is implemented by evolving the existing BE-VOICE-051 push-to-talk entry point rather than adding a second Ask Advisor surface. It remains behind the legacy `voice_gm` feature flag or the newer Front Office Advisor voice-input flag.
 
-As of 2026-09-09, the visible shell is a floating gold Assistant GM bubble with an original dark coach-head mark. Opening the bubble reveals the same transcript, typed input, push-to-talk controls, stop/replay, and Tell me more affordances.
+As of 2026-09-09, the visible shell is a floating gold Front Office Advisor bubble with an original dark coach-head mark. Opening the bubble reveals the same transcript, typed input, push-to-talk controls, stop/replay, and Tell me more affordances.
 
 ## Reconciliation note
 
-`docs/executive/REPO_INVENTORY.md` recorded BE-VOICE-100 as *"Existing UI start: `apps/web/app/components/AskGmPushToTalk.tsx`; needs real gateway integration, transcript, Tell me more, focus restoration."* This task closed those four gaps in place. `AskGmPushToTalk` is still the single mounted Ask GM control, still mounted by `BigExecAppHeader`, but it now renders as a fixed-position sibling so it remains available when the desktop header is hidden on mobile.
+`docs/executive/REPO_INVENTORY.md` recorded BE-VOICE-100 as *"Existing UI start: `apps/web/app/components/AskGmPushToTalk.tsx`; needs real gateway integration, transcript, Tell me more, focus restoration."* This task closed those four gaps in place. `AskGmPushToTalk` is still the single mounted Ask Advisor control, still mounted by `BigExecAppHeader`, but it now renders as a fixed-position sibling so it remains available when the desktop header is hidden on mobile.
 
 ## Files
 
@@ -26,9 +26,9 @@ Interaction behavior lives in a pure reducer (`askGmMachine`) so states, announc
 
 The component owns only the adapter wiring: `lib/voice/speechToText` for capture (BE-VOICE-052), `lib/voice/textToSpeech` for spoken output (BE-VOICE-053), and `ScreenReaderAnnouncer` for announcements.
 
-As of the 2026-09-05 finish branch, `BigExecAppHeader` wires `onAsk` to `askHeaderAssistantGm`, a server action that authenticates the user, verifies league membership, resolves the current league season, routes common roster/lineup/standings/draft/waiver/trade/history questions to the read-only Assistant GM gateway, and returns a visible/spoken answer. The action does not expose write tools.
+As of the 2026-09-05 finish branch, `BigExecAppHeader` wires `onAsk` to `askHeaderAssistantGm`, a server action that authenticates the user, verifies league membership, resolves the current league season, routes common roster/lineup/standings/draft/waiver/trade/history questions to the read-only Front Office Advisor gateway, and returns a visible/spoken answer. The action does not expose write tools.
 
-As of 2026-09-09, stable help/rules questions are routed to the local markdown Assistant GM knowledge base before live league-state tools. That retrieval path is deterministic file search over `docs/assistant-gm/knowledge-base`, not a paid model call.
+As of 2026-09-09, stable help/rules questions are routed to the local markdown Front Office Advisor knowledge base before live league-state tools. That retrieval path is deterministic file search over `docs/assistant-gm/knowledge-base`, not a paid model call.
 
 ## States
 
@@ -45,7 +45,7 @@ As of 2026-09-09, stable help/rules questions are routed to the local markdown A
 
 The panel is modal (`role="dialog"`) only when no time-critical gameplay control is live. When `criticalControlsActive` is set — a running draft clock or an imminent lineup lock — it renders as a non-modal `role="region"` and never traps focus, so it cannot obstruct pick controls.
 
-The panel can be moved through keyboard-accessible controls. `Move Assistant GM` cycles the dock among the four screen corners, `Reset Assistant GM position` returns it to bottom right, and each move is announced on the `gm` live-announcement channel. This is the accessible equivalent of a draggable bubble for users who cannot use pointer drag.
+The panel can be moved through keyboard-accessible controls. `Move Front Office Advisor` cycles the dock among the four screen corners, `Reset Front Office Advisor position` returns it to bottom right, and each move is announced on the `gm` live-announcement channel. This is the accessible equivalent of a draggable bubble for users who cannot use pointer drag.
 
 ## Entitlement
 
@@ -58,6 +58,6 @@ Every failure exposes cancel plus at least one of retry or type instead. A micro
 ## Known limits
 
 - Voice capture and spoken output still use browser adapters only; the provider abstraction for cloud STT/TTS is BE-VOICE-101/102.
-- `onAsk` is wired from the authenticated product header to the read-only Assistant GM gateway in the finish branch. Production deployment and authenticated browser QA are still separate release evidence.
+- `onAsk` is wired from the authenticated product header to the read-only Front Office Advisor gateway in the finish branch. Production deployment and authenticated browser QA are still separate release evidence.
 - Audio priority against VoiceOver/TalkBack is modeled through the announcement queue's `gm` channel but is not proven on device; that is BE-VOICE-103.
 - No device assistive-technology session has been run for this control.

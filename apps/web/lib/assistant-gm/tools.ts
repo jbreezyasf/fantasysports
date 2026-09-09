@@ -106,8 +106,8 @@ export const assistantGmToolContracts: Record<AssistantGmToolName, { access: 'le
   getTradeContext: { access: 'league_member', writes: false, description: 'Read current league trade context without accepting, rejecting, or proposing a trade.' },
   getInvitationState: { access: 'league_member', writes: false, description: 'Read commissioner-authorized league invitation state.' },
   getHistory: { access: 'league_member', writes: false, description: 'Read authorized league history, championships, awards, and story events.' },
-  getEntitlement: { access: 'league_member', writes: false, description: 'Read current league-season Assistant GM entitlement mode.' },
-  searchKnowledgeBase: { access: 'league_member', writes: false, description: 'Retrieve sourced Big Exec rules and support answers from the local Assistant GM knowledge base.' }
+  getEntitlement: { access: 'league_member', writes: false, description: 'Read current league-season Front Office Advisor entitlement mode.' },
+  searchKnowledgeBase: { access: 'league_member', writes: false, description: 'Retrieve sourced Big Exec rules and support answers from the local Front Office Advisor knowledge base.' }
 };
 
 function fail(tool: AssistantGmToolName, code: 'unauthorized' | 'not_found' | 'invalid_request' | 'data_error', message: string): AssistantGmToolResponse {
@@ -359,10 +359,10 @@ export async function runAssistantGmTool(ctx: AssistantGmToolContext, request: A
         });
       }
       default:
-        return fail(request.tool, 'invalid_request', 'Unknown Assistant GM tool');
+        return fail(request.tool, 'invalid_request', 'Unknown Front Office Advisor tool');
     }
   } catch (error) {
     const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: 'unauthorized' | 'not_found' }).code : undefined;
-    return fail(request.tool, code ?? 'data_error', error instanceof Error ? error.message : 'Assistant GM tool failed');
+    return fail(request.tool, code ?? 'data_error', error instanceof Error ? error.message : 'Front Office Advisor tool failed');
   }
 }

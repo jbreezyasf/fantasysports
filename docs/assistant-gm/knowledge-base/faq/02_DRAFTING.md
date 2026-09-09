@@ -48,7 +48,7 @@
 
 **Voice answer:** Supported commissioner controls include pausing or resuming the draft and correcting or undoing the latest pick with an audit trail.
 
-## FAQ-BE-031 — Can the Assistant GM draft for me?
+## FAQ-BE-031 — Can the Front Office Advisor draft for me?
 
 **Voice answer:** The GM can recommend or prepare a pick. In Beta, it cannot complete your intentional voice-requested pick without confirming the exact player and rechecking that the player is still available and that you are on the clock.
 

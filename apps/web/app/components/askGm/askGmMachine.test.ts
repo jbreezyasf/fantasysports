@@ -18,7 +18,7 @@ function opened(capabilities = fullVoice) {
   return run(createAskGmState(capabilities), { type: 'open' });
 }
 
-describe('Ask GM state machine', () => {
+describe('Ask Advisor state machine', () => {
   it('starts closed and idle', () => {
     const state = createAskGmState(fullVoice);
 
@@ -156,7 +156,7 @@ describe('Ask GM state machine', () => {
   });
 });
 
-describe('Ask GM degraded modes', () => {
+describe('Ask Advisor degraded modes', () => {
   it('routes a microphone denial to the typed path with no retry loop', () => {
     const denied = run(opened(), { type: 'fail', error: 'microphone_denied' });
 
@@ -225,7 +225,7 @@ describe('Ask GM degraded modes', () => {
   });
 });
 
-describe('Ask GM gameplay obstruction rules', () => {
+describe('Ask Advisor gameplay obstruction rules', () => {
   it('is modal only when no time-critical control is live', () => {
     const calm = opened();
     expect(shouldTrapFocus(calm)).toBe(true);

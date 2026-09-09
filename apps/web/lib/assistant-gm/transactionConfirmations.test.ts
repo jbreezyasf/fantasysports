@@ -16,7 +16,7 @@ const base = {
   now: new Date('2026-09-01T12:00:00.000Z')
 };
 
-describe('Assistant GM transaction confirmation model', () => {
+describe('Front Office Advisor transaction confirmation model', () => {
   it('prepares a scoped confirmation object with action, state, and expiration metadata', () => {
     const confirmation = prepareTransactionConfirmation(base);
 
@@ -40,7 +40,7 @@ describe('Assistant GM transaction confirmation model', () => {
       return { rpc: 'set_lineup_slot' };
     });
 
-    expect(result).toEqual({ ok: false, actionId: undefined, code: 'missing_confirmation', message: 'Confirm this Assistant GM action before submitting it.' });
+    expect(result).toEqual({ ok: false, actionId: undefined, code: 'missing_confirmation', message: 'Confirm this Front Office Advisor action before submitting it.' });
     expect(committed).toBe(false);
   });
 
@@ -56,7 +56,7 @@ describe('Assistant GM transaction confirmation model', () => {
     expect(validateTransactionConfirmation(confirmation, { ...base, now: new Date('2026-09-01T12:00:02.000Z') })).toEqual({
       ok: false,
       code: 'expired',
-      message: 'That Assistant GM confirmation expired. Review the current state and confirm again.'
+      message: 'That Front Office Advisor confirmation expired. Review the current state and confirm again.'
     });
   });
 
@@ -71,7 +71,7 @@ describe('Assistant GM transaction confirmation model', () => {
     expect(validateTransactionConfirmation(confirmation, { ...base, proposedChanges: { ...base.proposedChanges, athleteId: 'athlete-2' } })).toEqual({
       ok: false,
       code: 'proposal_changed',
-      message: 'The proposed Assistant GM transaction changed. Confirm the revised action before submitting.'
+      message: 'The proposed Front Office Advisor transaction changed. Confirm the revised action before submitting.'
     });
   });
 

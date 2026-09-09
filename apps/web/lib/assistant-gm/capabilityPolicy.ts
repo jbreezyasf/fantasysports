@@ -11,7 +11,7 @@ import { type EntitlementSupabase, isExecutiveLeague } from '../executive/entitl
 /**
  * BE-GM-105 — central Standard/Pro+ capability enforcement.
  *
- * This module is the single place that decides whether an Assistant GM intent is
+ * This module is the single place that decides whether a Front Office Advisor intent is
  * Standard, accessibility, Pro+, commissioner-only, or unsupported. UI components,
  * server actions, and the gateway must consume a decision from here instead of
  * running their own entitlement or payment checks.
@@ -196,7 +196,7 @@ function capabilityClass(capability: BigExecCapability): Exclude<AssistantGmInte
 }
 
 /**
- * Accessibility capabilities must stay usable when the Assistant GM master switch
+ * Accessibility capabilities must stay usable when the Front Office Advisor master switch
  * or Executive entitlement is absent. Payment state can never gate them.
  */
 function isFreeAccessibilityTier(capability: BigExecCapability) {
@@ -213,7 +213,7 @@ export function evaluateAssistantGmIntent(
 
 /**
  * Capability-level entry point for callers that already hold a capability id
- * (the Assistant GM gateway). It runs the exact same policy as intent evaluation
+ * (the Front Office Advisor gateway). It runs the exact same policy as intent evaluation
  * so entitlement and payment rules exist in one place only.
  */
 export function evaluateAssistantGmCapability(
@@ -238,7 +238,7 @@ function evaluateCapability(
       capabilityId: null,
       intentClass: 'unsupported',
       reason: 'unknown_intent',
-      message: 'Assistant GM does not support that request yet.',
+      message: 'Front Office Advisor does not support that request yet.',
       upgradeRequired: false
     };
   }
@@ -252,7 +252,7 @@ function evaluateCapability(
       capabilityId,
       intentClass,
       reason: 'unauthenticated',
-      message: 'Sign in before using Assistant GM.',
+      message: 'Sign in before using Front Office Advisor.',
       upgradeRequired: false
     };
   }
@@ -265,7 +265,7 @@ function evaluateCapability(
       capabilityId,
       intentClass,
       reason: 'feature_disabled',
-      message: 'Assistant GM is currently disabled.',
+      message: 'Front Office Advisor is currently disabled.',
       upgradeRequired: false
     };
   }
@@ -277,7 +277,7 @@ function evaluateCapability(
       capabilityId,
       intentClass,
       reason: 'feature_disabled',
-      message: 'Assistant GM Pro+ is currently disabled.',
+      message: 'Front Office Advisor Pro+ is currently disabled.',
       upgradeRequired: false
     };
   }
@@ -293,8 +293,8 @@ function evaluateCapability(
       reason: 'audience_denied',
       message:
         capability.audience === 'commissioner'
-          ? 'Only the league commissioner can use that Assistant GM capability.'
-          : 'That Assistant GM capability is not available for this role.',
+          ? 'Only the league commissioner can use that Front Office Advisor capability.'
+          : 'That Front Office Advisor capability is not available for this role.',
       upgradeRequired: false
     };
   }
@@ -306,7 +306,7 @@ function evaluateCapability(
       capabilityId,
       intentClass,
       reason: 'entitlement_required',
-      message: 'Assistant GM Pro+ requires an active Executive league-season entitlement.',
+      message: 'Front Office Advisor Pro+ requires an active Executive league-season entitlement.',
       upgradeRequired: true
     };
   }
@@ -318,7 +318,7 @@ function evaluateCapability(
       capabilityId,
       intentClass,
       reason: 'not_released',
-      message: 'That Assistant GM capability is not available during the Big Exec beta.',
+      message: 'That Front Office Advisor capability is not available during the Big Exec beta.',
       upgradeRequired: false
     };
   }
@@ -355,7 +355,7 @@ export function describeAssistantGmUpgradePrompt(decision: AssistantGmPolicyDeci
   return {
     show: true,
     headline: 'Executive League Season Pass required',
-    body: 'Assistant GM Pro+ is included with the Executive League Season Pass for this league season.',
+    body: 'Front Office Advisor Pro+ is included with the Executive League Season Pass for this league season.',
     surface: 'executive_checkout'
   };
 }

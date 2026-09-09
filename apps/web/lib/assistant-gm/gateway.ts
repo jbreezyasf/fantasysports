@@ -105,7 +105,7 @@ export function createAssistantGmGateway(input: {
   return {
     async handle(request) {
       if (!request.userId) {
-        return { ok: false, code: 'unauthenticated', message: 'Sign in before using Assistant GM.', classification: 'unsupported' };
+        return { ok: false, code: 'unauthenticated', message: 'Sign in before using Front Office Advisor.', classification: 'unsupported' };
       }
 
       // Entitlement, kill-switch, audience, and release policy live in one place
@@ -139,7 +139,7 @@ export function createAssistantGmGateway(input: {
       });
       if (unauthorized) {
         await record(request as AssistantGmGatewayRequest & { userId: string }, { mode: executive ? 'pro_plus' : 'standard', providerRoute: 'deterministic_tools', status: 'denied', toolCount: toolRequests.length });
-        return { ok: false, code: 'unauthorized_tool', message: 'Assistant GM can only call declared read tools inside the current league.', classification: 'unsupported' };
+        return { ok: false, code: 'unauthorized_tool', message: 'Front Office Advisor can only call declared read tools inside the current league.', classification: 'unsupported' };
       }
 
       const ctx = { supabase: input.supabase, userId: request.userId };

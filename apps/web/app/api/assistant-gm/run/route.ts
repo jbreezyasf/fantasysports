@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using Assistant GM.' }, { status: 401 });
+  if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using Front Office Advisor.' }, { status: 401 });
   const { data: season } = await supabase.from('league_seasons').select('id').eq('league_id', body.leagueId).eq('is_current', true).maybeSingle();
   if (!season) return NextResponse.json({ ok: false, code: 'not_found', message: 'Current league season not found.' }, { status: 404 });
 

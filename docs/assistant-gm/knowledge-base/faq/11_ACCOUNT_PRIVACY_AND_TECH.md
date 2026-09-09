@@ -2,7 +2,7 @@
 
 ## FAQ-BE-200 — Why isn't my microphone working?
 
-**Voice answer:** Check that microphone permission is allowed for Big Exec, confirm another app is not using it, and try Ask GM again. You can always type instead.
+**Voice answer:** Check that microphone permission is allowed for Big Exec, confirm another app is not using it, and try Ask Advisor again. You can always type instead.
 
 ## FAQ-BE-201 — Is Big Exec always listening?
 
