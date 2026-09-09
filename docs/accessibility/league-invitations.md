@@ -2,7 +2,7 @@
 
 Date: 2026-08-31
 
-Status: Implemented for create/review/send/pending-link/resend flows, plus commissioner-created share links for text/message delivery; revoke is documented as unsupported by the verified backend.
+Status: Implemented for create/review/send/pending-link/resend flows, commissioner-created reusable share links for text/message delivery, and pre-draft commissioner seat removal.
 
 ## Objective
 
@@ -46,9 +46,11 @@ A blind or low-vision commissioner must be able to invite one or more managers b
 - The final Send Invitations action is disabled until at least one valid reviewed address exists.
 - The server action now accepts a reviewed email list and calls the existing `create_league_invite` RPC for each address.
 - Email delivery still uses the existing transactional email helper and template.
-- Commissioners can also create a shareable invite link for text/message delivery without entering a manager email first.
-- Share links are still backed by `league_invites`; the share token is bound to the signed-in user's email immediately before the existing canonical `accept_league_invite` RPC creates the franchise.
+- Commissioners can also create one shareable invite link for text/message delivery without entering manager emails first.
+- The same share link can be reused until the league reaches capacity. In a 10-manager league with the commissioner already seated, that means up to 9 managers can claim through the link.
+- Share links are still backed by `league_invites`; each claimant receives a hidden personal invite token bound to their signed-in email immediately before the existing canonical `accept_league_invite` RPC creates the franchise.
 - Email-specific invites still require the signed-in account email to match the invited email.
+- Before the draft starts or any draft picks exist, the commissioner can remove a non-commissioner franchise seat and reopen that spot.
 - Confirmation announces how many invitations were created and whether delivery was sent/manual/mixed.
 - Invite ledger now exposes table semantics and includes accessible invite links.
 - Pending invite rows expose a Resend action.
@@ -56,9 +58,9 @@ A blind or low-vision commissioner must be able to invite one or more managers b
 
 ## Verified Backend Limits
 
-Search found no verified invite revoke RPC/action in current app code or migrations. The invite ledger therefore announces that revoke is unsupported by the current verified invite engine rather than exposing a nonfunctional control.
+Invite revoke remains unsupported. Seat removal is limited to already-claimed non-commissioner franchises before the draft starts.
 
 ## Remaining Work
 
-- Add revoke only after canonical RPC or schema support exists.
+- Add invite revoke only after canonical RPC or schema support exists.
 - Record VoiceOver/TalkBack invitation flow results in `docs/accessibility/test-matrix.md`.

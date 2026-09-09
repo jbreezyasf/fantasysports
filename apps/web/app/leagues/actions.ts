@@ -89,12 +89,30 @@ export async function resendLeagueInvite(formData: FormData) {
 export async function acceptLeagueInvite(formData: FormData) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const token = String(formData.get('invite_token') ?? '');
+  let token = String(formData.get('invite_token') ?? '');
   if (!user) redirect(`/login?message=${encodeURIComponent('Sign in or create an account to claim your league invite.')}&next=${encodeURIComponent(`/invite/${token}`)}`);
-  await supabase.rpc('claim_share_league_invite', { p_invite_token: token });
+  const originalToken = token;
+  const { data: shareClaimToken, error: shareClaimError } = await supabase.rpc('claim_share_league_invite', { p_invite_token: token });
+  if (shareClaimError) redirect(`/invite/${originalToken}?error=` + encodeURIComponent(shareClaimError.message));
+  if (typeof shareClaimToken === 'string' && shareClaimToken) token = shareClaimToken;
   const { data, error } = await supabase.rpc('accept_league_invite', { p_invite_token: token, p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C') });
-  if (error) redirect(`/invite/${token}?error=` + encodeURIComponent(error.message));
+  if (error) redirect(`/invite/${originalToken}?error=` + encodeURIComponent(error.message));
   redirect(`/leagues/${(data as { league_id: string }).league_id}?joined=1`);
+}
+
+export async function removePreDraftFranchise(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+  const leagueId = String(formData.get('league_id') ?? '');
+  const franchiseId = String(formData.get('franchise_id') ?? '');
+  const { error } = await supabase.rpc('commissioner_remove_pre_draft_franchise', {
+    p_league_id: leagueId,
+    p_franchise_id: franchiseId
+  });
+  if (error) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(error.message));
+  revalidatePath(`/leagues/${leagueId}`);
+  redirect(`/leagues/${leagueId}?member_removed=1`);
 }
 
 export async function generateCircuitSchedule(formData: FormData) {

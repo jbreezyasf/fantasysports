@@ -10,6 +10,7 @@ describe('league share invite links', () => {
     expect(leagueActions()).toContain('createLeagueShareInvite');
     expect(leagueActions()).toContain("rpc('create_league_share_invite'");
     expect(leaguePage()).toContain('Create Share Link');
+    expect(leaguePage()).toContain('One link can be sent by text or message and reused until the league fills.');
   });
 
   it('lets share invites bypass exact-email matching before franchise claim', () => {
@@ -26,5 +27,13 @@ describe('league share invite links', () => {
 
     expect(claimIndex).toBeGreaterThan(-1);
     expect(acceptIndex).toBeGreaterThan(claimIndex);
+    expect(source).toContain('shareClaimToken');
+  });
+
+  it('exposes a commissioner pre-draft remove action for occupied non-commissioner seats', () => {
+    expect(leagueActions()).toContain('removePreDraftFranchise');
+    expect(leagueActions()).toContain("rpc('commissioner_remove_pre_draft_franchise'");
+    expect(leaguePage()).toContain('canRemoveManagers');
+    expect(leaguePage()).toContain('Remove ${franchise.name} and reopen this franchise seat');
   });
 });

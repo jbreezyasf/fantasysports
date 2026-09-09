@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
-import { createLeagueShareInvite, generateCircuitSchedule, resendLeagueInvite } from '../actions';
+import { createLeagueShareInvite, generateCircuitSchedule, removePreDraftFranchise, resendLeagueInvite } from '../actions';
 import { initializeDraft } from '../../drafts/actions';
 import { FranchiseCrest } from '../../components/FranchiseCrest';
 import { SportIdentity } from '../../components/SportIdentity';
@@ -8,7 +8,7 @@ import { standingRowLabel } from './standingsAccessibility';
 import InviteManagersForm from './InviteManagersForm';
 import { inviteConfirmation } from './invitationAccessibility';
 
-export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_resent?: string; invite_token?: string; invite_email?: string; invite_count?: string; email_status?: string; invite_error?: string; joined?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
+export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_resent?: string; invite_token?: string; invite_email?: string; invite_count?: string; email_status?: string; invite_error?: string; joined?: string; member_removed?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
   const { leagueId } = await params;
   const query = await searchParams;
   const supabase = await createClient();
@@ -20,6 +20,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const { data: franchises } = await supabase.from('franchises').select('id,name,abbreviation,primary_color,secondary_color,established_year').eq('league_id', leagueId).order('created_at');
   const { data: member } = await supabase.from('league_members').select('role').eq('league_id', leagueId).eq('user_id', user.id).maybeSingle();
   const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null);
+  const { data: activeOwners } = await supabase.from('franchise_owners').select('franchise_id,user_id').is('ends_on', null);
   const ownedIds = new Set((ownerships ?? []).map(item => item.franchise_id));
   const myFranchise = (franchises ?? []).find(item => ownedIds.has(item.id));
   const { data: leagueSeason } = await supabase.from('league_seasons').select('id,competition_seasons(competitions(code,display_name))').eq('league_id', leagueId).eq('is_current', true).maybeSingle();
@@ -44,11 +45,14 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const leagueCapacity = league.max_franchises ?? 10;
   const draftMinimum = league.draft_min_franchises ?? leagueCapacity;
   const draftReady = memberCount >= draftMinimum;
+  const isShareInvite = (email: string) => /^share\+[a-f0-9]{32}@bigexecfs\.local$/i.test(email);
   const pendingInviteCount = (invites ?? []).filter(invite => invite.status === 'pending').length;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://bigexecfs.com';
   const isCommissioner = member?.role === 'commissioner';
   const draftDate = draft?.starts_at ? new Date(draft.starts_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
   const franchiseBySeasonId = new Map((seasonFranchises ?? []).map(sf => [sf.id, (franchises ?? []).find(f => f.id === sf.franchise_id)]));
+  const ownerByFranchiseId = new Map((activeOwners ?? []).map(owner => [owner.franchise_id, owner.user_id]));
+  const canRemoveManagers = isCommissioner && (!draft || draft.status === 'scheduled');
 
   return (
     <main className="leagueShell">
@@ -72,6 +76,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
       </section>
 
       {query.joined && <p className="successNotice">Franchise claimed. Welcome to the league.</p>}
+      {query.member_removed && <p className="successNotice">Franchise seat reopened.</p>}
       {query.schedule_status && <p className="successNotice">The Circuit schedule is ready: Weeks 1–9 are set.</p>}
 
       <section className="leagueQuickGrid">
@@ -131,9 +136,10 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
               {query.invite_resent && <p className="successNotice" role="status">{inviteConfirmation(1,query.invite_email??'manager',query.email_status)}</p>}
               {memberCount < leagueCapacity ? (
                 <>
-                  <InviteManagersForm leagueId={leagueId} pendingEmails={(invites??[]).filter(invite=>invite.status==='pending').map(invite=>invite.email)} />
+                  <InviteManagersForm leagueId={leagueId} pendingEmails={(invites??[]).filter(invite=>invite.status==='pending' && !isShareInvite(invite.email)).map(invite=>invite.email)} />
                   <form action={createLeagueShareInvite} className="shareInviteForm">
                     <input type="hidden" name="league_id" value={leagueId} />
+                    <p>One link can be sent by text or message and reused until the league fills.</p>
                     <button className="secondary" type="submit">Create Share Link</button>
                   </form>
                 </>
@@ -153,7 +159,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
               ) : <p>Draft setup unlocks automatically when this league reaches {draftMinimum} claimed franchises.</p>}
             </article>
           </div>
-          {!!invites?.length && <div className="inviteLedger" role="table" aria-label="Pending and historical league invitations"><div className="sectionMiniHeader"><span>INVITE LEDGER</span><strong>{invites.length} TOTAL</strong></div><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span><span role="columnheader">Expires</span><span role="columnheader">Invite link</span><span role="columnheader">Actions</span></div>{invites.map(invite => <div key={invite.id} className="inviteRow" role="row" aria-label={`Invite for ${invite.email}. Status ${invite.status}. Expires ${new Date(invite.expires_at).toLocaleDateString()}. Invite link ${appUrl}/invite/${invite.invite_token}.${invite.status==='pending'?' Resend available.':' Resend unavailable because this invite is not pending.'} Revoke is not supported in the current verified invite engine.`}><span role="cell">{invite.email}</span><strong role="cell">{invite.status.toUpperCase()}</strong><small className="srOnly" role="cell">Expires {new Date(invite.expires_at).toLocaleDateString()}</small><a role="cell" href={`/invite/${invite.invite_token}`} aria-label={`Open invite link for ${invite.email}`}>Invite Link</a><span role="cell">{invite.status==='pending'?<form action={resendLeagueInvite}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="invite_id" value={invite.id}/><button className="miniAction" type="submit" aria-label={`Resend invitation to ${invite.email}`}>Resend</button></form>:<span className="srOnly">No invite action available</span>}</span></div>)}</div>}
+          {!!invites?.length && <div className="inviteLedger" role="table" aria-label="Pending and historical league invitations"><div className="sectionMiniHeader"><span>INVITE LEDGER</span><strong>{invites.length} TOTAL</strong></div><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span><span role="columnheader">Expires</span><span role="columnheader">Invite link</span><span role="columnheader">Actions</span></div>{invites.map(invite => { const shareInvite = isShareInvite(invite.email); const inviteLabel = shareInvite ? 'Share link' : invite.email; return <div key={invite.id} className="inviteRow" role="row" aria-label={`Invite for ${inviteLabel}. Status ${invite.status}. Expires ${new Date(invite.expires_at).toLocaleDateString()}. Invite link ${appUrl}/invite/${invite.invite_token}.${invite.status==='pending' && !shareInvite?' Resend available.':' Resend unavailable for this invitation.'} Revoke is not supported in the current verified invite engine.`}><span role="cell">{inviteLabel}</span><strong role="cell">{invite.status.toUpperCase()}</strong><small className="srOnly" role="cell">Expires {new Date(invite.expires_at).toLocaleDateString()}</small><a role="cell" href={`/invite/${invite.invite_token}`} aria-label={`Open invite link for ${inviteLabel}`}>Invite Link</a><span role="cell">{invite.status==='pending' && !shareInvite?<form action={resendLeagueInvite}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="invite_id" value={invite.id}/><button className="miniAction" type="submit" aria-label={`Resend invitation to ${invite.email}`}>Resend</button></form>:<span className="srOnly">No invite action available</span>}</span></div>})}</div>}
         </section>
       )}
 
@@ -162,9 +168,11 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
         <div className="franchiseGrid">
           {(franchises ?? []).map((franchise, index) => {
             const mine = ownedIds.has(franchise.id);
+            const canRemove = canRemoveManagers && !mine && ownerByFranchiseId.get(franchise.id);
             const card = <article className={`franchiseCard ${mine ? 'myFranchise' : ''}`} style={{ '--team-primary': franchise.primary_color ?? '#d9b43b', '--team-secondary': franchise.secondary_color ?? '#f5f1e8' } as React.CSSProperties}>
               <div className="franchiseCardTop"><span>{mine ? 'YOUR FRANCHISE' : `SEAT ${String(index + 1).padStart(2,'0')}`}</span><b>{franchise.abbreviation ?? 'BEX'}</b></div>
               <FranchiseCrest className="franchiseMonogram franchiseCardCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary_color} secondary={franchise.secondary_color} decorative/><strong>{franchise.name}</strong><p>EST. {franchise.established_year ?? new Date().getFullYear()}</p>{mine && <em>ENTER TEAM HQ →</em>}
+              {canRemove && <form action={removePreDraftFranchise} className="franchiseRemoveForm"><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="franchise_id" value={franchise.id}/><button className="miniAction" type="submit" aria-label={`Remove ${franchise.name} and reopen this franchise seat`}>Remove</button></form>}
             </article>;
             return mine ? <a key={franchise.id} href={`/franchises/${franchise.id}/team`}>{card}</a> : <div key={franchise.id}>{card}</div>;
           })}
