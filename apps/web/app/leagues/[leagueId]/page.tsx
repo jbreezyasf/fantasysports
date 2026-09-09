@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
-import { generateCircuitSchedule, resendLeagueInvite } from '../actions';
+import { createLeagueShareInvite, generateCircuitSchedule, resendLeagueInvite } from '../actions';
 import { initializeDraft } from '../../drafts/actions';
 import { FranchiseCrest } from '../../components/FranchiseCrest';
 import { SportIdentity } from '../../components/SportIdentity';
@@ -130,7 +130,13 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
               {query.invite_created && query.invite_token && <div className="inviteLinkBox" role="status"><span>{inviteConfirmation(Number(query.invite_count??1),query.invite_email??'manager',query.email_status)}</span><code aria-label={`Accessible invite link ${appUrl}/invite/${query.invite_token}`}>{`${appUrl}/invite/${query.invite_token}`}</code></div>}
               {query.invite_resent && <p className="successNotice" role="status">{inviteConfirmation(1,query.invite_email??'manager',query.email_status)}</p>}
               {memberCount < leagueCapacity ? (
-                <InviteManagersForm leagueId={leagueId} pendingEmails={(invites??[]).filter(invite=>invite.status==='pending').map(invite=>invite.email)} />
+                <>
+                  <InviteManagersForm leagueId={leagueId} pendingEmails={(invites??[]).filter(invite=>invite.status==='pending').map(invite=>invite.email)} />
+                  <form action={createLeagueShareInvite} className="shareInviteForm">
+                    <input type="hidden" name="league_id" value={leagueId} />
+                    <button className="secondary" type="submit">Create Share Link</button>
+                  </form>
+                </>
               ) : <p className="successNotice">League full. All {leagueCapacity} franchise spots are claimed.</p>}
             </article>
             <article className={`commandCard ${draftReady ? 'readyCard' : ''}`}>

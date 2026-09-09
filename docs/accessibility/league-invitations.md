@@ -1,12 +1,12 @@
-# BE-A11Y-028 Accessible League Invitation by Email
+# BE-A11Y-028 Accessible League Invitations
 
 Date: 2026-08-31
 
-Status: Implemented for create/review/send/pending-link/resend flows; revoke is documented as unsupported by the verified backend.
+Status: Implemented for create/review/send/pending-link/resend flows, plus commissioner-created share links for text/message delivery; revoke is documented as unsupported by the verified backend.
 
 ## Objective
 
-A blind or low-vision commissioner must be able to invite one or more managers by email, review addresses, correct invalid entries, send invitations, receive confirmation, and inspect pending invitations.
+A blind or low-vision commissioner must be able to invite one or more managers by email, create a shareable invite link for text/message delivery, review addresses, correct invalid entries, send invitations, receive confirmation, and inspect pending invitations.
 
 ## Files Updated
 
@@ -14,8 +14,10 @@ A blind or low-vision commissioner must be able to invite one or more managers b
 - `apps/web/app/leagues/[leagueId]/InviteManagersForm.tsx`
 - `apps/web/app/leagues/[leagueId]/invitationAccessibility.ts`
 - `apps/web/app/leagues/[leagueId]/invitationAccessibility.test.ts`
+- `apps/web/app/leagues/inviteShareLink.test.ts`
 - `apps/web/app/leagues/actions.ts`
 - `apps/web/app/gate5.css`
+- `supabase/migrations/20260909040752_league_share_invites.sql`
 
 ## Current Invitation Architecture
 
@@ -27,7 +29,10 @@ A blind or low-vision commissioner must be able to invite one or more managers b
 - Canonical invite RPCs:
   - `create_league_invite`
   - `get_public_league_invite`
+  - `get_public_league_invite_v2`
   - `invite_matches_current_user`
+  - `create_league_share_invite`
+  - `claim_share_league_invite`
   - `accept_league_invite`
 
 ## Behavior Implemented
@@ -41,6 +46,9 @@ A blind or low-vision commissioner must be able to invite one or more managers b
 - The final Send Invitations action is disabled until at least one valid reviewed address exists.
 - The server action now accepts a reviewed email list and calls the existing `create_league_invite` RPC for each address.
 - Email delivery still uses the existing transactional email helper and template.
+- Commissioners can also create a shareable invite link for text/message delivery without entering a manager email first.
+- Share links are still backed by `league_invites`; the share token is bound to the signed-in user's email immediately before the existing canonical `accept_league_invite` RPC creates the franchise.
+- Email-specific invites still require the signed-in account email to match the invited email.
 - Confirmation announces how many invitations were created and whether delivery was sent/manual/mixed.
 - Invite ledger now exposes table semantics and includes accessible invite links.
 - Pending invite rows expose a Resend action.

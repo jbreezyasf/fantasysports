@@ -10,7 +10,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: inviteRows, error: inviteLookupError } = await supabase.rpc('get_public_league_invite', {
+  const { data: inviteRows, error: inviteLookupError } = await supabase.rpc('get_public_league_invite_v2', {
     p_invite_token: token
   });
   const invite = Array.isArray(inviteRows) ? inviteRows[0] : null;
@@ -24,6 +24,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   }
 
   const leagueName = invite.league_name as string | undefined;
+  const inviteKind = invite.invite_kind as string | undefined;
   const next = `/invite/${token}`;
 
   if (!user) {
@@ -38,7 +39,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
     return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>We couldn't verify your account.</h1><p className="lede">Please try this invitation again in a moment.</p></section></main>;
   }
 
-  if (!inviteMatchesUser) {
+  if (inviteKind !== 'share' && !inviteMatchesUser) {
     return (
       <main>
         <section className="panel">

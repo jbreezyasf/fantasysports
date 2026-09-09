@@ -50,6 +50,20 @@ export async function createLeagueInvite(formData: FormData) {
   redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${firstToken}&invite_email=${encodeURIComponent(emails.join(', '))}&invite_count=${emails.length}&email_status=${emailStatus}`);
 }
 
+export async function createLeagueShareInvite(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+  const leagueId = String(formData.get('league_id') ?? '');
+  const { data, error } = await supabase.rpc('create_league_share_invite', { p_league_id: leagueId });
+  const invite = Array.isArray(data) ? data[0] as { invite_token?: string } | undefined : data as { invite_token?: string } | null;
+  if (error || !invite?.invite_token) {
+    redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(error?.message ?? 'We could not create a share invite link.'));
+  }
+  revalidatePath(`/leagues/${leagueId}`);
+  redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${invite.invite_token}&invite_email=${encodeURIComponent('share link')}&invite_count=1&email_status=manual`);
+}
+
 export async function resendLeagueInvite(formData: FormData) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -77,6 +91,7 @@ export async function acceptLeagueInvite(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   const token = String(formData.get('invite_token') ?? '');
   if (!user) redirect(`/login?message=${encodeURIComponent('Sign in or create an account to claim your league invite.')}&next=${encodeURIComponent(`/invite/${token}`)}`);
+  await supabase.rpc('claim_share_league_invite', { p_invite_token: token });
   const { data, error } = await supabase.rpc('accept_league_invite', { p_invite_token: token, p_franchise_name: String(formData.get('franchise_name') ?? ''), p_abbreviation: String(formData.get('abbreviation') ?? ''), p_primary_color: String(formData.get('primary_color') ?? '#D9B43B'), p_secondary_color: String(formData.get('secondary_color') ?? '#0B0B0C') });
   if (error) redirect(`/invite/${token}?error=` + encodeURIComponent(error.message));
   redirect(`/leagues/${(data as { league_id: string }).league_id}?joined=1`);
