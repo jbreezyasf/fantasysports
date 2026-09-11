@@ -32,7 +32,9 @@
     "qa:transactions:run": "node scripts/qa-transactions-run.mjs",
     "qa:roster-integrity:audit": "node scripts/qa-roster-integrity-audit.mjs",
     "qa:roster-integrity:visual": "node scripts/qa-roster-integrity-visual.mjs",
-    "qa:playwright": "playwright test --config=playwright.config.ts"
+    "qa:playwright": "playwright test --config=playwright.config.ts",
+    "qa:stress:season": "node scripts/stress-season.mjs",
+    "test:stress:season": "node --test tests/stress-season.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

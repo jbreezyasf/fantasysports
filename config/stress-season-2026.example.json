@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "testId": "BIG_EXEC_STRESS_SEASON_2026",
+  "sport": "pro_football",
+  "seasonYear": 2026,
+  "leagueId": "REPLACE_WITH_STRESS_LEAGUE_UUID",
+  "leagueSeasonId": "REPLACE_WITH_STRESS_LEAGUE_SEASON_UUID",
+  "humanManagerEmail": "juanita.brazziel@gmail.com",
+  "draft": { "startsAt": "2026-09-13T01:30:00.000Z", "timezone": "America/Chicago" },
+  "disabledAt": "2027-03-01T00:00:00.000Z",
+  "syntheticManagers": [
+    { "label": "Manager01", "email": "juanita.brazziel+qa-manager-01@gmail.com" },
+    { "label": "Manager02", "email": "juanita.brazziel+qa-manager-02@gmail.com" },
+    { "label": "Manager03", "email": "juanita.brazziel+qa-manager-03@gmail.com" },
+    { "label": "Manager04", "email": "juanita.brazziel+qa-manager-04@gmail.com" },
+    { "label": "Manager05", "email": "juanita.brazziel+qa-manager-05@gmail.com" },
+    { "label": "Manager06", "email": "juanita.brazziel+qa-manager-06@gmail.com" },
+    { "label": "Manager07", "email": "juanita.brazziel+qa-manager-07@gmail.com" },
+    { "label": "Manager08", "email": "juanita.brazziel+qa-manager-08@gmail.com" },
+    { "label": "Manager09", "email": "juanita.brazziel+qa-manager-09@gmail.com" }
+  ]
+}

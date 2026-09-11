@@ -14,3 +14,4 @@ qa-artifacts/
 .auth/
 test-results/
 .vercel
+config/stress-season-2026.local.json
