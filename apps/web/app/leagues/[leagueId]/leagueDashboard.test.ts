@@ -26,12 +26,15 @@ describe('League HQ information hierarchy', () => {
     expect(fields).toContain('if every clock expires');
   });
 
-  it('replaces primary draft information with the Trade Room after completion', () => {
+  it('turns Draft Room into Free Agency and keeps the four Front Office destinations', () => {
     const page = source('leagues/[leagueId]/page.tsx');
 
-    expect(page).toContain('draftComplete ? <article className="leagueStatCard featured tradeRoomCard"');
-    expect(page).toContain('MAKE THE NEXT MOVE');
+    expect(page).toContain("frontOfficePrimaryLabel = draftComplete ? 'Free Agency' : 'Draft Room'");
+    expect(page).toContain('frontOfficeActionGrid');
+    expect(page).toContain('<strong>Locker Room</strong>');
+    expect(page).toContain('<strong>Trade Room</strong>');
+    expect(page).toContain('<strong>League News</strong>');
     expect(page).toContain('href={`/leagues/${leagueId}/trades`}');
-    expect(page).toContain("draft && !isCommissioner && !draftComplete");
+    expect(page).toContain('<details className="frontOfficeSecondary">');
   });
 });
