@@ -7,6 +7,7 @@ import { standingRowLabel } from './standingsAccessibility';
 import InviteManagersForm from './InviteManagersForm';
 import DraftSettingsFields from './DraftSettingsFields';
 import { inviteConfirmation } from './invitationAccessibility';
+import { currentCompetitionWeek, selectFrontOfficeMatchup } from './frontOfficeMatchup';
 
 export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_resent?: string; invite_token?: string; invite_email?: string; invite_count?: string; email_status?: string; invite_error?: string; joined?: string; member_removed?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
   const { leagueId } = await params;
@@ -24,16 +25,17 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const { data: activeOwners } = await supabase.from('franchise_owners').select('franchise_id,user_id').is('ends_on', null);
   const ownedIds = new Set((ownerships ?? []).map(item => item.franchise_id));
   const myFranchise = (franchises ?? []).find(item => ownedIds.has(item.id));
-  const { data: leagueSeason } = await supabase.from('league_seasons').select('id').eq('league_id', leagueId).eq('is_current', true).maybeSingle();
+  const { data: leagueSeason } = await supabase.from('league_seasons').select('id,competition_season_id').eq('league_id', leagueId).eq('is_current', true).maybeSingle();
 
-  const [{ data: draft }, { count: circuitCount }, { data: seasonFranchises }, { data: standings }, { data: recentMatchups }, { data: leagueNews }] = leagueSeason ? await Promise.all([
+  const [{ data: draft }, { count: circuitCount }, { data: seasonFranchises }, { data: standings }, { data: seasonMatchups }, { data: competitionGames }, { data: leagueNews }] = leagueSeason ? await Promise.all([
     supabase.from('drafts').select('id,status,starts_at,pick_seconds').eq('league_season_id', leagueSeason.id).maybeSingle(),
     supabase.from('matchups').select('id', { count: 'exact', head: true }).eq('league_season_id', leagueSeason.id).gte('week', 1).lte('week', 9),
     supabase.from('season_franchises').select('id,franchise_id').eq('league_season_id', leagueSeason.id),
     supabase.from('standings').select('season_franchise_id,wins,losses,ties,points_for,points_against').eq('league_season_id', leagueSeason.id).order('wins', { ascending: false }).order('points_for', { ascending: false }),
-    supabase.from('matchups').select('id,week,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,event_type').eq('league_season_id', leagueSeason.id).order('week', { ascending: false }).limit(20),
+    supabase.from('matchups').select('id,week,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,event_type').eq('league_season_id', leagueSeason.id).order('week', { ascending: true }),
+    supabase.from('real_games').select('week,starts_at').eq('competition_season_id', leagueSeason.competition_season_id).order('starts_at', { ascending: true }),
     supabase.from('league_feed_events').select('id,event_type,body,created_at').eq('league_id',leagueId).order('created_at',{ascending:false}).limit(4)
-  ]) : [{ data: null }, { count: 0 }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  ]) : [{ data: null }, { count: 0 }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
   const { data: invites } = member?.role === 'commissioner'
     ? await supabase.from('league_invites').select('id,email,status,expires_at,invite_token').eq('league_id', leagueId).order('created_at', { ascending: false })
@@ -56,7 +58,8 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const mySeasonFranchise = (seasonFranchises ?? []).find(item=>item.franchise_id===myFranchise?.id);
   const myStanding = (standings ?? []).find(row=>row.season_franchise_id===mySeasonFranchise?.id);
   const myRank = myStanding ? (standings ?? []).findIndex(row=>row.season_franchise_id===myStanding.season_franchise_id)+1 : null;
-  const activeMatchup = (recentMatchups ?? []).find(matchup=>matchup.home_season_franchise_id===mySeasonFranchise?.id||matchup.away_season_franchise_id===mySeasonFranchise?.id) ?? null;
+  const currentWeek = currentCompetitionWeek(competitionGames ?? []);
+  const activeMatchup = selectFrontOfficeMatchup(seasonMatchups ?? [], mySeasonFranchise?.id, currentWeek);
   const managerName = profile?.display_name || user.user_metadata?.display_name || 'Franchise Manager';
   const record = myStanding ? `${myStanding.wins}-${myStanding.losses}${myStanding.ties?`-${myStanding.ties}`:''}` : '0-0';
   const frontOfficePrimaryHref = draftComplete ? `/leagues/${leagueId}/players` : draft ? `/drafts/${draft.id}` : '#league-administration';
