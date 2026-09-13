@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, liveIdentityKey, liveNamePositionKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
-import { canonicalSportradarPlayerStats, sportradarGamePlayers } from '../scripts/sportradar-nfl-live-fallback.mjs';
+import { canonicalSportradarPlayerStats, incompleteProviderGames, sportradarGamePlayers } from '../scripts/sportradar-nfl-live-fallback.mjs';
 
 test('matches provider players to duplicate drafted records safely', () => {
   assert.equal(liveIdentityKey('James Cook III', 'RB', 'BUF'), liveIdentityKey('James Cook', 'rb', 'BUF'));
@@ -57,6 +57,18 @@ test('normalizes Sportradar game statistics for Big Exec scoring', () => {
   assert.equal(result.receptions, 8);
   assert.equal(result.receiving_yards, 90);
   assert.equal(result.receiving_tds, 1);
+  assert.equal(result.rushing_yards / 10 + result.receptions * 0.5 + result.receiving_yards / 10 + result.receiving_tds * 6, 27.3);
+});
+
+test('limits fallback requests to games with incomplete player coverage', () => {
+  const teams = { home_team: { abbreviation: 'PIT' }, visitor_team: { abbreviation: 'ATL' } };
+  const game = { id: 10, status_state: 'final', home_team_score: 20, visitor_team_score: 27, ...teams };
+  const complete = ['QB', 'RB', 'WR', 'TE', 'K'].flatMap(position => [
+    { game: { id: 10 }, team: { abbreviation: 'PIT' }, player: { position } },
+    { game: { id: 10 }, team: { abbreviation: 'ATL' }, player: { position } },
+  ]);
+  assert.deepEqual(incompleteProviderGames([game], complete), []);
+  assert.deepEqual(incompleteProviderGames([game], complete.filter(row => row.team.abbreviation !== 'ATL' || row.player.position !== 'QB')), [game]);
 });
 
 test('reads both Sportradar game-statistics teams', () => {
