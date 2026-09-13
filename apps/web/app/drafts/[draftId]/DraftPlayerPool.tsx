@@ -17,7 +17,7 @@ function formatRankingVersion(value:string){
   const parsed=new Date(value);
   return Number.isNaN(parsed.getTime())?value:parsed.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
 }
-function formatScore(value:number|null){return value===null?'NO VALUE':`${value.toFixed(1)} VALUE`;}
+function formatScore(value:number|null){return value===null?'NO CURRENT PROJECTION':`${value.toFixed(1)} RANKING SCORE`;}
 
 export function DraftPlayerPool({draftId,status,canDraft,athletes,defenses,queuedAssets,draftedAssets,rankingSource,rankingVersion}:{draftId:string;status:string;canDraft:boolean;athletes:Athlete[];defenses:Defense[];queuedAssets:QueuedAsset[];draftedAssets:DraftedAsset[];rankingSource:string;rankingVersion:string}){
   const [position,setPosition]=useState<Position>('ALL');

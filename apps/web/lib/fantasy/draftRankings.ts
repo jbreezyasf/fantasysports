@@ -262,7 +262,7 @@ export function buildDraftRankings(
       overallRank: index + 1,
       positionRank: candidate.providerPositionRank ?? calculatedPositionRank,
       rankingScore: candidate.score,
-      rankingSource: marketRankings.length ? 'BALLDONTLIE current half-PPR rankings and ADP' : DRAFT_RANKING_SOURCE,
+      rankingSource: marketRankings.length ? 'BALLDONTLIE current rankings, half-PPR projections, and ADP' : DRAFT_RANKING_SOURCE,
       rankingVersion: marketVersion ?? rankingVersion,
     };
   });
@@ -273,7 +273,7 @@ export function buildDraftRankings(
   return {
     athletes: rankedAthletes,
     defenses: rankedDefenses,
-    source: marketRankings.length ? 'BALLDONTLIE current half-PPR rankings and ADP' : DRAFT_RANKING_SOURCE,
+    source: marketRankings.length ? 'BALLDONTLIE current rankings, half-PPR projections, and ADP' : DRAFT_RANKING_SOURCE,
     version: marketVersion ?? rankingVersion,
   };
 }

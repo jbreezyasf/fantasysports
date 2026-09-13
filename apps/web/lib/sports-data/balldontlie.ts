@@ -40,7 +40,7 @@ export type BalldontlieNflFantasyRanking = {
   player?: BalldontlieNflPlayer | null;
   team?: BalldontlieNflTeam | null;
   position?: string | null;
-  rankings?: Record<string, unknown> | null;
+  rankings?: Array<Record<string, unknown>> | Record<string, unknown> | null;
 } & Record<string, unknown>;
 
 export type BalldontlieNflFantasyAdp = {
@@ -58,7 +58,7 @@ export type BalldontlieNflFantasyProjection = {
   team?: BalldontlieNflTeam | null;
   position?: string | null;
   projected_games?: number | string | null;
-  projections?: Record<string, unknown> | null;
+  projections?: Array<Record<string, unknown>> | Record<string, unknown> | null;
   stats?: Record<string, unknown> | null;
 } & Record<string, unknown>;
 

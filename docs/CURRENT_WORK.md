@@ -728,3 +728,23 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [ ] Backfill matchups and publish validated standings atomically.
 - [ ] Keep other sports and existing leagues independent of football enrollment closure.
 - [ ] Preserve free voice accessibility and league-scoped Executive entitlement.
+
+---
+
+## Provider Rankings and Live Scoring Reliability — 2026-09-13
+
+- [x] Repair BALLDONTLIE market parsing for array-shaped `rankings` and nested scoring-format projection records.
+- [x] Use provider PPR overall/position rank as the available ranking signal, exact Half-PPR season projections for points, and ADP/ownership as secondary market signals.
+- [x] Add exact, unambiguous active-player identity reconciliation before market import; ambiguous names remain unmapped.
+- [x] Reject empty/sparse provider imports before database writes and add a read-only freshness/coverage health command.
+- [x] Schedule daily provider market refresh plus a fail-fast health gate through an authenticated Vercel Cron endpoint.
+- [x] Change in-season waiver ordering to health, recent fantasy production, provider projection, roster rate, provider rank/ADP, then deterministic name/id fallback.
+- [x] Display an explicit current, delayed, or historical-fallback data status on Free Agency instead of silently presenting stale guidance.
+- [x] Add BALLDONTLIE weekly-stat ingestion into canonical raw player/team game-stat tables, followed by deterministic Big Exec score recalculation and non-final matchup recomputation.
+- [x] Schedule weekly-stat refresh every 15 minutes during the regular-season months through an authenticated Vercel Cron endpoint. Do not automatically finalize matchups because the provider documents no correction-finality signal.
+- [x] Add blocked-kick scoring coverage to the TypeScript normalization tests.
+- [x] Remove the provider schedules and their duplicate secret references from GitHub Actions; provider credentials now remain in the Vercel production runtime.
+- [ ] UNVERIFIED: `CRON_SECRET` is configured for the Vercel production environment; the connected project API does not expose environment-variable names.
+- [ ] UNVERIFIED: the repaired 2026 provider import has executed against production; local runtime credentials were unavailable in this workspace.
+- [ ] UNVERIFIED: production market-row coverage/freshness passes the new health gate after the first scheduled or manually dispatched run.
+- [ ] UNVERIFIED: live weekly ingestion has been reconciled against a completed 2026 box score and exercised in the deployed matchup UI.

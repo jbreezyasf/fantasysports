@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/provider-rankings",
+      "schedule": "17 10 * * *"
+    },
+    {
+      "path": "/api/cron/live-scoring",
+      "schedule": "*/15 * * 9-12,1 *"
+    }
+  ]
+}

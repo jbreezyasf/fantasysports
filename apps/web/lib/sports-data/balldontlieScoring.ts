@@ -45,6 +45,7 @@ const statAliases: Record<string, string[]> = {
   defensiveTouchdowns: ['defensive_touchdowns', 'defense_touchdowns'],
   specialTeamsTouchdowns: ['special_teams_touchdowns', 'return_touchdowns'],
   fumblesRecovered: ['fumbles_recovered', 'defensive_fumbles_recovered'],
+  blockedKicks: ['blocked_kicks', 'kicks_blocked'],
   pointsAllowed: ['points_allowed'],
 };
 
@@ -133,6 +134,7 @@ export function balldontlieDefenseFantasyPoints(row: Record<string, unknown>) {
     readStat(row, 'sacks')
     + readStat(row, 'interceptions') * 2
     + readStat(row, 'fumblesRecovered') * 2
+    + readStat(row, 'blockedKicks') * 2
     + readStat(row, 'safeties') * 2
     + readStat(row, 'defensiveTouchdowns') * 6
     + readStat(row, 'specialTeamsTouchdowns') * 6
