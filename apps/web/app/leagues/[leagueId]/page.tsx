@@ -3,7 +3,6 @@ import { createClient } from '../../../lib/supabase/server';
 import { createLeagueShareInvite, generateCircuitSchedule, removePreDraftFranchise, resendLeagueInvite } from '../actions';
 import { initializeDraft } from '../../drafts/actions';
 import { FranchiseCrest } from '../../components/FranchiseCrest';
-import { SportIdentity } from '../../components/SportIdentity';
 import { standingRowLabel } from './standingsAccessibility';
 import InviteManagersForm from './InviteManagersForm';
 import DraftSettingsFields from './DraftSettingsFields';
@@ -21,22 +20,20 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const { data: franchises } = await supabase.from('franchises').select('id,name,abbreviation,primary_color,secondary_color,avatar_key,established_year').eq('league_id', leagueId).order('created_at');
   const { data: member } = await supabase.from('league_members').select('role').eq('league_id', leagueId).eq('user_id', user.id).maybeSingle();
   const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null);
+  const { data: profile } = await supabase.from('user_profiles').select('display_name').eq('user_id', user.id).maybeSingle();
   const { data: activeOwners } = await supabase.from('franchise_owners').select('franchise_id,user_id').is('ends_on', null);
   const ownedIds = new Set((ownerships ?? []).map(item => item.franchise_id));
   const myFranchise = (franchises ?? []).find(item => ownedIds.has(item.id));
-  const { data: leagueSeason } = await supabase.from('league_seasons').select('id,competition_seasons(competitions(code,display_name))').eq('league_id', leagueId).eq('is_current', true).maybeSingle();
-  const competitionSeasonRelation = leagueSeason?.competition_seasons as unknown as { competitions?: { code?: string | null; display_name?: string | null } | { code?: string | null; display_name?: string | null }[] | null } | { competitions?: { code?: string | null; display_name?: string | null } | { code?: string | null; display_name?: string | null }[] | null }[] | null;
-  const competitionSeason = Array.isArray(competitionSeasonRelation) ? competitionSeasonRelation[0] : competitionSeasonRelation;
-  const competitionRelation = competitionSeason?.competitions;
-  const competition = Array.isArray(competitionRelation) ? competitionRelation[0] : competitionRelation;
+  const { data: leagueSeason } = await supabase.from('league_seasons').select('id').eq('league_id', leagueId).eq('is_current', true).maybeSingle();
 
-  const [{ data: draft }, { count: circuitCount }, { data: seasonFranchises }, { data: standings }, { data: activeMatchup }] = leagueSeason ? await Promise.all([
+  const [{ data: draft }, { count: circuitCount }, { data: seasonFranchises }, { data: standings }, { data: recentMatchups }, { data: leagueNews }] = leagueSeason ? await Promise.all([
     supabase.from('drafts').select('id,status,starts_at,pick_seconds').eq('league_season_id', leagueSeason.id).maybeSingle(),
     supabase.from('matchups').select('id', { count: 'exact', head: true }).eq('league_season_id', leagueSeason.id).gte('week', 1).lte('week', 9),
     supabase.from('season_franchises').select('id,franchise_id').eq('league_season_id', leagueSeason.id),
     supabase.from('standings').select('season_franchise_id,wins,losses,ties,points_for,points_against').eq('league_season_id', leagueSeason.id).order('wins', { ascending: false }).order('points_for', { ascending: false }),
-    supabase.from('matchups').select('id,week,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,event_type').eq('league_season_id', leagueSeason.id).order('week', { ascending: false }).limit(1).maybeSingle()
-  ]) : [{ data: null }, { count: 0 }, { data: [] }, { data: [] }, { data: null }];
+    supabase.from('matchups').select('id,week,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,event_type').eq('league_season_id', leagueSeason.id).order('week', { ascending: false }).limit(20),
+    supabase.from('league_feed_events').select('id,event_type,body,created_at').eq('league_id',leagueId).order('created_at',{ascending:false}).limit(4)
+  ]) : [{ data: null }, { count: 0 }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
   const { data: invites } = member?.role === 'commissioner'
     ? await supabase.from('league_invites').select('id,email,status,expires_at,invite_token').eq('league_id', leagueId).order('created_at', { ascending: false })
@@ -47,7 +44,6 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const draftMinimum = league.draft_min_franchises ?? leagueCapacity;
   const draftReady = memberCount >= draftMinimum;
   const isShareInvite = (email: string) => /^share\+[a-f0-9]{32}@bigexecfs\.local$/i.test(email);
-  const pendingInviteCount = (invites ?? []).filter(invite => invite.status === 'pending').length;
   const pendingInvites = (invites ?? []).filter(invite => invite.status === 'pending');
   const historicalInvites = (invites ?? []).filter(invite => invite.status !== 'pending');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://bigexecfs.com';
@@ -57,25 +53,28 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const ownerByFranchiseId = new Map((activeOwners ?? []).map(owner => [owner.franchise_id, owner.user_id]));
   const canRemoveManagers = isCommissioner && (!draft || draft.status === 'scheduled');
   const draftComplete = draft?.status === 'completed';
+  const mySeasonFranchise = (seasonFranchises ?? []).find(item=>item.franchise_id===myFranchise?.id);
+  const myStanding = (standings ?? []).find(row=>row.season_franchise_id===mySeasonFranchise?.id);
+  const myRank = myStanding ? (standings ?? []).findIndex(row=>row.season_franchise_id===myStanding.season_franchise_id)+1 : null;
+  const activeMatchup = (recentMatchups ?? []).find(matchup=>matchup.home_season_franchise_id===mySeasonFranchise?.id||matchup.away_season_franchise_id===mySeasonFranchise?.id) ?? null;
+  const managerName = profile?.display_name || user.user_metadata?.display_name || 'Franchise Manager';
+  const record = myStanding ? `${myStanding.wins}-${myStanding.losses}${myStanding.ties?`-${myStanding.ties}`:''}` : '0-0';
+  const frontOfficePrimaryHref = draftComplete ? `/leagues/${leagueId}/players` : draft ? `/drafts/${draft.id}` : '#league-administration';
+  const frontOfficePrimaryLabel = draftComplete ? 'Free Agency' : 'Draft Room';
 
   return (
     <main className="leagueShell">
-      <section className="leagueHero">
-        <div className="leagueHeroGlow" />
-        <div className="leagueTopline">
-          <a className="backLink" href="/dashboard">← FRONT OFFICE</a>
-          <span className="leagueRole">{isCommissioner ? 'COMMISSIONER' : 'FRANCHISE MANAGER'}</span>
+      <section className="frontOfficeLeagueHero" style={{'--team-primary':myFranchise?.primary_color??'#d9b43b','--team-secondary':myFranchise?.secondary_color??'#f5f1e8'} as React.CSSProperties}>
+        <div className="frontOfficeLeagueTop"><a href="/dashboard">BIG EXEC</a><div><span>{league.name}</span><b>{isCommissioner?'COMMISSIONER':'MANAGER'}</b></div></div>
+        <div className="frontOfficeIdentity">
+          {myFranchise&&<FranchiseCrest className="frontOfficeCrest" name={myFranchise.name} abbreviation={myFranchise.abbreviation} primary={myFranchise.primary_color} secondary={myFranchise.secondary_color} avatarKey={myFranchise.avatar_key}/>}
+          <div><p className="eyebrow">YOUR FRONT OFFICE</p><h1>{myFranchise?.name??league.name}</h1><p>{managerName}</p></div>
+          <div className="frontOfficeRecord" aria-label={`Record ${record}${myRank?`, league rank ${myRank}`:''}`}><span>RECORD</span><strong>{record}</strong>{myRank&&<small>#{myRank} IN LEAGUE</small>}</div>
         </div>
-        <div className="leagueHeroContent">
-          <p className="eyebrow">BIG EXEC • LEAGUE HQ</p>
-          <h1>{league.name}</h1>
-          <p className="leagueTagline">Build the franchise. Run the room. Own the season.</p>
-          <div className="leagueMetaRow">
-            <SportIdentity code={competition?.code} displayName={competition?.display_name} compact />
-            <span>HALF-PPR</span>
-            <span>{memberCount}/{leagueCapacity} FRANCHISES</span>
-            <span>{draftComplete ? 'SEASON ACTIVE' : draftReady ? 'DRAFT READY' : `${Math.max(0, draftMinimum - memberCount)} TO DRAFT READY`}</span>
-          </div>
+        <div className="frontOfficeGameStrip">
+          <div><span>{activeMatchup?`WEEK ${activeMatchup.week}`:'SEASON STATUS'}</span><strong>{activeMatchup?`${franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'} vs ${franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'}`:(draftComplete?'Schedule pending':'Draft preparation')}</strong></div>
+          {activeMatchup&&<div className="frontOfficeMiniScore"><b>{Number(activeMatchup.home_points).toFixed(2)}</b><i>–</i><b>{Number(activeMatchup.away_points).toFixed(2)}</b></div>}
+          {activeMatchup?<a href={`/matchups/${activeMatchup.id}`}>Open matchup <span aria-hidden="true">→</span></a>:myFranchise?<a href={`/franchises/${myFranchise.id}/team`}>Manage lineup <span aria-hidden="true">→</span></a>:null}
         </div>
       </section>
 
@@ -83,68 +82,20 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
       {query.member_removed && <p className="successNotice">Franchise seat reopened.</p>}
       {query.schedule_status && <p className="successNotice">The Circuit schedule is ready: Weeks 1–9 are set.</p>}
 
-      <section className="leagueQuickGrid">
-        {draftComplete ? <article className="leagueStatCard featured tradeRoomCard"><span>TRADE ROOM</span><strong>MAKE THE NEXT MOVE</strong><p>Build offers, review proposals, and improve your franchise for the season ahead.</p><a className="primary" href={`/leagues/${leagueId}/trades`}>Enter Trade Room</a></article> : <article className="leagueStatCard featured"><span>DRAFT STATUS</span><strong>{draft ? draft.status.toUpperCase() : draftReady ? 'READY TO SCHEDULE' : 'BUILDING THE ROOM'}</strong><p>{draftDate ? `Draft Day: ${draftDate}` : `${memberCount} of ${draftMinimum} required franchises claimed for this league.`}</p></article>}
-        <article className="leagueStatCard">
-          <span>FRANCHISES</span>
-          <strong>{memberCount}/{leagueCapacity}</strong>
-          <p>{Math.max(0, leagueCapacity - memberCount)} open league slots remain.</p>
-        </article>
-        <article className="leagueStatCard">
-          <span>INVITES OUT</span>
-          <strong>{pendingInviteCount}</strong>
-          <p>Pending manager invitations.</p>
-        </article>
+      <section className="frontOfficeActions" aria-labelledby="front-office-actions-heading">
+        <div className="frontOfficeSectionTitle"><div><p className="eyebrow">MAKE YOUR MOVE</p><h2 id="front-office-actions-heading">What needs attention</h2></div><span>{draftComplete?'SEASON ACTIVE':draft?.status?.toUpperCase()??'PRESEASON'}</span></div>
+        <div className="frontOfficeActionGrid">
+          <a className="frontOfficeActionCard is-primary" href={frontOfficePrimaryHref}><span>01</span><div><small>{draftComplete?'ROSTER MARKET':draftDate??'BUILD YOUR BOARD'}</small><strong>{frontOfficePrimaryLabel}</strong><p>{draftComplete?'Add players and manage waiver claims.':draft?.status==='live'?'The room is live. Make your pick.':'Prepare your queue and enter the room.'}</p></div><b aria-hidden="true">→</b></a>
+          <a className="frontOfficeActionCard" href={`/leagues/${leagueId}/locker-room`}><span>02</span><div><small>LEAGUE CONVERSATION</small><strong>Locker Room</strong><p>Talk with managers and follow league activity.</p></div><b aria-hidden="true">→</b></a>
+          <a className="frontOfficeActionCard" href={`/leagues/${leagueId}/trades`}><span>03</span><div><small>DEALS & NEGOTIATIONS</small><strong>Trade Room</strong><p>Build offers and review proposals.</p></div><b aria-hidden="true">→</b></a>
+          <a className="frontOfficeActionCard" href="#league-news"><span>04</span><div><small>LATEST FROM {league.name.toUpperCase()}</small><strong>League News</strong><p>{leagueNews?.[0]?.body??'Standings, moves, and weekly headlines appear here.'}</p></div><b aria-hidden="true">↓</b></a>
+        </div>
       </section>
 
-      {draft && !isCommissioner && !draftComplete && (
-        <section className="leagueCommandPanel" aria-labelledby="member-draft-room-heading">
-          <div className="commandHeader">
-            <div><p className="eyebrow">DRAFT ROOM</p><h2 id="member-draft-room-heading">{draft.status === 'live' ? 'The draft is live.' : 'Your draft room is ready.'}</h2></div>
-            <span className="commandBadge">{draft.status.toUpperCase()}</span>
-          </div>
-          <div className="commandGrid">
-            <article className="commandCard readyCard tradeCommandCard">
-              <span>TRADE ROOM</span>
-              <strong>Work the market</strong>
-              <p>Propose a deal, review incoming offers, and negotiate with the league.</p>
-              <a className="primary" href={`/leagues/${leagueId}/trades`}>Enter Trade Room</a>
-            </article>
-            <article className="commandCard readyCard">
-              <span>YOUR DRAFT SEAT</span>
-              <strong>{myFranchise?.name ?? 'Franchise ready'}</strong>
-              <p>{draftDate ? `Draft Day: ${draftDate}.` : 'Enter the room to see the current pick, player pool, queue, and draft order.'}</p>
-              <a className="primary" href={`/drafts/${draft.id}`}>{draft.status === 'live' ? 'Enter Live Draft' : 'Enter Draft Room'}</a>
-            </article>
-          </div>
-        </section>
-      )}
-
-      {draft?.status === 'completed' && (
-        <section className="leagueCommandPanel">
-          <div className="commandHeader">
-            <div><p className="eyebrow">SEASON COMMAND</p><h2>Game mode.</h2></div>
-            <span className="commandBadge">POST-DRAFT</span>
-          </div>
-          <div className="commandGrid">
-            <article className="commandCard readyCard">
-              <span>YOUR FRONT OFFICE</span>
-              <strong>{myFranchise?.name ?? 'Franchise ready'}</strong>
-              <p>Set starters, review your bench, and prepare each weekly lineup.</p>
-              {myFranchise && <a className="primary" href={`/franchises/${myFranchise.id}/team`}>Manage Team</a>}
-            </article>
-            <article className="commandCard readyCard">
-              <span>{activeMatchup?.is_final ? `WEEK ${activeMatchup.week} • FINAL` : activeMatchup ? `WEEK ${activeMatchup.week} • MATCHUP` : 'MATCHUP'}</span>
-              <strong>{activeMatchup ? `${Number(activeMatchup.home_points).toFixed(2)} – ${Number(activeMatchup.away_points).toFixed(2)}` : 'Schedule pending'}</strong>
-              <p>{activeMatchup ? `${franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name ?? 'Home'} vs ${franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name ?? 'Away'}` : 'Your next opponent will appear here when the schedule is set.'}</p>
-              {activeMatchup && <a className="primary" href={`/matchups/${activeMatchup.id}`}>View Matchup</a>}
-            </article>
-          </div>
-        </section>
-      )}
-
       {isCommissioner && (
-        <section className="leagueCommandPanel">
+        <details className="commissionerDrawer" id="league-administration" open={!draftComplete}>
+          <summary><span><small>COMMISSIONER</small><strong>League administration</strong></span><b>{memberCount}/{leagueCapacity} FRANCHISES</b></summary>
+          <section className="leagueCommandPanel">
           <div className="commandHeader">
             <div><p className="eyebrow">COMMISSIONER COMMAND CENTER</p><h2>Run the league.</h2></div>
             <a className="secondary" href={`/leagues/${leagueId}/settings/roster-integrity`}>League Settings</a>
@@ -183,9 +134,12 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
           </div>
           {!!pendingInvites.length && <div className="inviteLedger" role="table" aria-label="Pending league invitations"><div className="sectionMiniHeader"><span>INVITATIONS NEEDING ACTION</span><strong>{pendingInvites.length} PENDING</strong></div><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span><span role="columnheader">Expires</span><span role="columnheader">Invite link</span><span role="columnheader">Actions</span></div>{pendingInvites.map(invite => { const shareInvite = isShareInvite(invite.email); const inviteLabel = shareInvite ? 'Share link' : invite.email; return <div key={invite.id} className="inviteRow" role="row" aria-label={`Invite for ${inviteLabel}. Status pending. Expires ${new Date(invite.expires_at).toLocaleDateString()}. Invite link ${appUrl}/invite/${invite.invite_token}.${!shareInvite?' Resend available.':' Reusable share link.'}`}><span role="cell">{inviteLabel}</span><strong role="cell">PENDING</strong><small className="srOnly" role="cell">Expires {new Date(invite.expires_at).toLocaleDateString()}</small><a role="cell" href={`/invite/${invite.invite_token}`} aria-label={`Open invite link for ${inviteLabel}`}>Invite Link</a><span role="cell">{!shareInvite?<form action={resendLeagueInvite}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="invite_id" value={invite.id}/><button className="miniAction" type="submit" aria-label={`Resend invitation to ${invite.email}`}>Resend</button></form>:<span className="srOnly">Reusable share link</span>}</span></div>})}</div>}
           {!!historicalInvites.length && <details className="inviteHistory"><summary><span>Invitation history</span><strong>{historicalInvites.length} completed or expired</strong></summary><div className="inviteLedger" role="table" aria-label="Completed and expired league invitations"><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span></div>{historicalInvites.map(invite => { const inviteLabel=isShareInvite(invite.email)?'Share link':invite.email; return <div key={invite.id} className="inviteRow historicalInviteRow" role="row" aria-label={`Invite for ${inviteLabel}. Status ${invite.status}.`}><span role="cell">{inviteLabel}</span><strong role="cell">{invite.status.toUpperCase()}</strong></div>})}</div></details>}
-        </section>
+          </section>
+        </details>
       )}
 
+      <details className="frontOfficeSecondary">
+        <summary><span><small>LEAGUE DIRECTORY</small><strong>All franchises</strong></span><b>{memberCount}/{leagueCapacity}</b></summary>
       <section className="leagueRosterSection">
         <div className="sectionTitleRow"><div><p className="eyebrow">FRANCHISE FLOOR</p><h2>The league.</h2></div><span className="sectionCounter">{memberCount}/{leagueCapacity}</span></div>
         <div className="franchiseGrid">
@@ -202,13 +156,22 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
           {Array.from({ length: Math.max(0, leagueCapacity - memberCount) }).map((_, index) => <article className="franchiseCard openFranchise" key={`open-${index}`}><div className="franchiseCardTop"><span>OPEN SEAT</span><b>{String(memberCount + index + 1).padStart(2,'0')}</b></div><div className="franchiseMonogram">+</div><strong>Awaiting Exec</strong><p>Invite a manager to claim this franchise.</p></article>)}
         </div>
       </section>
+      </details>
 
+      <section className="frontOfficeLowerGrid">
       {!!standings?.length && (
-        <section className="panel">
+        <section className="panel frontOfficeStandings">
           <p className="eyebrow">STANDINGS</p><h2>League table.</h2>
           <div className="standingsList" role="table" aria-label="League standings"><div className="srOnly" role="row"><span role="columnheader">Rank</span><span role="columnheader">Team</span><span role="columnheader">Record</span><span role="columnheader">Points for</span></div>{standings.map((row, index) => { const franchise = franchiseBySeasonId.get(row.season_franchise_id); const record=`${row.wins}-${row.losses}${row.ties ? `-${row.ties}` : ''}`; return <div className="standingRow" role="row" aria-label={standingRowLabel({rank:index+1,team:franchise?.name??'Franchise',record,pointsFor:Number(row.points_for)})} key={row.season_franchise_id}><b role="cell">{index + 1}</b><span role="cell">{franchise?.name ?? 'Franchise'}</span><small role="cell">{record}</small><small role="cell">PF {Number(row.points_for).toFixed(2)}</small></div>; })}</div>
         </section>
       )}
+
+      <section className="panel frontOfficeNews" id="league-news">
+        <p className="eyebrow">LEAGUE NEWS</p><h2>From around the league</h2>
+        <div className="frontOfficeNewsList">{(leagueNews??[]).map(item=><article key={item.id}><span>{item.event_type.replaceAll('_',' ')}</span><strong>{item.body}</strong><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</time></article>)}{!leagueNews?.length&&<p>No league headlines yet. Draft picks, trades, results, and awards will appear here.</p>}</div>
+        <a className="secondary" href={`/leagues/${leagueId}/locker-room`}>See all league activity</a>
+      </section>
+      </section>
 
       {isCommissioner && leagueCapacity === 10 && memberCount === 10 && (
         <section className="panel">
