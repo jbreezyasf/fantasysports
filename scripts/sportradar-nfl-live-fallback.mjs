@@ -6,6 +6,7 @@ const number = value => {
 const normalizeAlias = value => ({ JAC: 'JAX', LA: 'LAR', WAS: 'WSH' }[String(value ?? '').toUpperCase()] ?? String(value ?? '').toUpperCase());
 const normalizeName = value => String(value ?? '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b/g, '').replace(/[^a-z0-9]/g, '');
 const namePositionKey = (name, position) => `${normalizeName(name)}|${String(position ?? '').toUpperCase()}`;
+const hasStatsAvailable = value => ['in_progress', 'inprogress', 'final', 'post', 'complete', 'completed', 'closed'].includes(String(value ?? '').toLowerCase());
 
 export function canonicalSportradarPlayerStats(player) {
   const stats = player?.statistics ?? {};
@@ -81,7 +82,7 @@ export function incompleteProviderGames(activeGames, scoringPlayers) {
     coverage.set(key, current);
   }
   return activeGames.filter(game => {
-    if (!['in_progress', 'final'].includes(game.status_state)) return false;
+    if (!hasStatsAvailable(game.status_state)) return false;
     return [
       [game.home_team, game.home_team_score],
       [game.visitor_team, game.visitor_team_score],
@@ -95,7 +96,7 @@ export function incompleteProviderGames(activeGames, scoringPlayers) {
 export function missingRosteredProviderGames(activeGames, gameByProvider, ingestedPlayerStats, rosteredAthleteIds, athletes) {
   const observed = new Set(ingestedPlayerStats.map(row => `${row.athlete_id}|${row.game_id}`));
   return activeGames.filter(game => {
-    if (!['in_progress', 'final'].includes(game.status_state)) return false;
+    if (!hasStatsAvailable(game.status_state)) return false;
     const gameId = gameByProvider.get(String(game.id));
     const teams = new Set([normalizeAlias(game.home_team?.abbreviation), normalizeAlias(game.visitor_team?.abbreviation)]);
     return athletes.some(athlete => {
