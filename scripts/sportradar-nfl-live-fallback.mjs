@@ -137,17 +137,28 @@ export async function importSportradarFallback({ db, season, week, activeGames, 
     throw new Error(`Sportradar request exhausted for ${path}`);
   }
 
+  async function dbAll(table, columns, filter) {
+    const rows = [];
+    for (let from = 0; ; from += 1000) {
+      let query = db.from(table).select(columns);
+      query = filter(query).range(from, from + 999);
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      rows.push(...(data ?? []));
+      if ((data ?? []).length < 1000) return rows;
+    }
+  }
+
   const schedule = await get(`/games/${season}/REG/${week}/schedule.json`);
   const radarGames = schedule.week?.games ?? schedule.games ?? [];
-  const [{ data: links, error: linksError }, { data: athletes, error: athletesError }] = await Promise.all([
-    db.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider', 'sportradar').range(0, 10000),
-    db.from('athletes').select('id,display_name,position').eq('active', true).range(0, 10000),
+  const [links, athletes] = await Promise.all([
+    dbAll('athlete_provider_ids', 'athlete_id,provider_athlete_id', query => query.eq('provider', 'sportradar')),
+    dbAll('athletes', 'id,display_name,position', query => query.eq('active', true)),
   ]);
-  if (linksError || athletesError) throw new Error(linksError?.message || athletesError?.message);
-  const athleteByProvider = new Map((links ?? []).map(row => [String(row.provider_athlete_id), row.athlete_id]));
+  const athleteByProvider = new Map(links.map(row => [String(row.provider_athlete_id), row.athlete_id]));
   const athleteByIdentity = new Map();
   const ambiguous = new Set();
-  for (const athlete of athletes ?? []) {
+  for (const athlete of athletes) {
     const key = namePositionKey(athlete.display_name, athlete.position);
     if (athleteByIdentity.has(key)) ambiguous.add(key);
     else athleteByIdentity.set(key, athlete.id);
