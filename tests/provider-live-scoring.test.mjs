@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, liveIdentityKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
+import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, liveIdentityKey, liveNamePositionKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
 
 test('matches provider players to duplicate drafted records safely', () => {
   assert.equal(liveIdentityKey('James Cook III', 'RB', 'BUF'), liveIdentityKey('James Cook', 'rb', 'BUF'));
   assert.equal(liveIdentityKey('Brian Thomas Jr.', 'WR', 'JAX'), liveIdentityKey('Brian Thomas', 'WR', 'JAC'));
+});
+
+test('builds a team-independent identity key for unique roster moves', () => {
+  assert.equal(liveNamePositionKey('James Cook III', 'RB'), liveNamePositionKey('James Cook', 'rb'));
 });
 
 test('normalizes live player scoring fields', () => {
