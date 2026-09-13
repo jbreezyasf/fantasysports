@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
-import { importSportradarFallback } from './sportradar-nfl-live-fallback.mjs';
+import { importSportradarFallback, incompleteProviderGames } from './sportradar-nfl-live-fallback.mjs';
 
 if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
   const match = /^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/.exec(line);
@@ -156,7 +156,11 @@ export async function runLiveStatsImport() {
   for (const [table, values, conflict] of [['athlete_game_stats', playerStats, 'athlete_id,game_id,source_provider'], ['real_team_game_stats', teamStats, 'real_team_id,game_id,source_provider']]) if (values.length) { const { error } = await db.from(table).upsert(values, { onConflict: conflict }); if (error) throw new Error(error.message); }
   let sportradarFallback;
   try {
-    sportradarFallback = await importSportradarFallback({ db, season, week: weeks[0], activeGames, gameByProvider, ingestedAt });
+    const incompleteGames = incompleteProviderGames(activeGames, scoringPlayers);
+    sportradarFallback = incompleteGames.length
+      ? await importSportradarFallback({ db, season, week: weeks[0], activeGames: incompleteGames, gameByProvider, ingestedAt })
+      : { enabled: true, games: 0, playerStats: 0, requests: 0, reason: 'primary provider coverage complete' };
+    sportradarFallback.incompleteGames = incompleteGames.length;
   } catch (error) {
     sportradarFallback = { enabled: true, games: 0, playerStats: 0, requests: 0, error: error instanceof Error ? error.message : String(error) };
     console.error(JSON.stringify({ job: 'live-scoring', provider: 'sportradar-fallback', ...sportradarFallback }));
