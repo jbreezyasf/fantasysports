@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 function loadLocalEnv(file = '.env.local') {
@@ -13,11 +14,12 @@ function loadLocalEnv(file = '.env.local') {
 loadLocalEnv();
 const args = new Map(process.argv.slice(2).map(value => value.replace(/^--/, '').split('=', 2)).map(([key, value]) => [key, value ?? 'true']));
 if (args.has('help')) {
-  console.log(`Usage: npm run data:balldontlie:nfl:market -- --season=2026 [--dry-run]\n\nImports current half-PPR rankings, ADP, roster rates, and projections without changing completed drafts.`);
+  console.log(`Usage: npm run data:balldontlie:nfl:market -- --season=2026 [--dry-run]\n\nImports current provider rankings, ADP, roster rates, and half-PPR projections without changing completed drafts.`);
   process.exit(0);
 }
 
-const season = Number(args.get('season') ?? new Date().getUTCFullYear());
+const now = new Date();
+const season = Number(args.get('season') ?? (now.getUTCMonth() < 3 ? now.getUTCFullYear() - 1 : now.getUTCFullYear()));
 const scoringFormat = args.get('scoring-format') ?? 'half_ppr';
 const dryRun = args.has('dry-run');
 const apiKey = process.env.BALLDONTLIE_API_KEY || process.env.balldontlie || (process.env.SPORTS_DATA_PROVIDER === 'balldontlie' ? process.env.SPORTS_DATA_API_KEY : '');
@@ -26,10 +28,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const minRequestMs = Number(process.env.BALLDONTLIE_MIN_REQUEST_MS || 12_500);
 if (!Number.isInteger(season)) throw new Error('--season must be a four-digit year.');
-if (!apiKey) throw new Error('BALLDONTLIE_API_KEY, balldontlie, or SPORTS_DATA_API_KEY is required.');
-if (!supabaseUrl || !serviceRoleKey) throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
-
-const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const supabase = supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 let lastRequestAt = 0;
 let requestCount = 0;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -40,7 +39,22 @@ const firstNumber = (objects, keys, validator = finite) => {
   return null;
 };
 const playerId = row => String(row?.player?.id ?? row?.player_id ?? row?.athlete?.id ?? row?.id ?? '');
+const playerName = row => {
+  const player = row?.player ?? row?.athlete ?? row;
+  return String(player?.display_name ?? player?.full_name ?? `${player?.first_name ?? ''} ${player?.last_name ?? ''}`).trim();
+};
+const playerPosition = row => String((row?.player ?? row?.athlete ?? row)?.position_abbreviation ?? (row?.player ?? row?.athlete ?? row)?.position ?? '').trim().toUpperCase();
+const identityKey = row => `${playerName(row).toLowerCase().replace(/[^a-z0-9]/g, '')}|${playerPosition(row)}`;
 const percent = value => { const parsed = finite(value); return parsed === null ? null : parsed <= 1 ? Math.round(parsed * 10_000) / 100 : Math.min(100, parsed); };
+const normalizeFormat = value => String(value ?? '').trim().toLowerCase().replace(/[ -]+/g, '_');
+const matchingEntry = (value, format, typeKeys) => {
+  const rows = Array.isArray(value) ? value : value && typeof value === 'object' ? [value] : [];
+  const wanted = normalizeFormat(format);
+  return rows.find(row => typeKeys.some(key => normalizeFormat(row?.[key]) === wanted) || normalizeFormat(row?.scoring_format?.key) === wanted) ?? null;
+};
+export const rankingEntry = (row, format) => matchingEntry(row?.rankings, format, ['ranking_type', 'type', 'scoring_format']) ?? row;
+export const projectionEntry = (row, format) => matchingEntry(row?.projections, format, ['scoring_format', 'type', 'projection_type']) ?? row;
+export const adpEntry = (row, format) => matchingEntry(row?.adp, format, ['scoring_format', 'type', 'adp_type']) ?? row;
 
 async function getAll(path, params) {
   const rows = [];
@@ -61,9 +75,10 @@ async function getAll(path, params) {
   return rows;
 }
 
-function projectedPoints(row) {
-  const containers = [row, row?.projections, row?.stats];
-  const direct = firstNumber(containers, ['projected_fantasy_points', 'fantasy_points', 'projected_points', 'points']);
+export function projectedPoints(row) {
+  const selected = projectionEntry(row, scoringFormat);
+  const containers = [selected, selected?.stats, row];
+  const direct = firstNumber(containers, ['total_points', 'projected_fantasy_points', 'fantasy_points', 'projected_points', 'points']);
   if (direct !== null) return direct;
   const stat = (...keys) => firstNumber(containers, keys) ?? 0;
   const calculated = stat('passing_yards', 'pass_yards') / 25 + stat('passing_touchdowns', 'passing_tds', 'pass_tds') * 6
@@ -74,27 +89,51 @@ function projectedPoints(row) {
   return calculated ? Math.round(calculated * 100) / 100 : null;
 }
 
-async function main() {
-  const rankings = await getAll('/nfl/v1/fantasy/rankings', { season, ranking_type: scoringFormat });
+export async function runMarketImport() {
+  if (!apiKey) throw new Error('BALLDONTLIE_API_KEY, balldontlie, or SPORTS_DATA_API_KEY is required.');
+  if (!supabase) throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+  const rankings = await getAll('/nfl/v1/fantasy/rankings', { season, ranking_type: 'ppr' });
   const adpRows = await getAll('/nfl/v1/fantasy/adp', { season });
   const projectionRows = await getAll('/nfl/v1/fantasy/projections', { season });
   const { data: competition, error: competitionError } = await supabase.from('competitions').select('id').eq('code', 'pro_football').single();
   if (competitionError || !competition) throw new Error(competitionError?.message || 'pro_football competition missing.');
-  const { data: links, error: linkError } = await supabase.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider', 'balldontlie').range(0, 10000);
-  if (linkError) throw new Error(linkError.message);
+  const [{ data: links, error: linkError }, { data: athletes, error: athleteError }] = await Promise.all([
+    supabase.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider', 'balldontlie').range(0, 10000),
+    supabase.from('athletes').select('id,display_name,position').eq('competition_id', competition.id).eq('active', true).range(0, 10000),
+  ]);
+  if (linkError || athleteError) throw new Error(linkError?.message || athleteError?.message);
   const athleteByProviderId = new Map((links ?? []).map(link => [String(link.provider_athlete_id), link.athlete_id]));
+  const athleteByIdentity = new Map();
+  const ambiguousIdentities = new Set();
+  for (const athlete of athletes ?? []) {
+    const key = `${String(athlete.display_name).toLowerCase().replace(/[^a-z0-9]/g, '')}|${String(athlete.position).toUpperCase()}`;
+    if (athleteByIdentity.has(key)) ambiguousIdentities.add(key);
+    else athleteByIdentity.set(key, athlete.id);
+  }
+  for (const key of ambiguousIdentities) athleteByIdentity.delete(key);
   const byProviderId = new Map();
   for (const row of rankings) byProviderId.set(playerId(row), { ...(byProviderId.get(playerId(row)) ?? {}), ranking: row });
   for (const row of adpRows) byProviderId.set(playerId(row), { ...(byProviderId.get(playerId(row)) ?? {}), adp: row });
   for (const row of projectionRows) byProviderId.set(playerId(row), { ...(byProviderId.get(playerId(row)) ?? {}), projection: row });
+  const reconciledLinks = [];
+  for (const [providerId, value] of byProviderId) {
+    if (!providerId || athleteByProviderId.has(providerId)) continue;
+    const sample = value.ranking ?? value.adp ?? value.projection;
+    const athleteId = athleteByIdentity.get(identityKey(sample));
+    if (!athleteId) continue;
+    athleteByProviderId.set(providerId, athleteId);
+    reconciledLinks.push({ athlete_id: athleteId, provider: 'balldontlie', provider_athlete_id: providerId });
+  }
   const importedAt = new Date().toISOString();
   const unmapped = [];
   const values = [];
   for (const [providerId, value] of byProviderId) {
     const athleteId = athleteByProviderId.get(providerId);
     if (!athleteId) { if (providerId) unmapped.push(providerId); continue; }
-    const rankContainers = [value.ranking, value.ranking?.rankings];
-    const adpContainers = [value.adp, value.adp?.adp];
+    const selectedRanking = rankingEntry(value.ranking, 'ppr');
+    const selectedAdp = adpEntry(value.adp, scoringFormat);
+    const rankContainers = [selectedRanking, value.ranking];
+    const adpContainers = [selectedAdp, value.adp];
     values.push({
       competition_id: competition.id, season_year: season, athlete_id: athleteId, source: 'balldontlie', scoring_format: scoringFormat,
       overall_rank: firstNumber(rankContainers, ['overall_rank', 'overall', 'rank'], positive),
@@ -106,13 +145,27 @@ async function main() {
       raw_ranking: value.ranking ?? {}, raw_adp: value.adp ?? {}, raw_projection: value.projection ?? {}, imported_at: importedAt,
     });
   }
+  const ranked = values.filter(value => value.overall_rank !== null).length;
+  const projected = values.filter(value => value.projected_points !== null).length;
+  const requiredCoverage = Math.min(100, Math.ceil(values.length * 0.5));
+  if (!values.length || ranked < requiredCoverage || projected < requiredCoverage) {
+    throw new Error(`Provider quality gate failed: mapped=${values.length}, ranked=${ranked}, projected=${projected}, required=${requiredCoverage}. No partial import was accepted.`);
+  }
   if (!dryRun && values.length) {
+    for (let index = 0; index < reconciledLinks.length; index += 500) {
+      const { error } = await supabase.from('athlete_provider_ids').upsert(reconciledLinks.slice(index, index + 500), { onConflict: 'provider,provider_athlete_id' });
+      if (error) throw new Error(error.message);
+    }
     for (let index = 0; index < values.length; index += 500) {
       const { error } = await supabase.from('fantasy_player_market_values').upsert(values.slice(index, index + 500), { onConflict: 'competition_id,season_year,athlete_id,source,scoring_format' });
       if (error) throw new Error(error.message);
     }
   }
-  console.log(JSON.stringify({ dryRun, season, scoringFormat, fetched: { rankings: rankings.length, adp: adpRows.length, projections: projectionRows.length }, mapped: values.length, unmapped: unmapped.length, requests: requestCount }, null, 2));
+  const report = { dryRun, season, scoringFormat, fetched: { rankings: rankings.length, adp: adpRows.length, projections: projectionRows.length }, mapped: values.length, ranked, projected, reconciledLinks: reconciledLinks.length, unmapped: unmapped.length, requests: requestCount, importedAt };
+  console.log(JSON.stringify(report, null, 2));
+  return report;
 }
 
-main().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  runMarketImport().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+}

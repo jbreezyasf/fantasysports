@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rankWaiverPlayers } from './waiverRankings';
+import { explainWaiverRanking, rankWaiverPlayers } from './waiverRankings';
 
 const players = [
   { id: 'historical-name-first', displayName: 'Alpha Veteran', injuryStatus: 'ACT' },
@@ -20,5 +20,14 @@ describe('rankWaiverPlayers', () => {
   it('falls back deterministically when provider values are missing', () => {
     const ranked = rankWaiverPlayers(players.slice(0, 2), [], new Map([['provider-top', 12]]));
     expect(ranked.map(player => player.id)).toEqual(['provider-top', 'historical-name-first']);
+  });
+
+  it('uses recent in-season production ahead of preseason market rank', () => {
+    const ranked = rankWaiverPlayers(players.slice(0, 2), [
+      { athleteId: 'historical-name-first', overallRank: 80, projectedPoints: 90 },
+      { athleteId: 'provider-top', overallRank: 15, projectedPoints: 180 },
+    ], new Map([['historical-name-first', 24], ['provider-top', 8]]));
+    expect(ranked.map(player => player.id)).toEqual(['historical-name-first', 'provider-top']);
+    expect(explainWaiverRanking('historical-name-first', [], new Map([['historical-name-first', 24]])).reason).toContain('recent fantasy points');
   });
 });

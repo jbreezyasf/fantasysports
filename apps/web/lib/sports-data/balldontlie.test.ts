@@ -50,9 +50,10 @@ describe('balldontlie NFL normalization', () => {
       sacks: 4,
       interceptions: 2,
       fumbles_recovered: 1,
+      blocked_kicks: 1,
       defensive_touchdowns: 1,
       points_allowed: 13,
-    })).toBe(20);
+    })).toBe(22);
   });
 
   it('normalizes BALDONTLIE NFL games for canonical storage', () => {

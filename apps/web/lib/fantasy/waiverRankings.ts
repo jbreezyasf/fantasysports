@@ -15,6 +15,8 @@ export type WaiverRankablePlayer = {
   injuryStatus?: string | null;
 };
 
+export type WaiverRankingExplanation = { score: number; reason: string };
+
 function finite(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -37,16 +39,27 @@ export function rankWaiverPlayers<T extends WaiverRankablePlayer>(
     if (healthDelta) return healthDelta;
     const aMarket = marketByAthlete.get(a.id);
     const bMarket = marketByAthlete.get(b.id);
+    const recentDelta = (recentPoints.get(b.id) ?? 0) - (recentPoints.get(a.id) ?? 0);
+    if (recentDelta) return recentDelta;
     const projectionDelta = (finite(bMarket?.projectedPoints) ?? -Infinity) - (finite(aMarket?.projectedPoints) ?? -Infinity);
     if (Number.isFinite(projectionDelta) && projectionDelta) return projectionDelta;
+    const rosteredDelta = (finite(bMarket?.percentRostered) ?? -Infinity) - (finite(aMarket?.percentRostered) ?? -Infinity);
+    if (Number.isFinite(rosteredDelta) && rosteredDelta) return rosteredDelta;
     const rankDelta = (finite(aMarket?.overallRank) ?? Infinity) - (finite(bMarket?.overallRank) ?? Infinity);
     if (Number.isFinite(rankDelta) && rankDelta) return rankDelta;
     const adpDelta = (finite(aMarket?.adp) ?? Infinity) - (finite(bMarket?.adp) ?? Infinity);
     if (Number.isFinite(adpDelta) && adpDelta) return adpDelta;
-    const recentDelta = (recentPoints.get(b.id) ?? 0) - (recentPoints.get(a.id) ?? 0);
-    if (recentDelta) return recentDelta;
-    const rosteredDelta = (finite(bMarket?.percentRostered) ?? -Infinity) - (finite(aMarket?.percentRostered) ?? -Infinity);
-    if (Number.isFinite(rosteredDelta) && rosteredDelta) return rosteredDelta;
     return a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id);
   });
+}
+
+export function explainWaiverRanking(playerId: string, marketValues: WaiverMarketValue[], recentPoints: Map<string, number> = new Map()): WaiverRankingExplanation {
+  const market = marketValues.find(value => value.athleteId === playerId);
+  const recent = recentPoints.get(playerId) ?? 0;
+  if (recent > 0) return { score: recent, reason: `${recent.toFixed(1)} recent fantasy points lead this recommendation` };
+  const projection = finite(market?.projectedPoints);
+  if (projection !== null) return { score: projection, reason: `${projection.toFixed(1)} provider-projected season points` };
+  const rostered = finite(market?.percentRostered);
+  if (rostered !== null) return { score: rostered, reason: `${rostered.toFixed(0)}% rostered across provider leagues` };
+  return { score: 0, reason: 'No current provider projection; deterministic fallback order' };
 }

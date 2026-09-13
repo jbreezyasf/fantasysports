@@ -130,7 +130,7 @@ describe('buildDraftRankings', () => {
       [{ assetId: 'provider-one', overallRank: 1, positionRank: 1, projectedPoints: 300, importedAt: '2026-09-13T00:00:00Z', source: 'balldontlie', scoringFormat: 'half_ppr' }],
     );
 
-    expect(rankings.source).toContain('current half-PPR rankings');
+    expect(rankings.source).toContain('half-PPR projections');
     expect(rankings.version).toBe('2026-09-13T00:00:00Z');
     expect(rankings.athletes.map(player => player.id)).toEqual(['provider-one', 'historical-high']);
     expect(rankings.athletes[0]).toMatchObject({ positionRank: 1, rankingScore: 300 });
