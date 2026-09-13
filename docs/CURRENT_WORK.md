@@ -1,5 +1,7 @@
 # Big Exec Current Work
 
+**Progress 2026-09-13:** Corrected the mobile bottom-navigation active state. The raised Matchup treatment no longer depends on `:nth-child`, which was shifted by the visually hidden current-section announcement and incorrectly styled Team. Active visual styling now follows `aria-current="page"`; named route groups cover franchise/team pages and matchup/schedule pages.
+
 **Primary objective:** Prepare the standalone Pro Football product for the 10-manager friend beta.
 
 ## September 11 Internal Season Stress Harness
