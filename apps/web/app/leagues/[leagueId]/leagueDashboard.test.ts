@@ -37,4 +37,13 @@ describe('League HQ information hierarchy', () => {
     expect(page).toContain('href={`/leagues/${leagueId}/trades`}');
     expect(page).toContain('<details className="frontOfficeSecondary">');
   });
+
+  it('resolves the current matchup from the competition calendar and complete schedule', () => {
+    const page = source('leagues/[leagueId]/page.tsx');
+
+    expect(page).toContain("select('id,competition_season_id')");
+    expect(page).toContain("from('real_games').select('week,starts_at')");
+    expect(page).toContain('selectFrontOfficeMatchup(seasonMatchups ?? [], mySeasonFranchise?.id, currentWeek)');
+    expect(page).not.toContain("order('week', { ascending: false }).limit(20)");
+  });
 });
