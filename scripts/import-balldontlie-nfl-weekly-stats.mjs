@@ -14,8 +14,9 @@ const season = Number(args.get('season') ?? (now.getUTCMonth() < 3 ? now.getUTCF
 const requestedWeek = Number(args.get('week') ?? 0);
 const apiKey = process.env.BALLDONTLIE_API_KEY || process.env.balldontlie || process.env.SPORTS_DATA_API_KEY;
 const dbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const dbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!apiKey || !dbUrl || !dbKey) throw new Error('BALLDONTLIE_API_KEY and Supabase server credentials are required.');
+const dbKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const missing = [!apiKey && 'BALLDONTLIE_API_KEY', !dbUrl && 'NEXT_PUBLIC_SUPABASE_URL', !dbKey && 'SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY'].filter(Boolean);
+if (missing.length) throw new Error(`Missing production runtime binding: ${missing.join(', ')}`);
 const db = createClient(dbUrl, dbKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const baseUrl = (process.env.BALLDONTLIE_BASE_URL || 'https://api.balldontlie.io').replace(/\/$/, '');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
