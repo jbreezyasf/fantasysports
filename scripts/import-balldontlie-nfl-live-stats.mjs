@@ -105,6 +105,7 @@ export async function runLiveStatsImport() {
     return response.json();
   }
   async function all(path, params = {}) { const rows = []; let cursor; do { const payload = await page(path, { ...params, cursor, per_page: 100 }); rows.push(...(payload.data ?? [])); cursor = payload.meta?.next_cursor; } while (cursor); return rows; }
+  async function dbAll(table, columns, filter) { const rows = []; for (let from = 0; ; from += 1000) { let query = db.from(table).select(columns); query = filter(query).range(from, from + 999); const { data, error } = await query; if (error) throw new Error(error.message); rows.push(...(data ?? [])); if ((data ?? []).length < 1000) return rows; } }
 
   const now = new Date(); const season = now.getUTCMonth() < 3 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
   const { data: competition, error: competitionError } = await db.from('competitions').select('id').eq('code', 'pro_football').single();
@@ -133,16 +134,16 @@ export async function runLiveStatsImport() {
     ...weeklyPlayers.map(row => ({ ...row, _weekly: true })),
     ...players.filter(row => !weeklyKeys.has(`${row.player?.id}|${row.game?.id}`)),
   ];
-  const [{ data: links }, { data: teams }, { data: athletes }] = await Promise.all([
-    db.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider', 'balldontlie').range(0, 10000),
-    db.from('real_teams').select('id,abbreviation').eq('competition_id', competition.id),
-    db.from('athletes').select('id,display_name,position,real_teams(abbreviation)').eq('competition_id', competition.id).eq('active', true).range(0, 10000),
+  const [links, teams, athletes] = await Promise.all([
+    dbAll('athlete_provider_ids', 'athlete_id,provider_athlete_id', query => query.eq('provider', 'balldontlie')),
+    dbAll('real_teams', 'id,abbreviation', query => query.eq('competition_id', competition.id)),
+    dbAll('athletes', 'id,display_name,position,real_teams(abbreviation)', query => query.eq('competition_id', competition.id).eq('active', true)),
   ]);
-  const athleteByProvider = new Map((links ?? []).map(row => [String(row.provider_athlete_id), row.athlete_id]));
-  const teamByAlias = new Map((teams ?? []).map(row => [alias(row.abbreviation), row.id]));
+  const athleteByProvider = new Map(links.map(row => [String(row.provider_athlete_id), row.athlete_id]));
+  const teamByAlias = new Map(teams.map(row => [alias(row.abbreviation), row.id]));
   const athletesByIdentity = new Map();
   const athletesByNamePosition = new Map();
-  for (const athlete of athletes ?? []) {
+  for (const athlete of athletes) {
     const team = Array.isArray(athlete.real_teams) ? athlete.real_teams[0] : athlete.real_teams;
     const key = liveIdentityKey(athlete.display_name, athlete.position, team?.abbreviation);
     athletesByIdentity.set(key, [...(athletesByIdentity.get(key) ?? []), athlete.id]);
@@ -166,7 +167,7 @@ export async function runLiveStatsImport() {
   let sportradarFallback;
   try {
     const coverageGames = incompleteProviderGames(activeGames, scoringPlayers);
-    const rosterGames = missingRosteredProviderGames(activeGames, gameByProvider, playerStats, new Set((activeLineups ?? []).map(row => row.athlete_id)), athletes ?? []);
+    const rosterGames = missingRosteredProviderGames(activeGames, gameByProvider, playerStats, new Set((activeLineups ?? []).map(row => row.athlete_id)), athletes);
     const incompleteGames = [...new Map([...coverageGames, ...rosterGames].map(game => [String(game.id), game])).values()];
     sportradarFallback = incompleteGames.length
       ? await importSportradarFallback({ db, season, week: weeks[0], activeGames: incompleteGames, gameByProvider, ingestedAt })
