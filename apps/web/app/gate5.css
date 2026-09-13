@@ -25,6 +25,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 
 /* Matchup as broadcast scoreboard */
 .matchupHero{position:relative;overflow:hidden;padding:clamp(44px,7vw,80px) clamp(18px,3vw,40px);border:1px solid #3c362b;background:radial-gradient(circle at 50% 110%,rgba(31,217,210,.09),transparent 35%),radial-gradient(circle at 82% 8%,rgba(217,180,59,.13),transparent 28%),#0d0e10}.scoreboard{max-width:960px;border-top:1px solid #3a352c;border-bottom:1px solid #3a352c;padding:22px 0}.scoreboard div{min-height:150px;display:grid;align-content:center}.scoreboard strong{font-size:clamp(3.2rem,9vw,7rem)}.scoreboard p{font-weight:800;text-transform:uppercase}.battleList{width:100%;display:grid;gap:8px;border:0}.battleRow{padding:16px;border:1px solid #302e29;background:#111214}.battleRow b{font-size:1.35rem}
+.liveScoreFreshness{margin:0 0 12px;color:#c8c3b8;font-size:.8rem;font-weight:800;letter-spacing:.06em;text-align:center;text-transform:uppercase}
 
 /* Standings / schedule */
 .standingsList{width:100%;border:1px solid #302d27;background:#101113}.standingRow{min-height:58px;padding:12px 16px}.standingRow:nth-child(1){background:linear-gradient(90deg,rgba(217,180,59,.12),transparent 45%)}.standingRow>b{font-size:1rem}.weekStack{width:100%}.weekCard{background:linear-gradient(145deg,#151619,#101113);border-color:#38342d}.scheduleGame{min-height:56px}.scheduleGame span{font-size:1rem}

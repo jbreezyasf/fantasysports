@@ -1,6 +1,6 @@
-// This operational module uses the provider's real-time game-stat endpoints.
+// The fantasy summary endpoint is slower, but provides a periodic correction layer.
 // @ts-expect-error The repository script is native ESM without TypeScript declarations.
-import { runLiveStatsImport } from '../../../../../../scripts/import-balldontlie-nfl-live-stats.mjs';
+import { runWeeklyStatsImport } from '../../../../../../scripts/import-balldontlie-nfl-weekly-stats.mjs';
 import { authorizeCron, cronError } from '../_shared';
 
 export const runtime = 'nodejs';
@@ -9,11 +9,10 @@ export const maxDuration = 800;
 
 export async function GET(request: Request) {
   if (!authorizeCron(request)) return new Response('Unauthorized', { status: 401 });
-
   try {
-    const result = await runLiveStatsImport();
-    return Response.json({ ok: true, job: 'live-scoring', result });
+    const result = await runWeeklyStatsImport();
+    return Response.json({ ok: true, job: 'weekly-scoring-reconciliation', result });
   } catch (error) {
-    return cronError('live-scoring', error);
+    return cronError('weekly-scoring-reconciliation', error);
   }
 }
