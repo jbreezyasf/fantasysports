@@ -741,10 +741,13 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Change in-season waiver ordering to health, recent fantasy production, provider projection, roster rate, provider rank/ADP, then deterministic name/id fallback.
 - [x] Display an explicit current, delayed, or historical-fallback data status on Free Agency instead of silently presenting stale guidance.
 - [x] Add BALLDONTLIE weekly-stat ingestion into canonical raw player/team game-stat tables, followed by deterministic Big Exec score recalculation and non-final matchup recomputation.
-- [x] Schedule weekly-stat refresh every 15 minutes during the regular-season months through an authenticated Vercel Cron endpoint. Do not automatically finalize matchups because the provider documents no correction-finality signal.
+- [x] Ingest BALLDONTLIE live player/team stats every minute during the regular-season game window and refresh open matchup pages every 30 seconds; retain the weekly feed as a 15-minute reconciliation job. Do not automatically finalize matchups because the provider documents no correction-finality signal.
+- [x] Route Matchup navigation to the earliest open matchup, with the league schedule as a usable fallback instead of an inert control.
+- [x] Repair Stress Test 2026 with its 45-matchup, Weeks 1–9 Circuit schedule and verify the active post-draft schedule trigger in production.
+- [x] Automatically create the 45-matchup Circuit schedule whenever a future 10-franchise draft completes.
 - [x] Add blocked-kick scoring coverage to the TypeScript normalization tests.
 - [x] Remove the provider schedules and their duplicate secret references from GitHub Actions; provider credentials now remain in the Vercel production runtime.
 - [ ] UNVERIFIED: `CRON_SECRET` is configured for the Vercel production environment; the connected project API does not expose environment-variable names.
 - [ ] UNVERIFIED: the repaired 2026 provider import has executed against production; local runtime credentials were unavailable in this workspace.
 - [ ] UNVERIFIED: production market-row coverage/freshness passes the new health gate after the first scheduled or manually dispatched run.
-- [ ] UNVERIFIED: live weekly ingestion has been reconciled against a completed 2026 box score and exercised in the deployed matchup UI.
+- [ ] UNVERIFIED: live ingestion has been reconciled against an active/completed 2026 box score and exercised in the deployed matchup UI.

@@ -17,14 +17,14 @@ export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
     const {data:sf}=await supabase.from('season_franchises').select('id,franchise_id').eq('league_season_id',season.id).in('franchise_id',ownedIds).limit(1).maybeSingle();
     franchiseId=sf?.franchise_id; seasonFranchiseId=sf?.id;
     if(seasonFranchiseId){
-      const {data:matchups}=await supabase.from('matchups').select('id,week').eq('league_season_id',season.id).or(`home_season_franchise_id.eq.${seasonFranchiseId},away_season_franchise_id.eq.${seasonFranchiseId}`).order('week',{ascending:false}).limit(1);
-      matchupId=matchups?.[0]?.id;
+      const {data:matchups}=await supabase.from('matchups').select('id,week,is_final').eq('league_season_id',season.id).or(`home_season_franchise_id.eq.${seasonFranchiseId},away_season_franchise_id.eq.${seasonFranchiseId}`).order('week',{ascending:true});
+      matchupId=matchups?.find(matchup=>!matchup.is_final)?.id??matchups?.at(-1)?.id;
     }
   }
   const items: BigExecMobileNavItem[] = [
     { label: 'Home', icon: '⌂', href: '/dashboard', match: 'exact' },
     { label: 'Team', icon: 'J', href: franchiseId ? `/franchises/${franchiseId}/team` : undefined, match: 'prefix', unavailableLabel: 'Team unavailable until you own a franchise' },
-    { label: 'Matchup', icon: 'VS', href: matchupId ? `/matchups/${matchupId}` : undefined, match: 'prefix', unavailableLabel: 'Matchup unavailable until your franchise has a scheduled matchup' },
+    { label: 'Matchup', icon: 'VS', href: matchupId ? `/matchups/${matchupId}` : `/leagues/${leagueId}/schedule`, match: 'prefix' },
     { label: 'League', icon: '▦', href: `/leagues/${leagueId}`, match: 'exact' },
     { label: 'Players', icon: '⌕', href: `/leagues/${leagueId}/players`, match: 'prefix' }
   ];
