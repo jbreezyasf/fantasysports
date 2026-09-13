@@ -2,9 +2,23 @@
 
 **Primary objective:** Prepare the standalone Pro Football product for the 10-manager friend beta.
 
+## September 11 Internal Season Stress Harness
+
+**AUTHORIZED / IN PROGRESS:** Build football-only internal QA infrastructure for Juanita versus nine controlled QA managers in a designated 2026 stress league. This is expressly not a customer feature, Front Office Advisor autonomy mode, commissioner setting, entitlement, or public API capability. The human account remains human-controlled.
+
+**Implemented locally:** season-scoped configuration validation, exact QA-account allowlist, one-league enforcement, dry-run default, explicit execution phrase, automatic expiration, nine persistent football personas, deterministic mixed manual/late/autopick attendance planning, canonical `make_draft_pick` adapter, append-only action audit output, and focused safety tests. See `docs/qa/SEASON_STRESS_HARNESS.md`.
+
+**Still required before Saturday execution:** identify/configure the actual stress league and season UUIDs; seat the nine QA accounts; verify Juanita's seat through her own authenticated session; configure the Saturday September 12, 2026 8:30 PM Central draft; pass the existing beta draft preflight and new stress preflight; complete draft decision selection/monitoring; and verify deployed behavior without altering real beta data.
+
+**Future basketball decision preserved:** reuse the sport-neutral authorization/orchestration/audit core only after basketball rules and league design are defined; do not copy football roster, scoring, schedule, or waiver assumptions.
+
 The authoritative product definition is `docs/PRODUCT_PRD.md`. This file is the execution queue, not a place to change product strategy.
 
 **P0 execution rule:** User-facing functionality and UX/UI advance together. Use `docs/UX_UI_PAGE_SPEC.md` as the canonical page-by-page design requirement. A functional flow is not beta-ready until the associated mobile/desktop UX is also completed and reviewed.
+
+**Progress 2026-09-13 — lineup transition:** The Team HQ starter buttons previously submitted directly to `setLineup`, whose successful mutation redirected back to the same URL. That full route transition exposed the global black page background on desktop and mobile. The canonical `set_lineup_slot` RPC is unchanged; lineup moves now use an inline client form with a disabled `SAVING…` state, server revalidation, and inline success/error announcements without redirecting. Automated source/accessibility regression coverage, full tests, typecheck, build, and authenticated deployed verification remain required before this is production-proven.
+
+**Progress 2026-09-13 — draft room and post-draft handoff:** Rebuilt the Draft Room around a compact sticky decision bar, server clock, current manager/round/pick, next personal pick, compact snake-order rail, one-column ranked player table, persistent filters, personal queue, roster needs, drafted roster, recent-pick ticker, live-sync status, and responsive mobile section navigation. An available queued asset now exposes a confirmed Draft action only while its franchise is on the clock. FLEX remains roster guidance only, not a player-position filter. Commissioner controls are collapsed away from manager decisions. A completed draft now renders a Big Exec congratulatory letter and the database posts that letter once to the league feed on the status transition. League HQ removes primary draft entry/status after completion and makes the Trade Room its featured action for managers and commissioners. Automated regression coverage, full tests (74 files / 355 tests), typecheck, and production build pass; live authenticated desktop/mobile visual verification and production migration/deployment remain required before marking this production-proven.
 
 ---
 

@@ -1,10 +1,14 @@
 'use server';
 
-import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '../../lib/supabase/server';
 
-export async function setLineup(formData: FormData) {
+export type LineupActionState = {
+  status: 'idle' | 'success' | 'error';
+  message: string;
+};
+
+export async function setLineup(_previousState: LineupActionState, formData: FormData): Promise<LineupActionState> {
   const supabase = await createClient();
   const seasonFranchiseId = String(formData.get('season_franchise_id') ?? '');
   const franchiseId = String(formData.get('franchise_id') ?? '');
@@ -24,7 +28,7 @@ export async function setLineup(formData: FormData) {
     p_athlete_id: athleteId || null,
     p_real_team_id: realTeamId || null
   });
-  if (error) redirect(`/franchises/${franchiseId}/team?week=${week}&error=${encodeURIComponent(error.message)}`);
+  if (error) return { status: 'error', message: error.message };
   revalidatePath(`/franchises/${franchiseId}/team`);
-  redirect(`/franchises/${franchiseId}/team?week=${week}&lineup_status=set&lineup_slot=${encodeURIComponent(slotLabel)}&lineup_asset=${encodeURIComponent(assetLabel)}`);
+  return { status: 'success', message: `${assetLabel} moved to ${slotLabel} for week ${week}.` };
 }

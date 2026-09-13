@@ -6,6 +6,17 @@ export type DraftRankingScore = {
   source?: string | null;
 };
 
+export type DraftMarketRanking = {
+  assetId: string | null;
+  overallRank: number | string | null;
+  positionRank?: number | string | null;
+  adp?: number | string | null;
+  projectedPoints?: number | string | null;
+  importedAt?: string | null;
+  source?: string | null;
+  scoringFormat?: string | null;
+};
+
 export type RankableAthlete = {
   id: string;
   displayName: string;
@@ -33,6 +44,8 @@ type Candidate<T> = {
   position: string;
   displayName: string;
   score: number | null;
+  providerOrder: number | null;
+  providerPositionRank: number | null;
 };
 
 export const DRAFT_RANKING_SOURCE = 'Big Exec historical draft value';
@@ -145,6 +158,11 @@ function scoreMap(scores: DraftRankingScore[]) {
 }
 
 function compareCandidates(a: Candidate<unknown>, b: Candidate<unknown>) {
+  if (a.providerOrder !== null || b.providerOrder !== null) {
+    if (a.providerOrder === null) return 1;
+    if (b.providerOrder === null) return -1;
+    if (a.providerOrder !== b.providerOrder) return a.providerOrder - b.providerOrder;
+  }
   if (a.score !== null && b.score !== null && b.score !== a.score) return b.score - a.score;
 
   const positionDelta = (POSITION_PRIORITY[a.position] ?? 99) - (POSITION_PRIORITY[b.position] ?? 99);
@@ -178,6 +196,7 @@ export function buildDraftRankings(
   defenses: RankableDefense[],
   athleteScores: DraftRankingScore[],
   defenseScores: DraftRankingScore[],
+  marketRankings: DraftMarketRanking[] = [],
 ) {
   const athleteScoreMap = scoreMap(athleteScores);
   const defenseScoreMap = scoreMap(defenseScores);
@@ -186,6 +205,8 @@ export function buildDraftRankings(
     DRAFT_RANKING_FALLBACK_VERSION;
   const hasAnyScores = athleteScoreMap.totals.size > 0 || defenseScoreMap.totals.size > 0;
   const shouldUsePositionPriors = athleteScoreMap.hasSeasonalScores || defenseScoreMap.hasSeasonalScores || !hasAnyScores;
+  const marketByAsset = new Map(marketRankings.filter(value => value.assetId).map(value => [value.assetId as string, value]));
+  const marketVersion = marketRankings.map(value => value.importedAt).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 
   const scoredByPosition = new Map<string, number[]>();
   for (const asset of athletes) {
@@ -210,9 +231,13 @@ export function buildDraftRankings(
       position: asset.position,
       displayName: asset.displayName,
       score: (() => {
+        const projection = normalizeScore(marketByAsset.get(asset.id)?.projectedPoints ?? null);
+        if (projection !== null) return projection;
         const points = athleteScoreMap.totals.get(asset.id) ?? (shouldUsePositionPriors ? positionPrior(asset.position, scoredByPosition) : null);
         return points === null ? null : points - replacementBaseline(asset.position, scoredByPosition);
       })(),
+      providerOrder: normalizeScore(marketByAsset.get(asset.id)?.overallRank ?? marketByAsset.get(asset.id)?.adp ?? null),
+      providerPositionRank: normalizeScore(marketByAsset.get(asset.id)?.positionRank ?? null),
     })),
     ...defenses.map(asset => ({
       asset,
@@ -223,20 +248,22 @@ export function buildDraftRankings(
         const points = defenseScoreMap.totals.get(asset.id) ?? (shouldUsePositionPriors ? positionPrior('D/ST', scoredByPosition) : null);
         return points === null ? null : points - replacementBaseline('D/ST', scoredByPosition);
       })(),
+      providerOrder: null,
+      providerPositionRank: null,
     })),
   ].sort(compareCandidates);
 
   const positionCounts = new Map<string, number>();
   const ranked = candidates.map((candidate, index) => {
-    const positionRank = (positionCounts.get(candidate.position) ?? 0) + 1;
-    positionCounts.set(candidate.position, positionRank);
+    const calculatedPositionRank = (positionCounts.get(candidate.position) ?? 0) + 1;
+    positionCounts.set(candidate.position, calculatedPositionRank);
     return {
       ...candidate.asset,
       overallRank: index + 1,
-      positionRank,
+      positionRank: candidate.providerPositionRank ?? calculatedPositionRank,
       rankingScore: candidate.score,
-      rankingSource: DRAFT_RANKING_SOURCE,
-      rankingVersion,
+      rankingSource: marketRankings.length ? 'BALLDONTLIE current half-PPR rankings and ADP' : DRAFT_RANKING_SOURCE,
+      rankingVersion: marketVersion ?? rankingVersion,
     };
   });
 
@@ -246,7 +273,7 @@ export function buildDraftRankings(
   return {
     athletes: rankedAthletes,
     defenses: rankedDefenses,
-    source: DRAFT_RANKING_SOURCE,
-    version: rankingVersion,
+    source: marketRankings.length ? 'BALLDONTLIE current half-PPR rankings and ADP' : DRAFT_RANKING_SOURCE,
+    version: marketVersion ?? rankingVersion,
   };
 }

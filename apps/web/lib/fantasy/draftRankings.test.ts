@@ -114,4 +114,25 @@ describe('buildDraftRankings', () => {
       ['rookie-rb', 2, 111.6],
     ]);
   });
+
+  it('uses current provider ranking and projection ahead of historical totals', () => {
+    const rankings = buildDraftRankings(
+      [
+        { id: 'historical-high', displayName: 'Historical High', position: 'QB', team: 'OLD' },
+        { id: 'provider-one', displayName: 'Current One', position: 'QB', team: 'NOW' },
+      ],
+      [],
+      [
+        { assetId: 'historical-high', points: 500, calculated_at: '2026-01-01T00:00:00Z', seasonYear: 2025 },
+        { assetId: 'provider-one', points: 20, calculated_at: '2026-01-01T00:00:00Z', seasonYear: 2025 },
+      ],
+      [],
+      [{ assetId: 'provider-one', overallRank: 1, positionRank: 1, projectedPoints: 300, importedAt: '2026-09-13T00:00:00Z', source: 'balldontlie', scoringFormat: 'half_ppr' }],
+    );
+
+    expect(rankings.source).toContain('current half-PPR rankings');
+    expect(rankings.version).toBe('2026-09-13T00:00:00Z');
+    expect(rankings.athletes.map(player => player.id)).toEqual(['provider-one', 'historical-high']);
+    expect(rankings.athletes[0]).toMatchObject({ positionRank: 1, rankingScore: 300 });
+  });
 });

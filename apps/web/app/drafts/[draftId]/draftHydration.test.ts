@@ -46,4 +46,22 @@ describe('draft client components avoid hydration mismatches', () => {
     expect(pool).toContain("toLocaleDateString('en-US'");
     expect(pool).toContain("timeZone:'UTC'");
   });
+
+  it('keeps FLEX as a roster slot without presenting it as a player position filter', () => {
+    const pool = source('drafts/[draftId]/DraftPlayerPool.tsx');
+
+    expect(pool).toContain("const positions:Position[]=['ALL','QB','RB','WR','TE','K','D/ST']");
+    expect(pool).toContain("['FLEX','RB / WR / TE']");
+    expect(pool).not.toContain("value==='FLEX'?");
+  });
+
+  it('preserves player filters and scroll position across queue refreshes', () => {
+    const pool = source('drafts/[draftId]/DraftPlayerPool.tsx');
+
+    expect(pool).toContain('window.sessionStorage.getItem(`${storagePrefix}:position`)');
+    expect(pool).toContain('window.sessionStorage.setItem(`${storagePrefix}:search`,search)');
+    expect(pool).toContain('window.sessionStorage.setItem(`${storagePrefix}:scrollY`,String(window.scrollY))');
+    expect(pool).toContain('onSubmit={rememberViewport}');
+    expect(pool).toContain("window.scrollTo({top:Number(savedScroll),behavior:'instant'})");
+  });
 });

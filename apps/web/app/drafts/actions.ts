@@ -7,7 +7,8 @@ import { createClient } from '../../lib/supabase/server';
 export async function initializeDraft(formData: FormData) {
   const supabase = await createClient();
   const leagueId = String(formData.get('league_id') ?? '');
-  const pickSeconds = Number(formData.get('pick_seconds') ?? 90);
+  const requestedPickSeconds = Number(formData.get('pick_seconds') ?? 60);
+  const pickSeconds = [30, 45, 60, 90, 120].includes(requestedPickSeconds) ? requestedPickSeconds : 60;
   const startsAtRaw = String(formData.get('starts_at') ?? '');
   const { data, error } = await supabase.rpc('initialize_snake_draft', {
     p_league_id: leagueId,
