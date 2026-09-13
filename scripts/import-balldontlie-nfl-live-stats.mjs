@@ -166,7 +166,7 @@ export async function runLiveStatsImport() {
   let sportradarFallback;
   try {
     const coverageGames = incompleteProviderGames(activeGames, scoringPlayers);
-    const rosterGames = missingRosteredProviderGames(activeGames, playerStats, new Set((activeLineups ?? []).map(row => row.athlete_id)), athletes ?? []);
+    const rosterGames = missingRosteredProviderGames(activeGames, gameByProvider, playerStats, new Set((activeLineups ?? []).map(row => row.athlete_id)), athletes ?? []);
     const incompleteGames = [...new Map([...coverageGames, ...rosterGames].map(game => [String(game.id), game])).values()];
     sportradarFallback = incompleteGames.length
       ? await importSportradarFallback({ db, season, week: weeks[0], activeGames: incompleteGames, gameByProvider, ingestedAt })
