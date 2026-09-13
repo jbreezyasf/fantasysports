@@ -48,11 +48,22 @@ export function canonicalSportradarPlayerStats(player) {
 
 export function sportradarGamePlayers(payload) {
   return ['home', 'away'].flatMap(side => {
-    const team = payload?.statistics?.[side]?.team ?? payload?.[side] ?? {};
-    return (payload?.statistics?.[side]?.players ?? []).map(player => ({
-      ...player,
-      team_alias: normalizeAlias(team.alias),
-    }));
+    const team = payload?.statistics?.[side] ?? payload?.[side] ?? {};
+    const byPlayer = new Map();
+    for (const category of ['passing', 'rushing', 'receiving', 'fumbles', 'kick_returns', 'punt_returns', 'field_goals', 'extra_points', 'conversions']) {
+      for (const player of team?.[category]?.players ?? []) {
+        const key = String(player.id ?? player.sr_id ?? `${player.name ?? ''}|${player.position ?? ''}`);
+        const current = byPlayer.get(key) ?? {
+          ...player,
+          name: player.name ?? `${player.first_name ?? ''} ${player.last_name ?? ''}`.trim(),
+          statistics: {},
+          team_alias: normalizeAlias(team.alias),
+        };
+        current.statistics[category] = player;
+        byPlayer.set(key, current);
+      }
+    }
+    return [...byPlayer.values()];
   });
 }
 
@@ -81,16 +92,17 @@ export function incompleteProviderGames(activeGames, scoringPlayers) {
   });
 }
 
-export function missingRosteredProviderGames(activeGames, ingestedPlayerStats, rosteredAthleteIds, athletes) {
-  const observed = new Set(ingestedPlayerStats.map(row => row.athlete_id));
-  const missingTeams = new Set(athletes
-    .filter(athlete => rosteredAthleteIds.has(athlete.id) && !observed.has(athlete.id))
-    .map(athlete => normalizeAlias((Array.isArray(athlete.real_teams) ? athlete.real_teams[0] : athlete.real_teams)?.abbreviation))
-    .filter(Boolean));
-  return activeGames.filter(game => ['in_progress', 'final'].includes(game.status_state) && [
-    normalizeAlias(game.home_team?.abbreviation),
-    normalizeAlias(game.visitor_team?.abbreviation),
-  ].some(team => missingTeams.has(team)));
+export function missingRosteredProviderGames(activeGames, gameByProvider, ingestedPlayerStats, rosteredAthleteIds, athletes) {
+  const observed = new Set(ingestedPlayerStats.map(row => `${row.athlete_id}|${row.game_id}`));
+  return activeGames.filter(game => {
+    if (!['in_progress', 'final'].includes(game.status_state)) return false;
+    const gameId = gameByProvider.get(String(game.id));
+    const teams = new Set([normalizeAlias(game.home_team?.abbreviation), normalizeAlias(game.visitor_team?.abbreviation)]);
+    return athletes.some(athlete => {
+      const team = normalizeAlias((Array.isArray(athlete.real_teams) ? athlete.real_teams[0] : athlete.real_teams)?.abbreviation);
+      return rosteredAthleteIds.has(athlete.id) && teams.has(team) && !observed.has(`${athlete.id}|${gameId}`);
+    });
+  });
 }
 
 export async function importSportradarFallback({ db, season, week, activeGames, gameByProvider, ingestedAt, timeoutMs = 15_000 }) {
@@ -156,7 +168,7 @@ export async function importSportradarFallback({ db, season, week, activeGames, 
     for (const player of sportradarGamePlayers(payload)) {
       const position = String(player.position ?? '').toUpperCase();
       if (!['QB', 'RB', 'WR', 'TE', 'K'].includes(position)) continue;
-      const athleteId = athleteByProvider.get(String(player.id)) ?? athleteByIdentity.get(namePositionKey(player.name ?? player.full_name, position));
+      const athleteId = athleteByProvider.get(String(player.id)) ?? athleteByIdentity.get(namePositionKey(player.name ?? player.full_name ?? `${player.first_name ?? ''} ${player.last_name ?? ''}`, position));
       if (!athleteId) continue;
       values.push({
         athlete_id: athleteId,

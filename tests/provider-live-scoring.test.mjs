@@ -73,18 +73,34 @@ test('limits fallback requests to games with incomplete player coverage', () => 
 
 test('requests fallback when an actual starting-lineup player is absent', () => {
   const game = { id: 10, status_state: 'in_progress', home_team: { abbreviation: 'TB' }, visitor_team: { abbreviation: 'ATL' } };
+  const games = new Map([['10', 'canonical-game']]);
   const athletes = [
     { id: 'baker', real_teams: { abbreviation: 'TB' } },
     { id: 'bijan', real_teams: { abbreviation: 'ATL' } },
   ];
-  assert.deepEqual(missingRosteredProviderGames([game], [{ athlete_id: 'bijan' }], new Set(['baker', 'bijan']), athletes), [game]);
-  assert.deepEqual(missingRosteredProviderGames([game], [{ athlete_id: 'baker' }, { athlete_id: 'bijan' }], new Set(['baker', 'bijan']), athletes), []);
+  assert.deepEqual(missingRosteredProviderGames([game], games, [{ athlete_id: 'bijan', game_id: 'canonical-game' }], new Set(['baker', 'bijan']), athletes), [game]);
+  assert.deepEqual(missingRosteredProviderGames([game], games, [{ athlete_id: 'baker', game_id: 'canonical-game' }, { athlete_id: 'bijan', game_id: 'canonical-game' }], new Set(['baker', 'bijan']), athletes), []);
 });
 
 test('reads both Sportradar game-statistics teams', () => {
   const result = sportradarGamePlayers({ statistics: {
-    home: { team: { alias: 'PIT' }, players: [{ id: 'home', name: 'Home Player' }] },
-    away: { team: { alias: 'ATL' }, players: [{ id: 'away', name: 'Away Player' }] },
+    home: { alias: 'PIT', rushing: { players: [{ id: 'home', name: 'Home Player', position: 'RB', yards: 40 }] } },
+    away: { alias: 'ATL', receiving: { players: [{ id: 'away', name: 'Away Player', position: 'WR', yards: 50 }] } },
   } });
   assert.deepEqual(result.map(player => player.team_alias), ['PIT', 'ATL']);
+  assert.equal(result[0].statistics.rushing.yards, 40);
+  assert.equal(result[1].statistics.receiving.yards, 50);
+});
+
+test('merges a Sportradar player across category blocks', () => {
+  const [player] = sportradarGamePlayers({ statistics: { home: {
+    alias: 'ATL',
+    rushing: { players: [{ id: 'bijan', name: 'Bijan Robinson', position: 'RB', yards: 83 }] },
+    receiving: { players: [{ id: 'bijan', name: 'Bijan Robinson', position: 'RB', receptions: 8, yards: 90, touchdowns: 1 }] },
+  } } });
+  const stats = canonicalSportradarPlayerStats(player);
+  assert.equal(stats.rushing_yards, 83);
+  assert.equal(stats.receptions, 8);
+  assert.equal(stats.receiving_yards, 90);
+  assert.equal(stats.receiving_tds, 1);
 });
