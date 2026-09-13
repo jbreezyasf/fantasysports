@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, liveIdentityKey, liveNamePositionKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
+import { canonicalSportradarPlayerStats, sportradarGamePlayers } from '../scripts/sportradar-nfl-live-fallback.mjs';
 
 test('matches provider players to duplicate drafted records safely', () => {
   assert.equal(liveIdentityKey('James Cook III', 'RB', 'BUF'), liveIdentityKey('James Cook', 'rb', 'BUF'));
@@ -45,4 +46,23 @@ test('derives defense points allowed from the opponent score', () => {
   const result = canonicalLiveTeamStats({ team: { id: 1 }, game: { home_team: { id: 1 }, visitor_team_score: 17, home_team_score: 24 }, defensive_sacks: 3 });
   assert.equal(result.points_allowed, 17);
   assert.equal(result.def_sacks, 3);
+});
+
+test('normalizes Sportradar game statistics for Big Exec scoring', () => {
+  const result = canonicalSportradarPlayerStats({ statistics: {
+    rushing: { yards: 83, touchdowns: 0 },
+    receiving: { receptions: 8, yards: 90, touchdowns: 1 },
+  } });
+  assert.equal(result.rushing_yards, 83);
+  assert.equal(result.receptions, 8);
+  assert.equal(result.receiving_yards, 90);
+  assert.equal(result.receiving_tds, 1);
+});
+
+test('reads both Sportradar game-statistics teams', () => {
+  const result = sportradarGamePlayers({ statistics: {
+    home: { team: { alias: 'PIT' }, players: [{ id: 'home', name: 'Home Player' }] },
+    away: { team: { alias: 'ATL' }, players: [{ id: 'away', name: 'Away Player' }] },
+  } });
+  assert.deepEqual(result.map(player => player.team_alias), ['PIT', 'ATL']);
 });
