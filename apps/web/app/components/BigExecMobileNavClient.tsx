@@ -9,6 +9,7 @@ export type BigExecMobileNavItem = {
   icon: string;
   href?: string;
   match?: 'exact' | 'prefix';
+  activePrefixes?: string[];
   unavailableLabel?: string;
 };
 
@@ -16,6 +17,7 @@ export default function BigExecMobileNavClient({ items }: { items: BigExecMobile
   const pathname = usePathname();
   const isActive = (item: BigExecMobileNavItem) => {
     if (!item.href) return false;
+    if (item.activePrefixes?.some(prefix => pathname.startsWith(prefix))) return true;
     return item.match === 'prefix' ? pathname.startsWith(item.href) : pathname === item.href;
   };
   const current = items.find(isActive);
@@ -29,7 +31,7 @@ export default function BigExecMobileNavClient({ items }: { items: BigExecMobile
           <b aria-hidden="true">{item.icon}</b><small>{item.label}</small>
         </span>;
       }
-      return <a href={item.href} aria-current={active ? 'page' : undefined} aria-label={`${item.label}${active ? ', current section' : ''}`} key={item.label}>
+      return <a data-nav-item={item.label} href={item.href} aria-current={active ? 'page' : undefined} aria-label={`${item.label}${active ? ', current section' : ''}`} key={item.label}>
         <b aria-hidden="true">{item.icon}</b><small>{item.label}</small>
       </a>;
     })}
