@@ -71,6 +71,11 @@ test('limits fallback requests to games with incomplete player coverage', () => 
   assert.deepEqual(incompleteProviderGames([game], complete.filter(row => row.team.abbreviation !== 'ATL' || row.player.position !== 'QB')), [game]);
 });
 
+test('treats provider closed/post games as available for final stat recovery', () => {
+  const game = { id: 10, status_state: 'post', home_team_score: 20, visitor_team_score: 13, home_team: { abbreviation: 'PIT' }, visitor_team: { abbreviation: 'ATL' } };
+  assert.deepEqual(incompleteProviderGames([game], []), [game]);
+});
+
 test('requests fallback when an actual starting-lineup player is absent', () => {
   const game = { id: 10, status_state: 'in_progress', home_team: { abbreviation: 'TB' }, visitor_team: { abbreviation: 'ATL' } };
   const games = new Map([['10', 'canonical-game']]);

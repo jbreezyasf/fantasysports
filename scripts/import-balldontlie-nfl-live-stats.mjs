@@ -11,7 +11,7 @@ if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf
 
 const number = value => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const alias = value => ({ JAX: 'JAC', WAS: 'WSH', LA: 'LAR' }[String(value)] ?? String(value));
-const state = value => ['scheduled', 'in_progress', 'final', 'postponed', 'canceled', 'delayed', 'suspended'].includes(value) ? value : 'unknown';
+const state = value => ({ inprogress: 'in_progress', post: 'final', complete: 'final', completed: 'final', closed: 'final' }[String(value ?? '').toLowerCase()] ?? (['scheduled', 'in_progress', 'final', 'postponed', 'canceled', 'delayed', 'suspended'].includes(value) ? value : 'unknown'));
 export const cleanName = value => String(value ?? '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b/g, '').replace(/[^a-z0-9]/g, '');
 const playerName = row => String(row?.player?.display_name ?? row?.player?.full_name ?? `${row?.player?.first_name ?? ''} ${row?.player?.last_name ?? ''}`).trim();
 const playerPosition = row => String(row?.player?.position_abbreviation ?? row?.player?.position ?? '').toUpperCase();
