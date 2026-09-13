@@ -11,6 +11,7 @@ A screen-reader user must be able to understand starters, bench players, empty/i
 ## Files Updated
 
 - `apps/web/app/franchises/[franchiseId]/team/page.tsx`
+- `apps/web/app/franchises/[franchiseId]/team/LineupMoveForm.tsx`
 - `apps/web/app/franchises/[franchiseId]/team/lineupAccessibility.ts`
 - `apps/web/app/franchises/[franchiseId]/team/lineupAccessibility.test.ts`
 - `apps/web/app/team/actions.ts`
@@ -23,7 +24,7 @@ A screen-reader user must be able to understand starters, bench players, empty/i
   - current league season and Roster Integrity state from `league_seasons` and `season_franchises`;
   - pending Roster Integrity reviews from `roster_integrity_reviews`.
 - Starter slots are rendered from the local `slots` tuple in `apps/web/app/franchises/[franchiseId]/team/page.tsx`.
-- Eligible starter moves are rendered as normal form buttons under each slot.
+- Eligible starter moves are rendered as normal form buttons under each slot, with an inline pending state.
 - Submissions call `apps/web/app/team/actions.ts#setLineup`, which calls Supabase RPC `set_lineup_slot`.
 
 ## Behavior Implemented
@@ -51,7 +52,8 @@ A screen-reader user must be able to understand starters, bench players, empty/i
   - injury status fallback;
   - projected-points fallback.
 - Move buttons now include target slot and week in their accessible names.
-- Successful lineup moves now redirect with `lineup_status=set`, `lineup_slot`, and `lineup_asset`, then render a `role="status"` confirmation.
+- Successful lineup moves update the current server-rendered lineup in place and render an inline `role="status"` confirmation. Errors render as an inline alert.
+- The lineup action no longer redirects back to the same page, preventing the black full-page flash that was reported on desktop and mobile.
 - Copy-generation helpers have unit coverage.
 
 ## Canonical Logic Preserved

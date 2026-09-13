@@ -6,6 +6,7 @@ import { FranchiseCrest } from '../../components/FranchiseCrest';
 import { SportIdentity } from '../../components/SportIdentity';
 import { standingRowLabel } from './standingsAccessibility';
 import InviteManagersForm from './InviteManagersForm';
+import DraftSettingsFields from './DraftSettingsFields';
 import { inviteConfirmation } from './invitationAccessibility';
 
 export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_resent?: string; invite_token?: string; invite_email?: string; invite_count?: string; email_status?: string; invite_error?: string; joined?: string; member_removed?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
@@ -47,12 +48,15 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const draftReady = memberCount >= draftMinimum;
   const isShareInvite = (email: string) => /^share\+[a-f0-9]{32}@bigexecfs\.local$/i.test(email);
   const pendingInviteCount = (invites ?? []).filter(invite => invite.status === 'pending').length;
+  const pendingInvites = (invites ?? []).filter(invite => invite.status === 'pending');
+  const historicalInvites = (invites ?? []).filter(invite => invite.status !== 'pending');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://bigexecfs.com';
   const isCommissioner = member?.role === 'commissioner';
   const draftDate = draft?.starts_at ? new Date(draft.starts_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
   const franchiseBySeasonId = new Map((seasonFranchises ?? []).map(sf => [sf.id, (franchises ?? []).find(f => f.id === sf.franchise_id)]));
   const ownerByFranchiseId = new Map((activeOwners ?? []).map(owner => [owner.franchise_id, owner.user_id]));
   const canRemoveManagers = isCommissioner && (!draft || draft.status === 'scheduled');
+  const draftComplete = draft?.status === 'completed';
 
   return (
     <main className="leagueShell">
@@ -70,7 +74,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
             <SportIdentity code={competition?.code} displayName={competition?.display_name} compact />
             <span>HALF-PPR</span>
             <span>{memberCount}/{leagueCapacity} FRANCHISES</span>
-            <span>{draft?.status === 'completed' ? 'DRAFT COMPLETE' : draftReady ? 'DRAFT READY' : `${Math.max(0, draftMinimum - memberCount)} TO DRAFT READY`}</span>
+            <span>{draftComplete ? 'SEASON ACTIVE' : draftReady ? 'DRAFT READY' : `${Math.max(0, draftMinimum - memberCount)} TO DRAFT READY`}</span>
           </div>
         </div>
       </section>
@@ -80,11 +84,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
       {query.schedule_status && <p className="successNotice">The Circuit schedule is ready: Weeks 1–9 are set.</p>}
 
       <section className="leagueQuickGrid">
-        <article className="leagueStatCard featured">
-          <span>DRAFT STATUS</span>
-          <strong>{draft ? draft.status.toUpperCase() : draftReady ? 'READY TO SCHEDULE' : 'BUILDING THE ROOM'}</strong>
-          <p>{draftDate ? `Draft Day: ${draftDate}` : `${memberCount} of ${draftMinimum} required franchises claimed for this league.`}</p>
-        </article>
+        {draftComplete ? <article className="leagueStatCard featured tradeRoomCard"><span>TRADE ROOM</span><strong>MAKE THE NEXT MOVE</strong><p>Build offers, review proposals, and improve your franchise for the season ahead.</p><a className="primary" href={`/leagues/${leagueId}/trades`}>Enter Trade Room</a></article> : <article className="leagueStatCard featured"><span>DRAFT STATUS</span><strong>{draft ? draft.status.toUpperCase() : draftReady ? 'READY TO SCHEDULE' : 'BUILDING THE ROOM'}</strong><p>{draftDate ? `Draft Day: ${draftDate}` : `${memberCount} of ${draftMinimum} required franchises claimed for this league.`}</p></article>}
         <article className="leagueStatCard">
           <span>FRANCHISES</span>
           <strong>{memberCount}/{leagueCapacity}</strong>
@@ -96,6 +96,29 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
           <p>Pending manager invitations.</p>
         </article>
       </section>
+
+      {draft && !isCommissioner && !draftComplete && (
+        <section className="leagueCommandPanel" aria-labelledby="member-draft-room-heading">
+          <div className="commandHeader">
+            <div><p className="eyebrow">DRAFT ROOM</p><h2 id="member-draft-room-heading">{draft.status === 'live' ? 'The draft is live.' : 'Your draft room is ready.'}</h2></div>
+            <span className="commandBadge">{draft.status.toUpperCase()}</span>
+          </div>
+          <div className="commandGrid">
+            <article className="commandCard readyCard tradeCommandCard">
+              <span>TRADE ROOM</span>
+              <strong>Work the market</strong>
+              <p>Propose a deal, review incoming offers, and negotiate with the league.</p>
+              <a className="primary" href={`/leagues/${leagueId}/trades`}>Enter Trade Room</a>
+            </article>
+            <article className="commandCard readyCard">
+              <span>YOUR DRAFT SEAT</span>
+              <strong>{myFranchise?.name ?? 'Franchise ready'}</strong>
+              <p>{draftDate ? `Draft Day: ${draftDate}.` : 'Enter the room to see the current pick, player pool, queue, and draft order.'}</p>
+              <a className="primary" href={`/drafts/${draft.id}`}>{draft.status === 'live' ? 'Enter Live Draft' : 'Enter Draft Room'}</a>
+            </article>
+          </div>
+        </section>
+      )}
 
       {draft?.status === 'completed' && (
         <section className="leagueCommandPanel">
@@ -146,20 +169,20 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
               ) : <p className="successNotice">League full. All {leagueCapacity} franchise spots are claimed.</p>}
             </article>
             <article className={`commandCard ${draftReady ? 'readyCard' : ''}`}>
-              <span>02 • SET DRAFT DAY</span>
-              <strong>{draft ? 'Draft room created' : draftReady ? 'Ready to schedule' : `Need ${Math.max(0, draftMinimum - memberCount)} more franchise${draftMinimum - memberCount === 1 ? '' : 's'}`}</strong>
+              <span>{draftComplete?'02 • TRADE ROOM':'02 • SET DRAFT DAY'}</span>
+              <strong>{draftComplete?'Shape the roster':draft ? 'Draft room created' : draftReady ? 'Ready to schedule' : `Need ${Math.max(0, draftMinimum - memberCount)} more franchise${draftMinimum - memberCount === 1 ? '' : 's'}`}</strong>
               {query.draft_error && <p className="errorNotice">{query.draft_error}</p>}
-              {draft ? <><p>{draftDate ? `Scheduled for ${draftDate}.` : `Draft status: ${draft.status}.`}</p><a className="primary" href={`/drafts/${draft.id}`}>Enter Draft Room</a></> : draftReady ? (
+              {draftComplete?<><p>Draft night is over. Move into season management and work the trade market.</p><a className="primary" href={`/leagues/${leagueId}/trades`}>Enter Trade Room</a></>:draft ? <><p>{draftDate ? `Scheduled for ${draftDate}.` : `Draft status: ${draft.status}.`}</p><a className="primary" href={`/drafts/${draft.id}`}>Enter Draft Room</a></> : draftReady ? (
                 <form className="authForm compactForm" action={initializeDraft}>
                   <input type="hidden" name="league_id" value={leagueId}/>
-                  <label>Draft date & time<input name="starts_at" type="datetime-local" /></label>
-                  <label>Seconds per pick<input name="pick_seconds" type="number" min="30" max="300" defaultValue="90" /></label>
+                  <DraftSettingsFields franchiseCount={memberCount}/>
                   <button className="primary" type="submit">Randomize Order + Create Draft</button>
                 </form>
               ) : <p>Draft setup unlocks automatically when this league reaches {draftMinimum} claimed franchises.</p>}
             </article>
           </div>
-          {!!invites?.length && <div className="inviteLedger" role="table" aria-label="Pending and historical league invitations"><div className="sectionMiniHeader"><span>INVITE LEDGER</span><strong>{invites.length} TOTAL</strong></div><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span><span role="columnheader">Expires</span><span role="columnheader">Invite link</span><span role="columnheader">Actions</span></div>{invites.map(invite => { const shareInvite = isShareInvite(invite.email); const inviteLabel = shareInvite ? 'Share link' : invite.email; return <div key={invite.id} className="inviteRow" role="row" aria-label={`Invite for ${inviteLabel}. Status ${invite.status}. Expires ${new Date(invite.expires_at).toLocaleDateString()}. Invite link ${appUrl}/invite/${invite.invite_token}.${invite.status==='pending' && !shareInvite?' Resend available.':' Resend unavailable for this invitation.'} Revoke is not supported in the current verified invite engine.`}><span role="cell">{inviteLabel}</span><strong role="cell">{invite.status.toUpperCase()}</strong><small className="srOnly" role="cell">Expires {new Date(invite.expires_at).toLocaleDateString()}</small><a role="cell" href={`/invite/${invite.invite_token}`} aria-label={`Open invite link for ${inviteLabel}`}>Invite Link</a><span role="cell">{invite.status==='pending' && !shareInvite?<form action={resendLeagueInvite}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="invite_id" value={invite.id}/><button className="miniAction" type="submit" aria-label={`Resend invitation to ${invite.email}`}>Resend</button></form>:<span className="srOnly">No invite action available</span>}</span></div>})}</div>}
+          {!!pendingInvites.length && <div className="inviteLedger" role="table" aria-label="Pending league invitations"><div className="sectionMiniHeader"><span>INVITATIONS NEEDING ACTION</span><strong>{pendingInvites.length} PENDING</strong></div><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span><span role="columnheader">Expires</span><span role="columnheader">Invite link</span><span role="columnheader">Actions</span></div>{pendingInvites.map(invite => { const shareInvite = isShareInvite(invite.email); const inviteLabel = shareInvite ? 'Share link' : invite.email; return <div key={invite.id} className="inviteRow" role="row" aria-label={`Invite for ${inviteLabel}. Status pending. Expires ${new Date(invite.expires_at).toLocaleDateString()}. Invite link ${appUrl}/invite/${invite.invite_token}.${!shareInvite?' Resend available.':' Reusable share link.'}`}><span role="cell">{inviteLabel}</span><strong role="cell">PENDING</strong><small className="srOnly" role="cell">Expires {new Date(invite.expires_at).toLocaleDateString()}</small><a role="cell" href={`/invite/${invite.invite_token}`} aria-label={`Open invite link for ${inviteLabel}`}>Invite Link</a><span role="cell">{!shareInvite?<form action={resendLeagueInvite}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="invite_id" value={invite.id}/><button className="miniAction" type="submit" aria-label={`Resend invitation to ${invite.email}`}>Resend</button></form>:<span className="srOnly">Reusable share link</span>}</span></div>})}</div>}
+          {!!historicalInvites.length && <details className="inviteHistory"><summary><span>Invitation history</span><strong>{historicalInvites.length} completed or expired</strong></summary><div className="inviteLedger" role="table" aria-label="Completed and expired league invitations"><div className="srOnly" role="row"><span role="columnheader">Email</span><span role="columnheader">Status</span></div>{historicalInvites.map(invite => { const inviteLabel=isShareInvite(invite.email)?'Share link':invite.email; return <div key={invite.id} className="inviteRow historicalInviteRow" role="row" aria-label={`Invite for ${inviteLabel}. Status ${invite.status}.`}><span role="cell">{inviteLabel}</span><strong role="cell">{invite.status.toUpperCase()}</strong></div>})}</div></details>}
         </section>
       )}
 

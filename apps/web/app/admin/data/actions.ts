@@ -133,7 +133,7 @@ export async function createSportradarDraftLab() {
     const { data: seasonFranchises } = await admin.from('season_franchises').insert(franchises.map((f,index) => ({league_season_id:leagueSeason.id,franchise_id:f.id,draft_position:index+1}))).select('id');
     if (seasonFranchises?.length) await admin.from('standings').insert(seasonFranchises.map(sf => ({league_season_id:leagueSeason.id,season_franchise_id:sf.id})));
   }
-  const { data, error } = await supabase.rpc('initialize_snake_draft',{p_league_id:leagueId,p_pick_seconds:90,p_starts_at:null});
+  const { data, error } = await supabase.rpc('initialize_snake_draft',{p_league_id:leagueId,p_pick_seconds:60,p_starts_at:null});
   if (error) redirect(`/admin/data?error=${encodeURIComponent(error.message)}`);
   redirect(`/drafts/${(data as {draft_id:string}).draft_id}`);
 }

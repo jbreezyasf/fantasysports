@@ -20,14 +20,25 @@ describe('P0 accessibility screen regressions', () => {
       'aria-labelledby="starters-heading"',
       'describeLineupSlot(label,currentLabel)',
       'aria-label={`Move eligible players to ${label}`}',
-      'slot_label',
-      'asset_label',
       'lineupMoveButtonLabel(assetLabel,label,week)',
       'lineupMoveConfirmation(query.lineup_asset',
       'role="status"',
       'aria-labelledby="bench-heading"',
       "describeAssetForScreenReader(asset,'bench')"
     ]);
+    expectSource('app/franchises/[franchiseId]/team/LineupMoveForm.tsx', [
+      'useActionState(setLineup',
+      'name="slot_label"',
+      'name="asset_label"',
+      "pending ? 'SAVING…'",
+      "role={state.status === 'error' ? 'alert' : 'status'}"
+    ]);
+    expectSource('app/team/actions.ts', [
+      "return { status: 'error'",
+      "return { status: 'success'",
+      'revalidatePath(`/franchises/${franchiseId}/team`)'
+    ]);
+    expect(source('app/team/actions.ts')).not.toContain('redirect(');
   });
 
   it('keeps player search labels, filter states, result announcements, and inspect controls', () => {
