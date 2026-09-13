@@ -147,7 +147,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
         <section className="leagueCommandPanel">
           <div className="commandHeader">
             <div><p className="eyebrow">COMMISSIONER COMMAND CENTER</p><h2>Run the league.</h2></div>
-            <span className="commandBadge">BIG EXEC CONTROL</span>
+            <a className="secondary" href={`/leagues/${leagueId}/settings/roster-integrity`}>League Settings</a>
           </div>
           <div className="commandGrid">
             <article className="commandCard">

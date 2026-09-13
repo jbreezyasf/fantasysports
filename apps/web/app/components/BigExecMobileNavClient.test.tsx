@@ -32,4 +32,13 @@ describe('BigExecMobileNavClient', () => {
     expect(html).toMatch(/data-nav-item="Players"[^>]+aria-current="page"/);
     expect(html).not.toMatch(/data-nav-item="Team"[^>]+aria-current="page"/);
   });
+
+  it('can link to a fallback route without incorrectly marking it current', () => {
+    const html = ReactDOMServer.renderToStaticMarkup(<BigExecMobileNavClient items={[
+      { label: 'Matchup', icon: 'matchup', href: '/leagues/league-1/players', match: 'manual', activePrefixes: ['/matchups/'] },
+      { label: 'League', icon: 'league', href: '/leagues/league-1/players', match: 'prefix' }
+    ]} />);
+    expect(html).toMatch(/data-nav-item="League"[^>]+aria-current="page"/);
+    expect(html).not.toMatch(/data-nav-item="Matchup"[^>]+aria-current="page"/);
+  });
 });

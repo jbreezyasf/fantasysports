@@ -8,6 +8,7 @@ import './mobile-nav.css';
 import './forms-gate5.css';
 import './stadium-gate5.css';
 import './ops.css';
+import './product-shell.css';
 import ScreenReaderAnnouncer from './components/ScreenReaderAnnouncer';
 
 export const metadata: Metadata = {
