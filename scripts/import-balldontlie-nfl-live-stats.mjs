@@ -11,6 +11,11 @@ if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf
 const number = value => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const alias = value => ({ JAX: 'JAC', WAS: 'WSH', LA: 'LAR' }[String(value)] ?? String(value));
 const state = value => ['scheduled', 'in_progress', 'final', 'postponed', 'canceled', 'delayed', 'suspended'].includes(value) ? value : 'unknown';
+export const cleanName = value => String(value ?? '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b/g, '').replace(/[^a-z0-9]/g, '');
+const playerName = row => String(row?.player?.display_name ?? row?.player?.full_name ?? `${row?.player?.first_name ?? ''} ${row?.player?.last_name ?? ''}`).trim();
+const playerPosition = row => String(row?.player?.position_abbreviation ?? row?.player?.position ?? '').toUpperCase();
+const playerTeam = row => alias(row?.team?.abbreviation ?? row?.player?.team?.abbreviation ?? '');
+export const liveIdentityKey = (name, position, team) => `${cleanName(name)}|${String(position).toUpperCase()}|${alias(team)}`;
 
 export function canonicalLivePlayerStats(row, fieldGoals = {}) {
   return {
@@ -92,15 +97,22 @@ export async function runLiveStatsImport() {
     Promise.all(activeGames.filter(game => game.status_state === 'in_progress').map(game => all('/nfl/v1/plays', { game_id: game.id }))),
   ]);
   const kicks = fieldGoalBuckets(playGroups.flat());
-  const [{ data: links }, { data: teams }] = await Promise.all([
+  const [{ data: links }, { data: teams }, { data: athletes }] = await Promise.all([
     db.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider', 'balldontlie').range(0, 10000),
     db.from('real_teams').select('id,abbreviation').eq('competition_id', competition.id),
+    db.from('athletes').select('id,display_name,position,real_teams(abbreviation)').eq('competition_id', competition.id).eq('active', true).range(0, 10000),
   ]);
   const athleteByProvider = new Map((links ?? []).map(row => [String(row.provider_athlete_id), row.athlete_id]));
   const teamByAlias = new Map((teams ?? []).map(row => [alias(row.abbreviation), row.id]));
+  const athletesByIdentity = new Map();
+  for (const athlete of athletes ?? []) {
+    const team = Array.isArray(athlete.real_teams) ? athlete.real_teams[0] : athlete.real_teams;
+    const key = liveIdentityKey(athlete.display_name, athlete.position, team?.abbreviation);
+    athletesByIdentity.set(key, [...(athletesByIdentity.get(key) ?? []), athlete.id]);
+  }
   const gameByProvider = new Map(candidates.map(row => [String(row.provider_game_id).replace(/^balldontlie:/, ''), row.id]));
   const ingestedAt = new Date().toISOString();
-  const playerStats = players.flatMap(row => { const athleteId = athleteByProvider.get(String(row.player?.id)); const gameId = gameByProvider.get(String(row.game?.id)); return athleteId && gameId ? [{ athlete_id: athleteId, game_id: gameId, raw_stats: canonicalLivePlayerStats(row, kicks.get(String(row.player.id))), source_provider: 'balldontlie', source_updated_at: row.game?.updated_at ?? null, ingested_at: ingestedAt }] : []; });
+  const playerStats = players.flatMap(row => { const mapped = athleteByProvider.get(String(row.player?.id)); const matches = athletesByIdentity.get(liveIdentityKey(playerName(row), playerPosition(row), playerTeam(row))) ?? []; const athleteIds = [...new Set([mapped, ...matches].filter(Boolean))]; const gameId = gameByProvider.get(String(row.game?.id)); return gameId ? athleteIds.map(athleteId => ({ athlete_id: athleteId, game_id: gameId, raw_stats: canonicalLivePlayerStats(row, kicks.get(String(row.player.id))), source_provider: 'balldontlie', source_updated_at: row.game?.updated_at ?? null, ingested_at: ingestedAt })) : []; });
   const teamStats = teamRows.flatMap(row => { const teamId = teamByAlias.get(String(row.team?.abbreviation)); const gameId = gameByProvider.get(String(row.game?.id)); return teamId && gameId ? [{ real_team_id: teamId, game_id: gameId, raw_stats: canonicalLiveTeamStats(row), source_provider: 'balldontlie', source_updated_at: row.game?.updated_at ?? null, ingested_at: ingestedAt }] : []; });
   for (const [table, values, conflict] of [['athlete_game_stats', playerStats, 'athlete_id,game_id,source_provider'], ['real_team_game_stats', teamStats, 'real_team_id,game_id,source_provider']]) if (values.length) { const { error } = await db.from(table).upsert(values, { onConflict: conflict }); if (error) throw new Error(error.message); }
   for (const game of activeGames) { const { error } = await db.from('real_games').update({ state: state(game.status_state), home_score: game.home_team_score, away_score: game.visitor_team_score, updated_at: ingestedAt }).eq('id', gameByProvider.get(String(game.id))); if (error) throw new Error(error.message); }
