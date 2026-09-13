@@ -56,6 +56,31 @@ export function sportradarGamePlayers(payload) {
   });
 }
 
+export function incompleteProviderGames(activeGames, scoringPlayers) {
+  const coverage = new Map();
+  for (const row of scoringPlayers) {
+    const gameId = String(row?.game?.id ?? '');
+    const team = normalizeAlias(row?.team?.abbreviation ?? row?.player?.team?.abbreviation);
+    const position = String(row?.player?.position_abbreviation ?? row?.player?.position ?? '').toUpperCase();
+    if (!gameId || !team || !['QB', 'RB', 'WR', 'TE', 'K'].includes(position)) continue;
+    const key = `${gameId}|${team}`;
+    const current = coverage.get(key) ?? { count: 0, positions: new Set() };
+    current.count += 1;
+    current.positions.add(position);
+    coverage.set(key, current);
+  }
+  return activeGames.filter(game => {
+    if (!['in_progress', 'final'].includes(game.status_state)) return false;
+    return [
+      [game.home_team, game.home_team_score],
+      [game.visitor_team, game.visitor_team_score],
+    ].some(([team, score]) => {
+      const found = coverage.get(`${game.id}|${normalizeAlias(team?.abbreviation)}`);
+      return number(score) > 0 && (!found || found.count < 5 || !found.positions.has('QB'));
+    });
+  });
+}
+
 export async function importSportradarFallback({ db, season, week, activeGames, gameByProvider, ingestedAt, timeoutMs = 15_000 }) {
   const apiKey = process.env.SPORTS_DATA_API_KEY || process.env.NFL_API || process.env.sportradar;
   if (!apiKey) return { enabled: false, games: 0, playerStats: 0, requests: 0, reason: 'credential unavailable' };
@@ -66,16 +91,25 @@ export async function importSportradarFallback({ db, season, week, activeGames, 
   let lastRequestAt = 0;
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   async function get(path) {
-    const wait = 1_250 - (Date.now() - lastRequestAt);
-    if (wait > 0) await sleep(wait);
-    lastRequestAt = Date.now();
-    const response = await fetch(`${baseUrl}${path}`, {
-      headers: { accept: 'application/json', 'x-api-key': apiKey },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    requests += 1;
-    if (!response.ok) throw new Error(`Sportradar ${response.status} for ${path}`);
-    return response.json();
+    const minimumInterval = Math.max(1_000, number(process.env.SPORTRADAR_MIN_REQUEST_MS) || 3_000);
+    const maxAttempts = 4;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const wait = minimumInterval - (Date.now() - lastRequestAt);
+      if (wait > 0) await sleep(wait);
+      lastRequestAt = Date.now();
+      const response = await fetch(`${baseUrl}${path}`, {
+        headers: { accept: 'application/json', 'x-api-key': apiKey },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      requests += 1;
+      if (response.ok) return response.json();
+      if (response.status !== 429 || attempt === maxAttempts - 1) {
+        throw new Error(`Sportradar ${response.status} for ${path} after ${attempt + 1} attempt(s)`);
+      }
+      const retryAfterSeconds = number(response.headers.get('retry-after'));
+      await sleep(Math.max(minimumInterval, retryAfterSeconds * 1_000, 5_000 * (attempt + 1)));
+    }
+    throw new Error(`Sportradar request exhausted for ${path}`);
   }
 
   const schedule = await get(`/games/${season}/REG/${week}/schedule.json`);
