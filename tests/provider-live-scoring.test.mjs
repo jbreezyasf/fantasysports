@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, liveIdentityKey, liveNamePositionKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
-import { canonicalSportradarPlayerStats, incompleteProviderGames, sportradarGamePlayers } from '../scripts/sportradar-nfl-live-fallback.mjs';
+import { canonicalSportradarPlayerStats, incompleteProviderGames, missingRosteredProviderGames, sportradarGamePlayers } from '../scripts/sportradar-nfl-live-fallback.mjs';
 
 test('matches provider players to duplicate drafted records safely', () => {
   assert.equal(liveIdentityKey('James Cook III', 'RB', 'BUF'), liveIdentityKey('James Cook', 'rb', 'BUF'));
@@ -69,6 +69,16 @@ test('limits fallback requests to games with incomplete player coverage', () => 
   ]);
   assert.deepEqual(incompleteProviderGames([game], complete), []);
   assert.deepEqual(incompleteProviderGames([game], complete.filter(row => row.team.abbreviation !== 'ATL' || row.player.position !== 'QB')), [game]);
+});
+
+test('requests fallback when an actual starting-lineup player is absent', () => {
+  const game = { id: 10, status_state: 'in_progress', home_team: { abbreviation: 'TB' }, visitor_team: { abbreviation: 'ATL' } };
+  const athletes = [
+    { id: 'baker', real_teams: { abbreviation: 'TB' } },
+    { id: 'bijan', real_teams: { abbreviation: 'ATL' } },
+  ];
+  assert.deepEqual(missingRosteredProviderGames([game], [{ athlete_id: 'bijan' }], new Set(['baker', 'bijan']), athletes), [game]);
+  assert.deepEqual(missingRosteredProviderGames([game], [{ athlete_id: 'baker' }, { athlete_id: 'bijan' }], new Set(['baker', 'bijan']), athletes), []);
 });
 
 test('reads both Sportradar game-statistics teams', () => {

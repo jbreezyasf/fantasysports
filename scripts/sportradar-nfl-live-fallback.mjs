@@ -81,6 +81,18 @@ export function incompleteProviderGames(activeGames, scoringPlayers) {
   });
 }
 
+export function missingRosteredProviderGames(activeGames, ingestedPlayerStats, rosteredAthleteIds, athletes) {
+  const observed = new Set(ingestedPlayerStats.map(row => row.athlete_id));
+  const missingTeams = new Set(athletes
+    .filter(athlete => rosteredAthleteIds.has(athlete.id) && !observed.has(athlete.id))
+    .map(athlete => normalizeAlias((Array.isArray(athlete.real_teams) ? athlete.real_teams[0] : athlete.real_teams)?.abbreviation))
+    .filter(Boolean));
+  return activeGames.filter(game => ['in_progress', 'final'].includes(game.status_state) && [
+    normalizeAlias(game.home_team?.abbreviation),
+    normalizeAlias(game.visitor_team?.abbreviation),
+  ].some(team => missingTeams.has(team)));
+}
+
 export async function importSportradarFallback({ db, season, week, activeGames, gameByProvider, ingestedAt, timeoutMs = 15_000 }) {
   const apiKey = process.env.SPORTS_DATA_API_KEY || process.env.NFL_API || process.env.sportradar;
   if (!apiKey) return { enabled: false, games: 0, playerStats: 0, requests: 0, reason: 'credential unavailable' };

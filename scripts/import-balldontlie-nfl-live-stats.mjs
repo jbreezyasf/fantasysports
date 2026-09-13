@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
-import { importSportradarFallback, incompleteProviderGames } from './sportradar-nfl-live-fallback.mjs';
+import { importSportradarFallback, incompleteProviderGames, missingRosteredProviderGames } from './sportradar-nfl-live-fallback.mjs';
 
 if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
   const match = /^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/.exec(line);
@@ -154,9 +154,20 @@ export async function runLiveStatsImport() {
   const playerStats = scoringPlayers.flatMap(row => { const mapped = athleteByProvider.get(String(row.player?.id)); const exactMatches = athletesByIdentity.get(liveIdentityKey(playerName(row), playerPosition(row), playerTeam(row))) ?? []; const crossTeamMatches = athletesByNamePosition.get(liveNamePositionKey(playerName(row), playerPosition(row))) ?? []; const safeCrossTeamMatch = crossTeamMatches.length === 1 ? crossTeamMatches : []; const athleteIds = [...new Set([mapped, ...exactMatches, ...safeCrossTeamMatch].filter(Boolean))]; const gameId = gameByProvider.get(String(row.game?.id)); const rawStats = row._weekly ? canonicalWeeklyPlayerStats(row) : canonicalLivePlayerStats(row, kicks.get(String(row.player.id))); return gameId ? athleteIds.map(athleteId => ({ athlete_id: athleteId, game_id: gameId, raw_stats: rawStats, source_provider: 'balldontlie', source_updated_at: row.collected_at ?? row.game?.updated_at ?? null, ingested_at: ingestedAt })) : []; });
   const teamStats = teamRows.flatMap(row => { const teamId = teamByAlias.get(String(row.team?.abbreviation)); const gameId = gameByProvider.get(String(row.game?.id)); return teamId && gameId ? [{ real_team_id: teamId, game_id: gameId, raw_stats: canonicalLiveTeamStats(row), source_provider: 'balldontlie', source_updated_at: row.game?.updated_at ?? null, ingested_at: ingestedAt }] : []; });
   for (const [table, values, conflict] of [['athlete_game_stats', playerStats, 'athlete_id,game_id,source_provider'], ['real_team_game_stats', teamStats, 'real_team_id,game_id,source_provider']]) if (values.length) { const { error } = await db.from(table).upsert(values, { onConflict: conflict }); if (error) throw new Error(error.message); }
+  const { data: leagueSeasons, error: leagueSeasonsError } = await db.from('league_seasons').select('id').eq('competition_season_id', competitionSeason.id);
+  if (leagueSeasonsError) throw new Error(leagueSeasonsError.message);
+  const { data: seasonFranchises, error: seasonFranchisesError } = await db.from('season_franchises').select('id').in('league_season_id', (leagueSeasons ?? []).map(row => row.id));
+  if (seasonFranchisesError) throw new Error(seasonFranchisesError.message);
+  const franchiseIds = (seasonFranchises ?? []).map(row => row.id);
+  const { data: activeLineups, error: activeLineupsError } = franchiseIds.length
+    ? await db.from('lineups').select('athlete_id').eq('week', weeks[0]).in('season_franchise_id', franchiseIds).not('athlete_id', 'is', null)
+    : { data: [], error: null };
+  if (activeLineupsError) throw new Error(activeLineupsError.message);
   let sportradarFallback;
   try {
-    const incompleteGames = incompleteProviderGames(activeGames, scoringPlayers);
+    const coverageGames = incompleteProviderGames(activeGames, scoringPlayers);
+    const rosterGames = missingRosteredProviderGames(activeGames, playerStats, new Set((activeLineups ?? []).map(row => row.athlete_id)), athletes ?? []);
+    const incompleteGames = [...new Map([...coverageGames, ...rosterGames].map(game => [String(game.id), game])).values()];
     sportradarFallback = incompleteGames.length
       ? await importSportradarFallback({ db, season, week: weeks[0], activeGames: incompleteGames, gameByProvider, ingestedAt })
       : { enabled: true, games: 0, playerStats: 0, requests: 0, reason: 'primary provider coverage complete' };
@@ -166,8 +177,6 @@ export async function runLiveStatsImport() {
     console.error(JSON.stringify({ job: 'live-scoring', provider: 'sportradar-fallback', ...sportradarFallback }));
   }
   for (const game of activeGames) { const { error } = await db.from('real_games').update({ state: state(game.status_state), home_score: game.home_team_score, away_score: game.visitor_team_score, updated_at: ingestedAt }).eq('id', gameByProvider.get(String(game.id))); if (error) throw new Error(error.message); }
-  const { data: leagueSeasons, error: leagueSeasonsError } = await db.from('league_seasons').select('id').eq('competition_season_id', competitionSeason.id);
-  if (leagueSeasonsError) throw new Error(leagueSeasonsError.message);
   for (const week of weeks) for (const leagueSeason of leagueSeasons ?? []) { const { error } = await db.rpc('calculate_pro_football_week_scores', { p_league_season_id: leagueSeason.id, p_week: week }); if (error) throw new Error(error.message); const { data: matchups, error: matchupsError } = await db.from('matchups').select('id').eq('league_season_id', leagueSeason.id).eq('week', week).eq('is_final', false); if (matchupsError) throw new Error(matchupsError.message); for (const matchup of matchups ?? []) { const { error: matchupError } = await db.rpc('recompute_matchup', { p_matchup_id: matchup.id, p_finalize: false }); if (matchupError) throw new Error(matchupError.message); } }
   const report = { season, weeks, games: activeGames.length, playerStats: playerStats.length, weeklyPlayerStats: weeklyPlayers.length, rawPlayerStats: players.length, teamStats: teamStats.length, requests, sportradarFallback, ingestedAt }; console.log(JSON.stringify(report)); return report;
 }
