@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalLivePlayerStats, canonicalLiveTeamStats, fieldGoalBuckets, liveIdentityKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
+import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, liveIdentityKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
 
 test('matches provider players to duplicate drafted records safely', () => {
   assert.equal(liveIdentityKey('James Cook III', 'RB', 'BUF'), liveIdentityKey('James Cook', 'rb', 'BUF'));
@@ -14,6 +14,19 @@ test('normalizes live player scoring fields', () => {
   assert.equal(result.rushing_tds, 1);
   assert.equal(result.rushing_fumbles_lost, 1);
   assert.equal(result.pat_made, 3);
+});
+
+test('normalizes provider weekly fantasy observations for canonical scoring', () => {
+  const result = canonicalWeeklyPlayerStats({ stats: {
+    passing_touchdowns: 2, passing_two_point_conversions: 1, receiving_receptions: 7,
+    receiving_touchdowns: 1, fumbles_lost: 1, field_goals_made_0_to_39: 2,
+  } });
+  assert.equal(result.passing_tds, 2);
+  assert.equal(result.passing_2pt_conversions, 1);
+  assert.equal(result.receptions, 7);
+  assert.equal(result.receiving_tds, 1);
+  assert.equal(result.rushing_fumbles_lost, 1);
+  assert.equal(result.fg_made_0_19, 2);
 });
 
 test('buckets made field goals by distance and ignores misses', () => {

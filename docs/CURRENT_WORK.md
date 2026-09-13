@@ -1,5 +1,7 @@
 # Big Exec Current Work
 
+**Progress 2026-09-13 — live score completeness:** Production cron execution and matchup recomputation were healthy, but the raw BALLDONTLIE `/nfl/v1/stats` response omitted primary offensive players for multiple active scoring games and silently left drafted starters at `0.00`. Live ingestion now prefers the provider's paginated `/nfl/v1/fantasy/weekly_stats` observations for active games, normalizes those sparse stats into Big Exec's canonical six-point-touchdown / half-PPR scoring fields, and retains raw live rows as fallback when a weekly record is unavailable. Cron reports now separate weekly and raw provider row counts so partial coverage is observable. Production deployment and score verification remain required.
+
 **Progress 2026-09-13:** Corrected the mobile bottom-navigation active state. The raised Matchup treatment no longer depends on `:nth-child`, which was shifted by the visually hidden current-section announcement and incorrectly styled Team. Active visual styling now follows `aria-current="page"`; named route groups cover franchise/team pages and matchup/schedule pages.
 
 **Primary objective:** Prepare the standalone Pro Football product for the 10-manager friend beta.
