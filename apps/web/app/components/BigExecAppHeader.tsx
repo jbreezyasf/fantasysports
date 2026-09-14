@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import AskGmPushToTalk from './AskGmPushToTalk';
 import { askHeaderAssistantGm } from './assistantGmActions';
 import { VisuallyHidden } from './accessibility';
+import BigExecCrownMark from './BigExecCrownMark';
 
 const items=[['League HQ',''],['Locker Room','/locker-room'],['Schedule','/schedule'],['Trades','/trades'],['Players','/players']] as const;
 
@@ -15,7 +16,7 @@ export default function BigExecAppHeader({leagueId,isCommissioner=false,voiceInp
   return <>
     <AskGmPushToTalk onAsk={(question)=>askHeaderAssistantGm(leagueId,question)} voiceInputEnabled={voiceInputEnabled} capabilities={{voiceInput:voiceInputEnabled,spokenOutput:true,criticalControlsActive}} />
     <header className="bigExecAppHeader">
-      <a className="appBrandLockup" href="/dashboard" aria-label="Big Exec dashboard"><span>BE</span><div><strong>BIG EXEC</strong><small>FANTASY SPORTS</small></div></a>
+      <a className="appBrandLockup" href="/dashboard" aria-label="Big Exec dashboard"><BigExecCrownMark className="appCrownMark"/><div><strong>BIG EXEC</strong><small>FANTASY SPORTS</small></div></a>
       <nav aria-label="League sections">
         {(currentItem || rosterIntegrityActive) && <VisuallyHidden>Current league section: {rosterIntegrityActive?'Roster Integrity':currentItem?.[0]}</VisuallyHidden>}
         {items.map(([label,suffix])=>{const href=`/leagues/${leagueId}${suffix}`;const active=suffix?pathname.startsWith(href):pathname===href;return <a key={label} href={href} aria-current={active?'page':undefined} aria-label={`${label}${active?', current section':''}`}>{label}</a>})}

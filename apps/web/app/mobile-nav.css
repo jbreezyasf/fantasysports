@@ -32,3 +32,6 @@
  .leagueNav {display:none}
  .franchiseNav {position:relative;top:auto}
 }
+.mobileGameNav>.mobileGameBrand{display:none}
+@media(min-width:721px){.mobileGameNav::before{display:none}.mobileGameBrand{display:grid!important;place-items:center!important;width:76px;min-height:76px!important;margin:0 12px 28px;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}.mobileGameBrand img{width:72px;height:72px;object-fit:contain}.mobileGameBrand:hover{transform:translateY(-1px)}}
+@media(min-width:721px) and (max-width:999px){.mobileGameBrand{width:76px;margin:0 auto 24px}.mobileGameBrand img{width:66px;height:66px}}
