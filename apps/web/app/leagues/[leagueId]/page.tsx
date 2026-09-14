@@ -68,15 +68,16 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   return (
     <main className="leagueShell">
       <section className="frontOfficeLeagueHero" style={{'--team-primary':myFranchise?.primary_color??'#d9b43b','--team-secondary':myFranchise?.secondary_color??'#f5f1e8'} as React.CSSProperties}>
+        <div className="executiveSuiteScene" aria-hidden="true" />
         <div className="frontOfficeLeagueTop"><a href="/dashboard">BIG EXEC</a><div><span>{league.name}</span><b>{isCommissioner?'COMMISSIONER':'MANAGER'}</b></div></div>
         <div className="frontOfficeIdentity">
           {myFranchise&&<FranchiseCrest className="frontOfficeCrest" name={myFranchise.name} abbreviation={myFranchise.abbreviation} primary={myFranchise.primary_color} secondary={myFranchise.secondary_color} avatarKey={myFranchise.avatar_key}/>}
-          <div><p className="eyebrow">YOUR FRONT OFFICE</p><h1>{myFranchise?.name??league.name}</h1><p>{managerName}</p></div>
+          <div><p className="eyebrow">YOUR FRONT OFFICE</p><h1>{myFranchise?.name??league.name}</h1><p>{managerName}</p>{myFranchise&&<a className="officeLineupLink" href={`/franchises/${myFranchise.id}/team`}>Manage your lineup <span aria-hidden="true">↗</span></a>}</div>
           <div className="frontOfficeRecord" aria-label={`Record ${record}${myRank?`, league rank ${myRank}`:''}`}><span>RECORD</span><strong>{record}</strong>{myRank&&<small>#{myRank} IN LEAGUE</small>}</div>
         </div>
         <div className="frontOfficeGameStrip">
-          <div><span>{activeMatchup?`WEEK ${activeMatchup.week}`:'SEASON STATUS'}</span><strong>{activeMatchup?`${franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'} vs ${franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'}`:(draftComplete?'Schedule pending':'Draft preparation')}</strong></div>
-          {activeMatchup&&<div className="frontOfficeMiniScore"><b>{Number(activeMatchup.home_points).toFixed(2)}</b><i>–</i><b>{Number(activeMatchup.away_points).toFixed(2)}</b></div>}
+          <div className="officeWeek"><span>{activeMatchup?`WEEK ${activeMatchup.week}`:'SEASON STATUS'}</span><strong>{activeMatchup?(activeMatchup.is_final?'Final result':'This week’s matchup'):(draftComplete?'Schedule pending':'Draft preparation')}</strong></div>
+          {activeMatchup&&<div className="frontOfficeMiniScore" aria-label={`${franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'} ${Number(activeMatchup.home_points).toFixed(2)}, ${franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'} ${Number(activeMatchup.away_points).toFixed(2)}`}><div><span>{franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'}</span><b>{Number(activeMatchup.home_points).toFixed(2)}</b></div><i aria-hidden="true">VS</i><div><span>{franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'}</span><b>{Number(activeMatchup.away_points).toFixed(2)}</b></div></div>}
           {activeMatchup?<a href={`/matchups/${activeMatchup.id}`}>Open matchup <span aria-hidden="true">→</span></a>:myFranchise?<a href={`/franchises/${myFranchise.id}/team`}>Manage lineup <span aria-hidden="true">→</span></a>:null}
         </div>
       </section>

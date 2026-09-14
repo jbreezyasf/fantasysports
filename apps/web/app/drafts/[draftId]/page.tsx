@@ -102,6 +102,7 @@ export default async function DraftPage({ params, searchParams }: { params: Prom
 
   return (
     <main className="draftRoom draftRoomEvent">
+      {draft.status !== 'completed' && <div className="draftRoomIdentity"><p className="eyebrow">THE SELECTION SUITE</p><h1>Draft Room</h1><p>Your board. Your next franchise player.</p></div>}
       <header className="draftEventHeader">
         <div><a className="backLink" href={`/leagues/${leagueSeason.league_id}`}>← LEAGUE HQ</a><p>{league?.name ?? 'BIG EXEC LEAGUE'}</p></div>
         <div><span className="leagueRole">{draft.status.toUpperCase()}</span><DraftRoomLive draftId={draftId} seasonFranchiseId={mySeasonFranchise?.id ?? null}/></div>
