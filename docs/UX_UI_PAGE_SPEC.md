@@ -21,6 +21,10 @@ A gate does not pass merely because its backend is functional if the associated 
 
 # 2. Global Product Shell
 
+## Approved September 14, 2026 visual refinement
+
+Juanita approved the desktop/mobile Front Office concept in this implementation conversation. Carry its stadium-suite environment, original destination imagery, champagne-gold/evergreen materials, editorial franchise heading, and solid readable score panels into the app. Desktop keeps the persistent left rail. The approved mobile concept and explicit earlier navigation request use a compact bottom bar with the same five destinations and an obvious route-aware active state; this supersedes the older mobile drawer presentation below. Gameplay text must remain real HTML, not baked into artwork. Background imagery is decorative; live records and scores remain database-derived. The concept image is art direction, not proof of deployed functionality.
+
 ## 2.1 Persistent left-side navigation
 
 All authenticated Big Exec pages use the same left-side navigation model.

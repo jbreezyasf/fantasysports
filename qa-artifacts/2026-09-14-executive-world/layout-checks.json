@@ -1,0 +1,130 @@
+[
+  {
+    "name": "front-office",
+    "width": 1440,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "matchup",
+    "width": 1440,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft",
+    "width": 1440,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft-completed",
+    "width": 1440,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "front-office",
+    "width": 390,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "matchup",
+    "width": 390,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft",
+    "width": 390,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft-completed",
+    "width": 390,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "front-office",
+    "width": 320,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "matchup",
+    "width": 320,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft",
+    "width": 320,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft-completed",
+    "width": 320,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "front-office",
+    "width": 768,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "matchup",
+    "width": 768,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft",
+    "width": 768,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  },
+  {
+    "name": "draft-completed",
+    "width": 768,
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "navActive": 1
+  }
+]

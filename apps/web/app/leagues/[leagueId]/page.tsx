@@ -64,6 +64,8 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
   const record = myStanding ? `${myStanding.wins}-${myStanding.losses}${myStanding.ties?`-${myStanding.ties}`:''}` : '0-0';
   const frontOfficePrimaryHref = draftComplete ? `/leagues/${leagueId}/players` : draft ? `/drafts/${draft.id}` : '#league-administration';
   const frontOfficePrimaryLabel = draftComplete ? 'Free Agency' : 'Draft Room';
+  const homeFranchise = activeMatchup ? franchiseBySeasonId.get(activeMatchup.home_season_franchise_id) : null;
+  const awayFranchise = activeMatchup ? franchiseBySeasonId.get(activeMatchup.away_season_franchise_id) : null;
 
   return (
     <main className="leagueShell">
@@ -77,7 +79,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
         </div>
         <div className="frontOfficeGameStrip">
           <div className="officeWeek"><span>{activeMatchup?`WEEK ${activeMatchup.week}`:'SEASON STATUS'}</span><strong>{activeMatchup?(activeMatchup.is_final?'Final result':'This week’s matchup'):(draftComplete?'Schedule pending':'Draft preparation')}</strong></div>
-          {activeMatchup&&<div className="frontOfficeMiniScore" aria-label={`${franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'} ${Number(activeMatchup.home_points).toFixed(2)}, ${franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'} ${Number(activeMatchup.away_points).toFixed(2)}`}><div><span>{franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'}</span><b>{Number(activeMatchup.home_points).toFixed(2)}</b></div><i aria-hidden="true">VS</i><div><span>{franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'}</span><b>{Number(activeMatchup.away_points).toFixed(2)}</b></div></div>}
+          {activeMatchup&&<div className="frontOfficeMiniScore" aria-label={`${franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'} ${Number(activeMatchup.home_points).toFixed(2)}, ${franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'} ${Number(activeMatchup.away_points).toFixed(2)}`}><div>{homeFranchise&&<FranchiseCrest className="frontOfficeMatchupCrest" name={homeFranchise.name} abbreviation={homeFranchise.abbreviation} primary={homeFranchise.primary_color} secondary={homeFranchise.secondary_color} avatarKey={homeFranchise.avatar_key} decorative/>}<span>{franchiseBySeasonId.get(activeMatchup.home_season_franchise_id)?.name??'Home'}</span><b>{Number(activeMatchup.home_points).toFixed(2)}</b></div><i aria-hidden="true">VS</i><div>{awayFranchise&&<FranchiseCrest className="frontOfficeMatchupCrest" name={awayFranchise.name} abbreviation={awayFranchise.abbreviation} primary={awayFranchise.primary_color} secondary={awayFranchise.secondary_color} avatarKey={awayFranchise.avatar_key} decorative/>}<span>{franchiseBySeasonId.get(activeMatchup.away_season_franchise_id)?.name??'Away'}</span><b>{Number(activeMatchup.away_points).toFixed(2)}</b></div></div>}
           {activeMatchup?<a href={`/matchups/${activeMatchup.id}`}>Open matchup <span aria-hidden="true">→</span></a>:myFranchise?<a href={`/franchises/${myFranchise.id}/team`}>Manage lineup <span aria-hidden="true">→</span></a>:null}
         </div>
       </section>
