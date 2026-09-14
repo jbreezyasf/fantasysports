@@ -3,6 +3,7 @@
 import React from 'react';
 import { usePathname } from 'next/navigation';
 import { VisuallyHidden } from './accessibility';
+import BigExecCrownMark from './BigExecCrownMark';
 
 export type BigExecMobileNavItem = {
   label: string;
@@ -34,6 +35,7 @@ export default function BigExecMobileNavClient({ items }: { items: BigExecMobile
   const current = items.find(isActive);
 
   return <nav className="mobileGameNav" aria-label="Big Exec primary navigation">
+    <a className="mobileGameBrand" href="/dashboard" aria-label="Big Exec dashboard"><BigExecCrownMark/></a>
     {current && <VisuallyHidden>Current section: {current.label}</VisuallyHidden>}
     {items.map(item => {
       const active = isActive(item);

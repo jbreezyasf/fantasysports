@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import BigExecCrownMark from '../components/BigExecCrownMark';
 import { createClient } from '../../lib/supabase/server';
 import { signOut } from '../auth/actions';
 import { SportIdentity } from '../components/SportIdentity';
@@ -48,7 +49,7 @@ export default async function DashboardPage() {
         {featuredFranchise&&<div className="stadiumColorWash" aria-hidden="true"/>}
         <div className="frontOfficeHeroGlow" aria-hidden="true" />
         <div className="frontOfficeTopline">
-          <div className="brandLockup"><span>BE</span><strong>BIG EXEC</strong></div>
+          <div className="brandLockup"><BigExecCrownMark className="dashboardCrownMark" priority/><strong>BIG EXEC</strong></div>
           <form><button className="ghostAction" formAction={signOut}>Sign out</button></form>
         </div>
         <div className="frontOfficeHeroGrid">
