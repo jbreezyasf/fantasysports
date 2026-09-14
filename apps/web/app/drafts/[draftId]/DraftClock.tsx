@@ -68,7 +68,7 @@ export default function DraftClock({
     expiredFormRef.current?.requestSubmit();
   }, [deadlineAt, draftId, processExpiredAction, remaining, submittedDeadline]);
 
-  if (!deadline || remaining === null || totalSeconds === null) return <span className="draftClock" aria-live="polite">Clock pending</span>;
+  if (!deadline || remaining === null || totalSeconds === null) return <span className="draftClock isPending" aria-live="polite">Clock pending</span>;
   const clock = remaining <= 0
     ? <span className="draftClock isExpired" aria-live="polite">Expired</span>
     : <span className="draftClock" aria-label={`${totalSeconds} seconds remaining`}>{formatRemaining(remaining)}</span>;

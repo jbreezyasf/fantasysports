@@ -22,7 +22,7 @@ export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
     }
   }
   const items: BigExecMobileNavItem[] = [
-    { label: 'Front Office', icon: 'office', href: `/leagues/${leagueId}`, match: 'exact', activePrefixes: franchiseId ? [`/franchises/${franchiseId}/team`] : undefined },
+    { label: 'Front Office', icon: 'office', href: `/leagues/${leagueId}`, match: 'exact', activePrefixes: ['/drafts/', ...(franchiseId ? [`/franchises/${franchiseId}/team`] : [])] },
     { label: 'Matchup', icon: 'matchup', href: matchupId ? `/matchups/${matchupId}` : `/leagues/${leagueId}/schedule`, match: matchupId ? 'prefix' : 'manual', activePrefixes: ['/matchups/'] },
     { label: 'Locker Room', icon: 'locker', href: `/leagues/${leagueId}/locker-room`, match: 'prefix' },
     { label: 'League', icon: 'league', href: `/leagues/${leagueId}/schedule`, match: 'prefix', activePrefixes: [`/leagues/${leagueId}/schedule`, `/leagues/${leagueId}/players`, `/leagues/${leagueId}/trades`, `/leagues/${leagueId}/settings`] },

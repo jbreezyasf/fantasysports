@@ -1,1 +1,34 @@
-.mobileGameNav{display:none}.franchiseNav a[aria-current="page"],.leagueNav a[aria-current="page"]{background:linear-gradient(135deg,#f0d77c,#d9b43b);color:#0b0c0f}@media(min-width:721px){body{padding-left:112px}.mobileGameNav{position:fixed;left:0;top:0;bottom:0;z-index:1000;width:112px;display:flex;flex-direction:column;gap:8px;padding:86px 10px 18px;background:rgba(5,7,12,.98);border-right:1px solid #51446e;box-shadow:12px 0 36px rgba(0,0,0,.34)}.mobileGameNav a,.mobileGameNav span{min-height:68px;display:grid;place-items:center;align-content:center;gap:7px;padding:9px 4px;text-align:center;color:#e9e5dc;font-weight:900;text-transform:uppercase;border:1px solid transparent;border-radius:14px}.mobileGameNav b{display:grid;place-items:center;min-width:30px;height:30px;color:#b9a4ff;font-size:1rem}.mobileGameNav small{font-size:.58rem;letter-spacing:.07em}.mobileGameNav a[aria-current="page"]{border-color:#8a68e8;background:linear-gradient(145deg,#30205a,#15172d);color:#fff;box-shadow:0 0 22px rgba(124,77,255,.3)}.mobileGameNav a[aria-current="page"] b{color:#f0d77c}.mobileGameNav a:hover,.mobileGameNav a:focus-visible{background:#21183a;color:#fff;outline-offset:2px}.mobileGameNav span[aria-disabled="true"]{color:#5e5b55}}@media(max-width:720px){body{padding-bottom:calc(88px + env(safe-area-inset-bottom))}.mobileGameNav{position:fixed;left:8px;right:8px;bottom:8px;z-index:1000;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:rgba(5,7,12,.96);backdrop-filter:blur(22px);border:1px solid #51446e;border-radius:20px;box-shadow:0 -8px 40px rgba(0,0,0,.65),0 0 28px rgba(124,77,255,.14);padding:5px 4px calc(5px + env(safe-area-inset-bottom));overflow:visible}.mobileGameNav a,.mobileGameNav span{min-width:0;min-height:60px;display:grid;place-items:center;text-align:center;padding:5px 2px;color:#e9e5dc;font-weight:900;text-transform:uppercase;border-radius:14px}.mobileGameNav b{display:grid;place-items:center;min-width:28px;height:28px;color:#b9a4ff;font-size:1rem;line-height:1}.mobileGameNav small{font-size:.52rem;letter-spacing:.055em}.mobileGameNav a[data-nav-item="Matchup"]{transform:translateY(-12px);min-height:66px}.mobileGameNav a[aria-current="page"]{border:1px solid #8a68e8;background:linear-gradient(145deg,#30205a,#15172d);color:#fff;box-shadow:0 0 22px rgba(124,77,255,.38)}.mobileGameNav a[aria-current="page"] b{color:#f0d77c}.mobileGameNav a:hover,.mobileGameNav a:focus-visible{background:#21183a;color:#fff}.mobileGameNav span[aria-disabled="true"]{color:#5e5b55}.leagueNav{display:none}.franchiseNav{position:relative;top:auto}}
+/* One route-aware navigation system, shared across the authenticated app. */
+.mobileGameNav {display:none}
+.franchiseNav a[aria-current="page"],.leagueNav a[aria-current="page"] {background:#ddc28a;color:#0b1210}
+.mobileGameNav>a,.mobileGameNav>span[aria-disabled] {min-width:0;display:flex;align-items:center;gap:12px;min-height:52px;padding:12px;color:#c6cdc6;border:1px solid transparent;border-radius:4px;text-decoration:none}
+.mobileGameNav b {display:grid;place-items:center;flex:none;color:inherit}
+.mobileGameNav small {font-size:.8rem;line-height:1.35;font-weight:500}
+.mobileGameNav>a[aria-current="page"] {color:#f3d797;background:linear-gradient(90deg,#b08b3429,#b08b3408);border-color:#967b454d;box-shadow:inset 3px 0 #ddc28a}
+.mobileGameNav>a:hover {background:#22312a;color:#fff2d7}
+.mobileGameNav>a:focus-visible {outline:3px solid #f2d9a1;outline-offset:-3px}
+.mobileGameNav>span[aria-disabled] {color:#b0b5b0}
+@media(min-width:721px) {
+ body:has(.mobileGameNav) {padding-left:184px}
+ .mobileGameNav {position:fixed;inset:0 auto 0 0;z-index:1000;width:184px;display:flex;flex-direction:column;gap:8px;padding:30px 12px 24px;background:linear-gradient(180deg,#0a1411,#070d0b);border-right:1px solid #8c764640;overflow-y:auto}
+ .mobileGameNav::before {content:'BE';display:block;margin:8px 12px 36px;font-family:Georgia,'Times New Roman',serif;font-size:3rem;line-height:1;color:#e3c98e;letter-spacing:-.1em}
+ .mobileGameNav::after {content:'RUN THE FRANCHISE.\A OWN THE SEASON.';white-space:pre-line;margin-top:auto;padding:32px 12px 0;color:#bdc5ba;font-size:.6rem;letter-spacing:.15em;line-height:2}
+}
+@media(min-width:721px) and (max-width:999px) {
+ body:has(.mobileGameNav) {padding-left:100px}
+ .mobileGameNav {width:100px;padding-inline:6px}
+ .mobileGameNav>a,.mobileGameNav>span[aria-disabled] {flex-direction:column;gap:6px;text-align:center;padding:10px 3px}
+ .mobileGameNav small {font-size:.7rem}
+ .mobileGameNav::before {text-align:center;margin-inline:0}
+ .mobileGameNav::after {padding-inline:2px;font-size:.5rem;letter-spacing:.03em}
+}
+@media(max-width:720px) {
+ body:has(.mobileGameNav) {padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+ .mobileGameNav {position:fixed;inset:auto 0 0;z-index:1000;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;background:#080e0dfa;border-top:1px solid #9a855d;box-shadow:0 -8px 24px #0004;padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+ .mobileGameNav>a,.mobileGameNav>span[aria-disabled] {flex-direction:column;justify-content:center;gap:5px;min-height:64px;padding:7px 2px;text-align:center;border-radius:0}
+ .mobileGameNav small {font-size:.625rem;letter-spacing:0;text-transform:none}
+ .mobileGameNav b svg {width:21px;height:21px}
+ .mobileGameNav>a[aria-current="page"] {border-color:transparent;box-shadow:inset 0 2px #ddc28a}
+ .leagueNav {display:none}
+ .franchiseNav {position:relative;top:auto}
+}
