@@ -21,7 +21,7 @@ Fixed draft loading-clock overflow; horizontal draft overflow; missing keyboard 
 
 ## Limits
 
-Production remains main commit a64aa460 at the start of this pass; the previous PR31 preview was READY at ee35ec03. The cloud browser redirected the league URL to login. No authenticated deployment flow or actual database mutation was exercised in this pass. Do not advance fantasy gameplay gates or call live scoring verified from these images.
+Production remains main commit a64aa460 at the start of this pass. No actual database mutation was exercised. Do not advance fantasy gameplay gates or call live scoring verified from these images.
 
 ## Reproduce
 
@@ -33,3 +33,14 @@ Production remains main commit a64aa460 at the start of this pass; the previous 
 - [Mobile Front Office](front-office-390.webp)
 - [Draft queue confirmation](draft-queue-review-390.webp)
 - [Score details](score-details-390.webp)
+
+## Authenticated deployed preview
+
+After the user signed in, checked deployment dpl_8HfvqMTFz2RjJteRvvaiANAkthei at PR head fd30a168b749b4178e7c13eb23ffa688b2a07bd5.
+
+- Stress Test 2026 Front Office rendered High Volts, its current-week matchup, real franchise crests, the approved executive suite design, and completed-draft Free Agency destination.
+- Open matchup navigated to the manager’s actual matchup. The visible primary navigation highlighted Matchup.
+- Lamar Jackson’s score disclosure opened and showed stored category contributions reconciling to 26.96. These were category totals, not proof of live raw-yardage coverage.
+- Front Office → Manage your lineup opened High Volts’ Week 1 lineup and roster reserves.
+- Inspected deployed desktop visual output; checked no page-width overflow on Front Office, Matchup, and lineup. Mobile coverage is provided by the actual-component local matrix above.
+- Read-only inspection only: no draft picks, lineup changes, trades, or other league mutations submitted.
