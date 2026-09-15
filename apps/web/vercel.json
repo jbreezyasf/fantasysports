@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/weekly-scoring-reconciliation",
       "schedule": "*/15 * * 9-12,1 *"
+    },
+    {
+      "path": "/api/cron/qa-weekly-participation",
+      "schedule": "30 14 * * 2,3,4"
     }
   ]
 }

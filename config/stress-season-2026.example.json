@@ -5,7 +5,7 @@
   "seasonYear": 2026,
   "leagueId": "REPLACE_WITH_STRESS_LEAGUE_UUID",
   "leagueSeasonId": "REPLACE_WITH_STRESS_LEAGUE_SEASON_UUID",
-  "humanManagerEmail": "juanita.brazziel@gmail.com",
+  "humanManagerEmails": ["juanita.brazziel@gmail.com", "j_brazziel@yahoo.com"],
   "draft": { "startsAt": "2026-09-13T01:30:00.000Z", "timezone": "America/Chicago" },
   "disabledAt": "2027-03-01T00:00:00.000Z",
   "syntheticManagers": [
@@ -16,7 +16,6 @@
     { "label": "Manager05", "email": "juanita.brazziel+qa-manager-05@gmail.com" },
     { "label": "Manager06", "email": "juanita.brazziel+qa-manager-06@gmail.com" },
     { "label": "Manager07", "email": "juanita.brazziel+qa-manager-07@gmail.com" },
-    { "label": "Manager08", "email": "juanita.brazziel+qa-manager-08@gmail.com" },
-    { "label": "Manager09", "email": "juanita.brazziel+qa-manager-09@gmail.com" }
+    { "label": "Manager08", "email": "juanita.brazziel+qa-manager-08@gmail.com" }
   ]
 }

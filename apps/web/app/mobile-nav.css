@@ -35,3 +35,9 @@
 .mobileGameNav>.mobileGameBrand{display:none}
 @media(min-width:721px){.mobileGameNav::before{display:none}.mobileGameBrand{display:grid!important;place-items:center!important;width:76px;min-height:76px!important;margin:0 12px 28px;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}.mobileGameBrand img{width:72px;height:72px;object-fit:contain}.mobileGameBrand:hover{transform:translateY(-1px)}}
 @media(min-width:721px) and (max-width:999px){.mobileGameBrand{width:76px;margin:0 auto 24px}.mobileGameBrand img{width:66px;height:66px}}
+@media(max-width:720px){
+ body:has(.mobileGameNav){padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+ .mobileGameNav>.mobileGameBrand{display:grid;place-items:center;position:absolute;left:50%;bottom:calc(100% + 7px);width:52px;height:52px;min-height:52px;padding:0;transform:translateX(-50%);border:1px solid #9a855d;border-radius:50%;background:linear-gradient(145deg,#111b17,#060b09);box-shadow:0 10px 26px #000b}
+ .mobileGameNav>.mobileGameBrand img{width:46px;height:46px;object-fit:contain}
+ .mobileGameNav>.mobileGameBrand:hover{transform:translateX(-50%)}
+}

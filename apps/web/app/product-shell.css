@@ -237,6 +237,18 @@
 }
 
 .frontOfficeStandings .standingRow>* {grid-column:auto!important;grid-row:auto!important}
+.lineupWeekTotal{display:grid;grid-template-columns:auto auto;align-items:baseline;justify-items:end;column-gap:8px;text-align:right}
+.lineupWeekTotal strong{font-size:1.7rem;color:#f0d291;font-variant-numeric:tabular-nums;line-height:1}
+.lineupWeekTotal small{font-size:.58rem;letter-spacing:.1em;color:#c6c9c3}
+.lineupWeekTotal span{grid-column:1/-1;font-size:.58rem;letter-spacing:.1em;color:#a9afa9;margin-top:6px}
+.lineupAssetPoints{margin-left:auto;color:#f0d291;font-size:1.05rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lineupAssetPoints small{font-size:.55rem;letter-spacing:.08em;color:#aaa69d}
+.lineupTablePanel .lineupSlot{grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+.lineupTablePanel .lineupSlot>span{grid-row:1/3}
+.lineupTablePanel .lineupSlot>strong{grid-column:2}
+.lineupTablePanel .lineupSlot>.lineupAssetPoints{grid-column:3;grid-row:1/3}
+.lineupTablePanel .lineupChange{grid-column:2/4}
+.benchScoreRow{display:flex!important;align-items:center;justify-content:space-between;gap:12px}
 .frontOfficeStandings .standingRow>b {font-size:.8rem;white-space:nowrap}
 .draftQueueItem:has(.queueDraftReview[open]) {grid-template-rows:auto auto}
 .draftQueueItem .queueDraftReview[open] {grid-column:1/-1;grid-row:2;display:block}
