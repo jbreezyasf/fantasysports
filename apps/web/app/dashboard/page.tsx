@@ -43,6 +43,8 @@ export default async function DashboardPage() {
   const leagueCount = leagues?.length ?? 0;
   const inviteCount = invites?.length ?? 0;
 
+  if (leagueCount === 1 && inviteCount === 0) redirect(`/leagues/${leagues[0].id}`);
+
   return (
     <main className="frontOfficeShell">
       <section className={`frontOfficeHero ${featuredFranchise?'frontOfficeStadiumHero':''}`} style={featuredFranchise?{'--stadium-primary':featuredFranchise.primary_color??'#7c4dff','--stadium-secondary':featuredFranchise.secondary_color??'#fff'} as React.CSSProperties:undefined}>
