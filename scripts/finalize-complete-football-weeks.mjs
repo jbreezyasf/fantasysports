@@ -25,14 +25,17 @@ export async function finalizeCompleteFootballWeeks({db,competitionSeasonId,leag
     const {data:games,error:gamesError}=await db.from('real_games').select('id,week,state,starts_at').eq('competition_season_id',competitionSeasonId).eq('week',week);
     if(gamesError)throw new Error(gamesError.message);
     if(!isWeekComplete(games??[],now)){results.push({week,status:'open'});continue;}
-    let finalized=0,carried=0;
+    let finalized=0,carried=0,recapsQueued=0;
     for(const leagueSeason of leagueSeasons??[]){
       const {data:matchups,error:matchupsError}=await db.from('matchups').select('id').eq('league_season_id',leagueSeason.id).eq('week',week).eq('is_final',false);
       if(matchupsError)throw new Error(matchupsError.message);
       for(const matchup of matchups??[]){const {error}=await db.rpc('recompute_matchup',{p_matchup_id:matchup.id,p_finalize:true});if(error)throw new Error(error.message);finalized+=1;}
       carried+=await carryLineupsForward(db,leagueSeason.id,week);
+      const {data:recapId,error:recapError}=await db.rpc('publish_finalized_league_week',{p_league_season_id:leagueSeason.id,p_week:week});
+      if(recapError)throw new Error(recapError.message);
+      if(recapId)recapsQueued+=1;
     }
-    results.push({week,status:'final',finalized,carried});
+    results.push({week,status:'final',finalized,carried,recapsQueued});
   }
   return results;
 }

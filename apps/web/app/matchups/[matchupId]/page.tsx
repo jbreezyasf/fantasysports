@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
-import { buildArcadeRecap, generatePostgameTalk, postGeneratedTalk, refreshMatchup } from '../actions';
+import { generatePostgameTalk, postGeneratedTalk, refreshMatchup } from '../actions';
 import { FranchiseCrest } from '../../components/FranchiseCrest';
 import MatchupScoreAnnouncer from './MatchupScoreAnnouncer';
 import MatchupLiveRefresh from './MatchupLiveRefresh';
@@ -60,7 +60,7 @@ export default async function MatchupPage({
     supabase.from('fantasy_player_scores').select('athlete_id,game_id,points,breakdown,calculated_at').eq('league_season_id', matchup.league_season_id).eq('week', matchup.week),
     supabase.from('fantasy_team_scores').select('real_team_id,game_id,points,breakdown,calculated_at').eq('league_season_id', matchup.league_season_id).eq('week', matchup.week),
     query.talk ? supabase.from('generated_messages').select('id,tone,body,provider,created_at').eq('matchup_id', matchupId).eq('requested_by', user.id).eq('tone', query.talk).order('created_at', { ascending: false }).limit(3) : Promise.resolve({ data: [] }),
-    matchup.is_final ? supabase.from('recap_scripts').select('id,title').eq('matchup_id', matchupId).maybeSingle() : Promise.resolve({ data: null }),
+    matchup.is_final ? supabase.from('recap_scripts').select('id,title').eq('league_season_id', matchup.league_season_id).eq('week', matchup.week).eq('recap_kind', 'league_week').maybeSingle() : Promise.resolve({ data: null }),
     supabase.from('standings').select('season_franchise_id,wins,losses,ties,points_for,points_against').eq('league_season_id',matchup.league_season_id).order('wins',{ascending:false}).order('points_for',{ascending:false}),
   ]);
   const {data:weekGames}=member?.competition_season_id?await supabase.from('real_games').select('starts_at,state').eq('competition_season_id',member.competition_season_id).eq('week',matchup.week).order('starts_at',{ascending:true}):{data:[] as Array<{starts_at:string;state:string}>};
@@ -204,17 +204,11 @@ export default async function MatchupPage({
             <input type="hidden" name="matchup_id" value={matchupId} />
             <button className="secondary">Refresh Scores</button>
           </form>
-          {matchup.is_final &&
-            (recap ? (
+          {matchup.is_final && recap && (
               <a className="primary" href={`/recaps/${recap.id}`}>
-                Watch Arcade Recap
+                Watch Week Recap
               </a>
-            ) : (
-              <form action={buildArcadeRecap}>
-                <input type="hidden" name="matchup_id" value={matchupId} />
-                <button className="primary">Build Arcade Recap</button>
-              </form>
-            ))}
+            )}
           {member?.league_id && (
             <a className="secondary" href={`/leagues/${member.league_id}/locker-room`}>
               Locker Room

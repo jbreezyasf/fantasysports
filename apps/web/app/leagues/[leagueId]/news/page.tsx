@@ -45,10 +45,10 @@ export default async function LeagueNewsPage({
     { data: trades },
   ] = await Promise.all([
     supabase
-      .from("league_feed_events")
-      .select("id,event_type,body,created_at")
+      .from("league_news_stories")
+      .select("id,source_type,prominence,headline,dek,href,published_at")
       .eq("league_id", leagueId)
-      .order("created_at", { ascending: false })
+      .order("published_at", { ascending: false })
       .limit(80),
     supabase
       .from("standings")
@@ -84,9 +84,11 @@ export default async function LeagueNewsPage({
         {top && (
           <article>
             <span>TOP STORY</span>
-            <h2>{top.body}</h2>
-            <time dateTime={top.created_at}>
-              {new Date(top.created_at).toLocaleString()}
+            <h2>{top.headline}</h2>
+            <p>{top.dek}</p>
+            {top.href && <a className="primary" href={top.href}>Watch recap</a>}
+            <time dateTime={top.published_at}>
+              {new Date(top.published_at).toLocaleString()}
             </time>
           </article>
         )}
@@ -101,10 +103,12 @@ export default async function LeagueNewsPage({
           </div>
           {(stories ?? []).slice(top ? 1 : 0).map((story) => (
             <article className="leagueNewsItem" key={story.id}>
-              <span>{story.event_type.replaceAll("_", " ")}</span>
-              <p>{story.body}</p>
-              <time dateTime={story.created_at}>
-                {new Date(story.created_at).toLocaleString()}
+              <span>{story.source_type.replaceAll("_", " ")}</span>
+              <h3>{story.headline}</h3>
+              <p>{story.dek}</p>
+              {story.href && <a href={story.href}>Open story</a>}
+              <time dateTime={story.published_at}>
+                {new Date(story.published_at).toLocaleString()}
               </time>
             </article>
           ))}
