@@ -1,5 +1,6 @@
 import { buildDraftRankings } from '../fantasy/draftRankings';
 import { loadFantasyEligibleAthletesFrom, type AthletePoolClient } from '../fantasy/athletePoolCore';
+import { buildPlayerPerformance } from '../fantasy/playerPerformance';
 import { searchAssistantGmKnowledgeBase } from './knowledgeRetrieval';
 
 type QueryResult<T> = { data: T | null; error?: { message?: string } | null; count?: number | null };
@@ -233,11 +234,14 @@ export async function runAssistantGmTool(ctx: AssistantGmToolContext, request: A
         const q = (request.query ?? '').trim().toLowerCase();
         const position = (request.position ?? 'ALL').toUpperCase();
         const athletes = await loadFantasyEligibleAthletesFrom(ctx.supabase as unknown as AthletePoolClient);
+        const scores = await many<{athlete_id:string|null;week:number;points:number|string|null}>(ctx.supabase.from('fantasy_player_scores').select('athlete_id,week,points').eq('league_season_id',season.id).order('week',{ascending:false}).limit(5000));
+        const performance = buildPlayerPerformance(scores);
         const filtered = (athletes.data ?? [])
           .filter((athlete) => position === 'ALL' || (position === 'FLEX' && ['RB', 'WR', 'TE'].includes(athlete.position)) || athlete.position === position)
           .filter((athlete) => !q || `${athlete.display_name} ${athlete.position}`.toLowerCase().includes(q))
           .filter((athlete) => request.tool === 'searchPlayers' || !athleteOwner.has(athlete.id))
-          .map((athlete) => ({ ...athlete, availability: athleteOwner.get(athlete.id) ? `Rostered by ${athleteOwner.get(athlete.id)}` : 'Available' }));
+          .map((athlete) => ({ ...athlete, availability: athleteOwner.get(athlete.id) ? `Rostered by ${athleteOwner.get(athlete.id)}` : 'Available', performance: performance.get(athlete.id) ?? null }))
+          .sort((a,b)=>(b.performance?.lastThreeAverage??-Infinity)-(a.performance?.lastThreeAverage??-Infinity));
         return ok(request.tool, { query: request.query ?? '', position, players: filtered });
       }
       case 'getPlayerDetails':
