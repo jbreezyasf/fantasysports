@@ -151,18 +151,3 @@ export async function postGeneratedTalk(formData: FormData) {
   revalidatePath(`/leagues/${leagueId}/locker-room`);
   redirect(`/leagues/${leagueId}/locker-room`);
 }
-
-export async function buildArcadeRecap(formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-  const matchupId = String(formData.get('matchup_id') ?? '');
-  const { data, error } = await supabase.rpc('build_matchup_recap', {
-    p_matchup_id: matchupId,
-  });
-  if (error) redirect(`/matchups/${matchupId}?error=${encodeURIComponent(error.message)}`);
-  revalidatePath(`/matchups/${matchupId}`);
-  redirect(`/recaps/${String(data)}`);
-}
