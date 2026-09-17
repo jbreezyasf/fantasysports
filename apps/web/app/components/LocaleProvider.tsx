@@ -166,6 +166,11 @@ const spanish: Record<string, string> = {
   'The front office is waiting.': 'La oficina principal te espera.',
   'Continue building your franchise.': 'Continúa construyendo tu franquicia.',
   'Build something legendary.': 'Construye algo legendario.',
+  'Install Big Exec': 'Instala Big Exec',
+  'Install app': 'Instalar app',
+  'Not now': 'Ahora no',
+  'Add Big Exec to your home screen for faster game-day access.': 'Añade Big Exec a tu pantalla de inicio para entrar más rápido el día del juego.',
+  'Tap Share, then choose Add to Home Screen.': 'Toca Compartir y luego selecciona Añadir a pantalla de inicio.',
   'One identity. Every league. A franchise history designed to outlive the week.':
     'Una identidad. Cada liga. Una historia de franquicia diseñada para durar mucho más que una semana.',
 };
