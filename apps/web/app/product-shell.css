@@ -16,6 +16,7 @@
 .arenaMatchupHero{overflow:hidden;border-radius:18px!important;background:linear-gradient(180deg,rgba(5,9,10,.45),#080d0c 96%),url('/environments/big-exec-starter-stadium-v1.jpg') center 40%/cover!important;box-shadow:0 28px 80px rgba(0,0,0,.34);border:1px solid #64573b!important}
 .arenaMatchupHero .scoreboard{max-width:900px!important;border-radius:14px!important;background:rgba(5,7,10,.88)!important}
 .matchupLineupPanel{max-width:1080px;margin-inline:auto}
+.matchupStandingsPanel{max-width:1080px;margin-inline:auto}.matchupStandingsPanel .lineupSectionHeading{align-items:flex-end}.matchupStandingsPanel .standingsList{max-width:none}.matchupStandingsPanel .standingRow.isMatchupTeam{background:linear-gradient(90deg,rgba(217,189,123,.16),rgba(217,189,123,.03));box-shadow:inset 3px 0 #d9bd7b}.matchupStandingsEmpty{padding:18px;margin:0}
 .battleList{overflow:visible!important;border-radius:14px}
 .battleList .battleRow{position:relative;overflow:visible!important;min-height:82px!important;padding:12px 16px!important}
 .battleList .battleRow:first-child{border-radius:13px 13px 0 0}
@@ -60,6 +61,7 @@
   .scoreBreakdown summary{font-size:.59rem}
   .scoreBreakdownGrid{position:fixed;left:12px!important;right:12px!important;top:auto;bottom:92px;width:auto;max-height:46vh}
   .arenaMatchupHero{margin-inline:-12px!important;border-radius:0!important}
+  .matchupStandingsPanel{padding-top:18px!important}.matchupStandingsPanel .standingRow{grid-template-columns:26px minmax(0,1fr) auto}.matchupStandingsPanel .standingRow small:last-child{display:none}
 }
 
 @media(prefers-reduced-motion:reduce){.mobileGameNav a,.scoreBreakdown summary{transition:none}}

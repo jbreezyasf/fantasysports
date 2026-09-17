@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, liveIdentityKey, liveNamePositionKey } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
+import { canonicalLivePlayerStats, canonicalLiveTeamStats, canonicalWeeklyPlayerStats, fieldGoalBuckets, isStaleNonTerminalGame, liveIdentityKey, liveNamePositionKey, providerGameState } from '../scripts/import-balldontlie-nfl-live-stats.mjs';
 import { canonicalSportradarPlayerStats, incompleteProviderGames, missingRosteredProviderGames, sportradarGamePlayers } from '../scripts/sportradar-nfl-live-fallback.mjs';
 
 test('matches provider players to duplicate drafted records safely', () => {
   assert.equal(liveIdentityKey('James Cook III', 'RB', 'BUF'), liveIdentityKey('James Cook', 'rb', 'BUF'));
   assert.equal(liveIdentityKey('Brian Thomas Jr.', 'WR', 'JAX'), liveIdentityKey('Brian Thomas', 'WR', 'JAC'));
+});
+
+test('normalizes every known terminal provider state and surfaces unknown states', () => {
+  for (const value of ['post', 'complete', 'completed', 'closed', 'final']) assert.equal(providerGameState(value), 'final');
+  assert.equal(providerGameState('mystery-state'), 'unknown');
+});
+
+test('identifies past non-terminal games for recovery without reopening finals', () => {
+  const cutoff = new Date('2026-09-17T00:00:00Z');
+  assert.equal(isStaleNonTerminalGame({ starts_at: '2026-09-14T00:00:00Z', state: 'in_progress' }, cutoff), true);
+  assert.equal(isStaleNonTerminalGame({ starts_at: '2026-09-14T00:00:00Z', state: 'final' }, cutoff), false);
+  assert.equal(isStaleNonTerminalGame({ starts_at: '2026-09-18T00:00:00Z', state: 'scheduled' }, cutoff), false);
 });
 
 test('builds a team-independent identity key for unique roster moves', () => {
