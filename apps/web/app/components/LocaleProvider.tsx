@@ -171,6 +171,10 @@ const spanish: Record<string, string> = {
   'Not now': 'Ahora no',
   'Add Big Exec to your home screen for faster game-day access.': 'Añade Big Exec a tu pantalla de inicio para entrar más rápido el día del juego.',
   'Tap Share, then choose Add to Home Screen.': 'Toca Compartir y luego selecciona Añadir a pantalla de inicio.',
+  'Recent performance mode.': 'Modo de rendimiento reciente.',
+  'Provider update delayed.': 'Actualización del proveedor retrasada.',
+  'Waiver recommendations prioritize recent production, provider projections, and availability.': 'Las recomendaciones de waivers priorizan la producción reciente, las proyecciones del proveedor y la disponibilidad.',
+  'Players are ranked by health and verified recent fantasy production while the next provider rankings update completes.': 'Los jugadores se clasifican por salud y producción fantasy reciente verificada mientras se completa la próxima actualización de rankings.',
   'One identity. Every league. A franchise history designed to outlive the week.':
     'Una identidad. Cada liga. Una historia de franquicia diseñada para durar mucho más que una semana.',
 };
