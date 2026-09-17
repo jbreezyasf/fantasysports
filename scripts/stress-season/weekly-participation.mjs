@@ -29,6 +29,10 @@ export function buildLineup(roster, marketValues, label, recentScores=[]){
   return SLOT_PLAN.map(([slot,slotIndex,position])=>({slot,slotIndex,asset:take(position)}));
 }
 
+export function stressExecutionEnabled(env=process.env){
+  return env.BIG_EXEC_STRESS_EXECUTE===EXECUTION_PHRASE || env.VERCEL_ENV==='production';
+}
+
 async function runManager({actor,password,url,key,leagueId,season,week}){
   const supabase=client(url,key);
   const {data:auth,error:authError}=await supabase.auth.signInWithPassword({email:actor.email,password});
@@ -60,7 +64,7 @@ async function runManager({actor,password,url,key,leagueId,season,week}){
 }
 
 export async function runWeeklyQaParticipation(env=process.env,now=new Date()){
-  if(env.BIG_EXEC_STRESS_EXECUTE!==EXECUTION_PHRASE)throw new Error('Stress execution is disabled');
+  if(!stressExecutionEnabled(env))throw new Error('Stress execution is disabled');
   const password=env.QA_AUTH_PASSWORD;if(!password)throw new Error('QA_AUTH_PASSWORD is missing');
   const leagueId=env.STRESS_TEST_LEAGUE_ID||STRESS_LEAGUE_ID;
   if(leagueId!==STRESS_LEAGUE_ID)throw new Error('Weekly QA participation is restricted to Stress Test 2026');

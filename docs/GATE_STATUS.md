@@ -344,6 +344,8 @@ Findings by gate:
 
 **Reconciled 2026-09-04.** No new evidence. Every 2026-08-30/31 QA artifact was checked; none exercises scoring. The draft and transactions runs operate on rosters and ownership, not on game ingestion or score calculation. Gate 3 evidence remains 2025 Week 1 fixture data plus schema/function inspection, and production still has no current-season 2026 `real_games` rows. This gate is unchanged and is the largest untested area of the product.
 
+**Reconciled 2026-09-17.** Production now contains the 2026 schedule and Week 1 scoring evidence. All 16 Week 1 real games were final, all five Stress Test 2026 fantasy matchups were recomputed and finalized, and standings readback showed five wins, five losses, and non-zero points for all ten franchises. Production runtime logs identified the unattended reconciliation blocker precisely: 393 failures from a missing public Supabase URL binding. The code now uses the same fixed public project-URL fallback as the live scorer while retaining server-key requirements. This proves the scoring/finalization path and the repaired current standings, but not the next unattended cron execution, live score latency, simultaneous games, stat corrections, or correction audit behavior; Gate 3 remains NOT PASSED.
+
 ---
 
 ## Gate 4 — Season Runs Itself
