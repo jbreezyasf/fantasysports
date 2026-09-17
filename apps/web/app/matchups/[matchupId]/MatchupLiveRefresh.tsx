@@ -5,7 +5,19 @@ import { useRouter } from 'next/navigation';
 
 const REFRESH_MS = 30_000;
 
-export default function MatchupLiveRefresh({ isFinal, updatedAt }: { isFinal: boolean; updatedAt: string | null }) {
+export type MatchupFeedState = 'upcoming' | 'live' | 'idle' | 'final';
+
+export function matchupFeedMessage({state,updatedAt,nextGameAt,now}:{state:MatchupFeedState;updatedAt:string|null;nextGameAt:string|null;now:number}) {
+  if(state==='final') return 'Final score';
+  if(state==='upcoming' || state==='idle') {
+    if(nextGameAt) return `No games in progress • Live scoring resumes ${new Date(nextGameAt).toLocaleString([], { weekday:'short', hour:'numeric', minute:'2-digit' })}`;
+    return 'No games in progress';
+  }
+  const ageSeconds=updatedAt?Math.max(0,Math.round((now-Date.parse(updatedAt))/1000)):null;
+  return `Live scoring updates automatically every 30 seconds${ageSeconds===null?'':` • Data updated ${ageSeconds<60?`${ageSeconds} seconds`:`${Math.floor(ageSeconds/60)} minutes`} ago`}`;
+}
+
+export default function MatchupLiveRefresh({ isFinal, updatedAt, feedState='live', nextGameAt=null }: { isFinal: boolean; updatedAt: string | null; feedState?: MatchupFeedState; nextGameAt?: string | null }) {
   const router = useRouter();
   const [now, setNow] = useState<number | null>(null);
 
@@ -19,8 +31,7 @@ export default function MatchupLiveRefresh({ isFinal, updatedAt }: { isFinal: bo
     return () => window.clearInterval(interval);
   }, [isFinal, router]);
 
-  const ageSeconds = updatedAt && now !== null ? Math.max(0, Math.round((now - Date.parse(updatedAt)) / 1000)) : null;
   return <p className="liveScoreFreshness" role="status">
-    {isFinal ? 'Final score' : `Updates automatically every 30 seconds${ageSeconds === null ? '' : ` • Data updated ${ageSeconds < 60 ? `${ageSeconds} seconds` : `${Math.floor(ageSeconds / 60)} minutes`} ago`}`}
+    {matchupFeedMessage({state:isFinal?'final':feedState,updatedAt,nextGameAt,now:now??Date.now()})}
   </p>;
 }

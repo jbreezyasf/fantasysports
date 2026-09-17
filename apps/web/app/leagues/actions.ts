@@ -33,12 +33,11 @@ export async function createLeagueInvite(formData: FormData) {
     supabase.from('league_members').select('id', { count:'exact', head:true }).eq('league_id', leagueId)
   ]);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bigexecfs.com';
-  let firstToken=''; let sent=0; let manual=0;
+  let sent=0; let manual=0;
   for (const email of emails) {
     const { data, error } = await supabase.rpc('create_league_invite', { p_league_id: leagueId, p_email: email });
     if (error) redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(error.message));
     const invite = data as { invite_id: string; invite_token: string; email: string };
-    if (!firstToken) firstToken=invite.invite_token;
     const { data: inviteRecord } = await supabase.from('league_invites').select('expires_at').eq('id', invite.invite_id).maybeSingle();
     const message = leagueInviteEmail({ leagueName: league?.name ?? 'your fantasy league', commissionerName: profile?.display_name ?? 'Your commissioner', seasonLabel: '2026', claimedCount: claimedCount ?? 1, totalSpots: league?.max_franchises ?? 10, claimUrl: `${appUrl}/invite/${invite.invite_token}`, expiresLabel: inviteRecord?.expires_at ? new Date(inviteRecord.expires_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:'UTC' }) : 'in 14 days' });
     const resendBucket = Math.floor(Date.now() / 60000);
@@ -47,7 +46,7 @@ export async function createLeagueInvite(formData: FormData) {
   }
   revalidatePath(`/leagues/${leagueId}`);
   const emailStatus = sent && manual ? 'mixed' : sent ? 'sent' : 'manual';
-  redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${firstToken}&invite_email=${encodeURIComponent(emails.join(', '))}&invite_count=${emails.length}&email_status=${emailStatus}`);
+  redirect(`/leagues/${leagueId}?invite_created=1&invite_count=${emails.length}&email_status=${emailStatus}`);
 }
 
 export async function createLeagueShareInvite(formData: FormData) {
@@ -61,7 +60,7 @@ export async function createLeagueShareInvite(formData: FormData) {
     redirect(`/leagues/${leagueId}?invite_error=` + encodeURIComponent(error?.message ?? 'We could not create a share invite link.'));
   }
   revalidatePath(`/leagues/${leagueId}`);
-  redirect(`/leagues/${leagueId}?invite_created=1&invite_token=${invite.invite_token}&invite_email=${encodeURIComponent('share link')}&invite_count=1&email_status=manual`);
+  redirect(`/leagues/${leagueId}?invite_created=1&invite_count=1&email_status=manual`);
 }
 
 export async function resendLeagueInvite(formData: FormData) {
@@ -83,7 +82,7 @@ export async function resendLeagueInvite(formData: FormData) {
   const resendBucket = Math.floor(Date.now() / 60000);
   const delivery = await sendTransactionalEmail({ to:invite.email, subject:message.subject, html:message.html, text:message.text, idempotencyKey:`league-invite/resend/${invite.id}/${resendBucket}` });
   revalidatePath(`/leagues/${leagueId}`);
-  redirect(`/leagues/${leagueId}?invite_resent=1&invite_email=${encodeURIComponent(invite.email)}&email_status=${delivery.sent ? 'sent' : 'manual'}`);
+  redirect(`/leagues/${leagueId}?invite_resent=1&email_status=${delivery.sent ? 'sent' : 'manual'}`);
 }
 
 export async function acceptLeagueInvite(formData: FormData) {

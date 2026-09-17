@@ -51,7 +51,7 @@ export default async function MatchupPage({
     away = sf?.find((x) => x.id === matchup.away_season_franchise_id);
   const homeFranchise = firstRelation(home?.franchises as FranchiseCard | FranchiseCard[] | null | undefined),
     awayFranchise = firstRelation(away?.franchises as FranchiseCard | FranchiseCard[] | null | undefined);
-  const { data: member } = await supabase.from('league_seasons').select('league_id').eq('id', matchup.league_season_id).maybeSingle();
+  const { data: member } = await supabase.from('league_seasons').select('league_id,competition_season_id').eq('id', matchup.league_season_id).maybeSingle();
   const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null);
   const ownedIds = new Set((ownerships ?? []).map((o) => o.franchise_id));
   const isParticipant = (sf ?? []).some((x) => ownedIds.has(x.franchise_id));
@@ -62,6 +62,11 @@ export default async function MatchupPage({
     query.talk ? supabase.from('generated_messages').select('id,tone,body,provider,created_at').eq('matchup_id', matchupId).eq('requested_by', user.id).eq('tone', query.talk).order('created_at', { ascending: false }).limit(3) : Promise.resolve({ data: [] }),
     matchup.is_final ? supabase.from('recap_scripts').select('id,title').eq('matchup_id', matchupId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const {data:weekGames}=member?.competition_season_id?await supabase.from('real_games').select('starts_at,state').eq('competition_season_id',member.competition_season_id).eq('week',matchup.week).order('starts_at',{ascending:true}):{data:[] as Array<{starts_at:string;state:string}>};
+  const now=Date.now();
+  const liveGame=(weekGames??[]).some(game=>['in_progress','live','halftime'].includes(String(game.state).toLowerCase()));
+  const nextGame=(weekGames??[]).find(game=>Date.parse(game.starts_at)>now&&!['final','canceled'].includes(String(game.state).toLowerCase()));
+  const feedState=matchup.is_final?'final':liveGame?'live':nextGame?'upcoming':'idle';
   const scoredGameIds = [...new Set([...(playerScores ?? []).map((score) => score.game_id), ...(teamScores ?? []).map((score) => score.game_id)].filter((id): id is string => Boolean(id)))];
   const [{ data: rawPlayerStats }, { data: rawTeamStats }] = scoredGameIds.length ? await Promise.all([supabase.from('athlete_game_stats').select('athlete_id,game_id,raw_stats,ingested_at').in('game_id', scoredGameIds).order('ingested_at', { ascending: false }), supabase.from('real_team_game_stats').select('real_team_id,game_id,raw_stats,ingested_at').in('game_id', scoredGameIds).order('ingested_at', { ascending: false })]) : [{ data: [] }, { data: [] }];
   const rawStatsByAssetGame = new Map<string, RawFootballStats>();
@@ -152,7 +157,7 @@ export default async function MatchupPage({
   return (
     <main>
       <MatchupScoreAnnouncer matchupId={matchupId} summary={summary} />
-      <MatchupLiveRefresh isFinal={matchup.is_final} updatedAt={latestCalculatedAt} />
+      <MatchupLiveRefresh isFinal={matchup.is_final} updatedAt={latestCalculatedAt} feedState={feedState} nextGameAt={nextGame?.starts_at??null} />
       <section
         className="panel matchupHero arenaMatchupHero"
         style={
@@ -164,7 +169,7 @@ export default async function MatchupPage({
       >
         <div className="stadiumColorWash" aria-hidden="true" />
         <p className="eyebrow">
-          WEEK {matchup.week} • {matchup.is_final ? 'FINAL' : `${matchup.event_type.toUpperCase()} • IN PROGRESS`}
+          WEEK {matchup.week} • {matchup.is_final ? 'FINAL' : `${matchup.event_type.toUpperCase()} • ${liveGame?'IN PROGRESS':nextGame?'UPCOMING':'AWAITING FINALIZATION'}`}
         </p>
         <p className="srOnly" role="status">
           {summary}

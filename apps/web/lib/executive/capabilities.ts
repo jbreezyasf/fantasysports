@@ -95,6 +95,11 @@ export function requiresExecutiveEntitlement(id: BigExecCapabilityId) {
 export function canUseCapability(id: BigExecCapabilityId, context: CapabilityContext) {
   const capability = getBigExecCapability(id);
   if (!capability) return false;
-  if (capability.audience !== 'league_member' && capability.audience !== context.audience) return false;
+  const audienceAllowed=capability.audience==='league_member'
+    ? ['league_member','manager','commissioner'].includes(context.audience)
+    : capability.audience==='manager'
+      ? ['manager','commissioner'].includes(context.audience)
+      : capability.audience===context.audience;
+  if (!audienceAllowed) return false;
   return !capability.requiresExecutive || context.isExecutiveLeague;
 }

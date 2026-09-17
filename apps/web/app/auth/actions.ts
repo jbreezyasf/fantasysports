@@ -107,3 +107,25 @@ export async function signOutTo(formData: FormData) {
   await supabase.auth.signOut();
   redirect('/login?message=' + encodeURIComponent('Sign in with the email address that received this invitation.') + '&next=' + encodeURIComponent(next));
 }
+
+export async function requestPasswordReset(formData: FormData) {
+  const supabase = await createClient();
+  const email = normalizeEmail(String(formData.get('email') ?? ''));
+  if (email) {
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${appUrl()}/auth/confirm?next=${encodeURIComponent('/login/reset')}`
+    });
+  }
+  redirect('/login/forgot?message=' + encodeURIComponent('If that email belongs to a Big Exec account, a secure reset link is on the way.'));
+}
+
+export async function updatePassword(formData: FormData) {
+  const supabase = await createClient();
+  const password = String(formData.get('password') ?? '');
+  const confirmPassword = String(formData.get('confirm_password') ?? '');
+  if (password !== confirmPassword) redirect('/login/reset?error=' + encodeURIComponent('The passwords do not match.'));
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) redirect('/login/reset?error=' + encodeURIComponent(friendlyAuthError(error.message, 'signup')));
+  await supabase.auth.signOut();
+  redirect('/login?message=' + encodeURIComponent('Your password was updated. Sign in with your new password.'));
+}
