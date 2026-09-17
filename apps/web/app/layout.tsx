@@ -10,6 +10,7 @@ import './stadium-gate5.css';
 import './ops.css';
 import './product-shell.css';
 import ScreenReaderAnnouncer from './components/ScreenReaderAnnouncer';
+import { LanguageToggle, LocaleProvider } from './components/LocaleProvider';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigexecfs.com'),
@@ -31,8 +32,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <ScreenReaderAnnouncer />
-        {children}
+        <LocaleProvider>
+          <ScreenReaderAnnouncer />
+          {children}
+          <LanguageToggle />
+        </LocaleProvider>
       </body>
     </html>
   );

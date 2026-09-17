@@ -53,6 +53,13 @@ describe('Front Office Advisor capability policy', () => {
     expect(decision).toMatchObject({ allowed: true, intentClass: 'standard', mode: 'standard', upgradeRequired: false });
   });
 
+  it('treats commissioners as franchise managers for standard reads', () => {
+    const commissioner={...manager,audience:'commissioner' as const,isExecutiveLeague:false};
+    expect(evaluateAssistantGmIntent('roster.read_lineup',commissioner).allowed).toBe(true);
+    expect(evaluateAssistantGmIntent('waiver.best_available',commissioner).allowed).toBe(true);
+    expect(evaluateAssistantGmIntent('standings.my_standing',commissioner).allowed).toBe(true);
+  });
+
   it('denies Pro+ intents without an entitlement and marks the upgrade path', () => {
     const decision = evaluateAssistantGmIntent('pro_plus.trade_advisor', { ...manager, isExecutiveLeague: false });
 

@@ -25,7 +25,7 @@ export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
     { label: 'Front Office', icon: 'office', href: `/leagues/${leagueId}`, match: 'exact', activePrefixes: ['/drafts/', ...(franchiseId ? [`/franchises/${franchiseId}/team`] : [])] },
     { label: 'Matchup', icon: 'matchup', href: matchupId ? `/matchups/${matchupId}` : `/leagues/${leagueId}/schedule`, match: matchupId ? 'prefix' : 'manual', activePrefixes: ['/matchups/'] },
     { label: 'Locker Room', icon: 'locker', href: `/leagues/${leagueId}/locker-room`, match: 'prefix' },
-    { label: 'League', icon: 'league', href: `/leagues/${leagueId}/schedule`, match: 'prefix', activePrefixes: [`/leagues/${leagueId}/schedule`, `/leagues/${leagueId}/players`, `/leagues/${leagueId}/trades`, `/leagues/${leagueId}/settings`] },
+    { label: 'League', icon: 'league', href: `/leagues/${leagueId}/schedule`, match: 'prefix', activePrefixes: [`/leagues/${leagueId}/schedule`, `/leagues/${leagueId}/news`, `/leagues/${leagueId}/players`, `/leagues/${leagueId}/trades`, `/leagues/${leagueId}/settings`] },
     { label: 'Stadium', icon: 'stadium', href: franchiseId ? `/franchises/${franchiseId}/stadium` : undefined, match: 'prefix', unavailableLabel: 'Stadium unavailable until you own a franchise' }
   ];
   return <BigExecMobileNavClient items={items} />;

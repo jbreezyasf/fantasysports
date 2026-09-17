@@ -4,6 +4,7 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import { VisuallyHidden } from './accessibility';
 import BigExecCrownMark from './BigExecCrownMark';
+import { useLocale } from './LocaleProvider';
 
 export type BigExecMobileNavItem = {
   label: string;
@@ -26,6 +27,7 @@ function NavIcon({name}:{name:string}) {
 
 export default function BigExecMobileNavClient({ items }: { items: BigExecMobileNavItem[] }) {
   const pathname = usePathname();
+  const {t}=useLocale();
   const isActive = (item: BigExecMobileNavItem) => {
     if (!item.href) return false;
     if (item.activePrefixes?.some(prefix => pathname.startsWith(prefix))) return true;
@@ -36,16 +38,16 @@ export default function BigExecMobileNavClient({ items }: { items: BigExecMobile
 
   return <nav className="mobileGameNav" aria-label="Big Exec primary navigation">
     <a className="mobileGameBrand" href="/dashboard" aria-label="Big Exec dashboard"><BigExecCrownMark/></a>
-    {current && <VisuallyHidden>Current section: {current.label}</VisuallyHidden>}
+    {current && <VisuallyHidden>Current section: {t(current.label)}</VisuallyHidden>}
     {items.map(item => {
       const active = isActive(item);
       if (!item.href) {
         return <span aria-disabled="true" aria-label={item.unavailableLabel ?? `${item.label} unavailable`} key={item.label}>
-          <b aria-hidden="true"><NavIcon name={item.icon}/></b><small>{item.label}</small>
+          <b aria-hidden="true"><NavIcon name={item.icon}/></b><small>{t(item.label)}</small>
         </span>;
       }
-      return <a data-nav-item={item.label} href={item.href} aria-current={active ? 'page' : undefined} aria-label={`${item.label}${active ? ', current section' : ''}`} key={item.label}>
-        <b aria-hidden="true"><NavIcon name={item.icon}/></b><small>{item.label}</small>
+      return <a data-nav-item={item.label} href={item.href} aria-current={active ? 'page' : undefined} aria-label={`${t(item.label)}${active ? ', current section' : ''}`} key={item.label}>
+        <b aria-hidden="true"><NavIcon name={item.icon}/></b><small>{t(item.label)}</small>
       </a>;
     })}
   </nav>;

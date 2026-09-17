@@ -6,11 +6,13 @@ import AskGmPushToTalk from './AskGmPushToTalk';
 import { askHeaderAssistantGm } from './assistantGmActions';
 import { VisuallyHidden } from './accessibility';
 import BigExecCrownMark from './BigExecCrownMark';
+import { useLocale } from './LocaleProvider';
 
 const items=[['League HQ',''],['Locker Room','/locker-room'],['Schedule','/schedule'],['Trades','/trades'],['Players','/players']] as const;
 
 export default function BigExecAppHeader({leagueId,isCommissioner=false,voiceInputEnabled=false,criticalControlsActive=false}:{leagueId:string;isCommissioner?:boolean;voiceGmEnabled?:boolean;voiceInputEnabled?:boolean;criticalControlsActive?:boolean}){
   const pathname=usePathname();
+  const {t}=useLocale();
   const currentItem=items.find(([_,suffix])=>{const href=`/leagues/${leagueId}${suffix}`;return suffix?pathname.startsWith(href):pathname===href;});
   const rosterIntegrityActive=pathname.startsWith(`/leagues/${leagueId}/settings/roster-integrity`);
   return <>
@@ -19,11 +21,11 @@ export default function BigExecAppHeader({leagueId,isCommissioner=false,voiceInp
       <a className="appBrandLockup" href="/dashboard" aria-label="Big Exec dashboard"><BigExecCrownMark className="appCrownMark"/><div><strong>BIG EXEC</strong><small>FANTASY SPORTS</small></div></a>
       <nav aria-label="League sections">
         {(currentItem || rosterIntegrityActive) && <VisuallyHidden>Current league section: {rosterIntegrityActive?'Roster Integrity':currentItem?.[0]}</VisuallyHidden>}
-        {items.map(([label,suffix])=>{const href=`/leagues/${leagueId}${suffix}`;const active=suffix?pathname.startsWith(href):pathname===href;return <a key={label} href={href} aria-current={active?'page':undefined} aria-label={`${label}${active?', current section':''}`}>{label}</a>})}
+        {items.map(([label,suffix])=>{const href=`/leagues/${leagueId}${suffix}`;const active=suffix?pathname.startsWith(href):pathname===href;return <a key={label} href={href} aria-current={active?'page':undefined} aria-label={`${t(label)}${active?', current section':''}`}>{t(label)}</a>})}
       </nav>
       <div className="actions">
-        {isCommissioner&&<a className="secondary" href={`/leagues/${leagueId}/settings/roster-integrity`} aria-current={rosterIntegrityActive?'page':undefined} aria-label={`Roster Integrity${rosterIntegrityActive?', current section':''}`}>Roster Integrity</a>}
-        <a className="appHomeAction" href="/dashboard" aria-label="Front Office dashboard">Front Office</a>
+        {isCommissioner&&<a className="secondary" href={`/leagues/${leagueId}/settings/roster-integrity`} aria-current={rosterIntegrityActive?'page':undefined} aria-label={`${t('Roster Integrity')}${rosterIntegrityActive?', current section':''}`}>{t('Roster Integrity')}</a>}
+        <a className="appHomeAction" href="/dashboard" aria-label={`${t('Front Office')} dashboard`}>{t('Front Office')}</a>
       </div>
     </header>
   </>;

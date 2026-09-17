@@ -9,7 +9,7 @@ import DraftSettingsFields from './DraftSettingsFields';
 import { inviteConfirmation } from './invitationAccessibility';
 import { currentCompetitionWeek, selectFrontOfficeMatchup } from './frontOfficeMatchup';
 
-export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_resent?: string; invite_token?: string; invite_email?: string; invite_count?: string; email_status?: string; invite_error?: string; joined?: string; member_removed?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
+export default async function LeaguePage({ params, searchParams }: { params: Promise<{ leagueId: string }>; searchParams: Promise<{ invite_created?: string; invite_resent?: string; invite_count?: string; email_status?: string; invite_error?: string; joined?: string; member_removed?: string; draft_error?: string; schedule_error?: string; schedule_status?: string }> }) {
   const { leagueId } = await params;
   const query = await searchParams;
   const supabase = await createClient();
@@ -94,7 +94,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
           <a className="frontOfficeActionCard is-primary" href={frontOfficePrimaryHref}><span>01</span><div><small>{draftComplete?'ROSTER MARKET':draftDate??'BUILD YOUR BOARD'}</small><strong>{frontOfficePrimaryLabel}</strong><p>{draftComplete?'Add players and manage waiver claims.':draft?.status==='live'?'The room is live. Make your pick.':'Prepare your queue and enter the room.'}</p></div><b aria-hidden="true">→</b></a>
           <a className="frontOfficeActionCard" href={`/leagues/${leagueId}/locker-room`}><span>02</span><div><small>LEAGUE CONVERSATION</small><strong>Locker Room</strong><p>Talk with managers and follow league activity.</p></div><b aria-hidden="true">→</b></a>
           <a className="frontOfficeActionCard" href={`/leagues/${leagueId}/trades`}><span>03</span><div><small>DEALS & NEGOTIATIONS</small><strong>Trade Room</strong><p>Build offers and review proposals.</p></div><b aria-hidden="true">→</b></a>
-          <a className="frontOfficeActionCard" href="#league-news"><span>04</span><div><small>LATEST FROM {league.name.toUpperCase()}</small><strong>League News</strong><p>{leagueNews?.[0]?.body??'Standings, moves, and weekly headlines appear here.'}</p></div><b aria-hidden="true">↓</b></a>
+          <a className="frontOfficeActionCard" href={`/leagues/${leagueId}/news`}><span>04</span><div><small>LATEST FROM {league.name.toUpperCase()}</small><strong>League News</strong><p>{leagueNews?.[0]?.body??'Standings, moves, and weekly headlines appear here.'}</p></div><b aria-hidden="true">→</b></a>
         </div>
       </section>
 
@@ -112,8 +112,8 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
               <strong>{memberCount}/{leagueCapacity} franchises claimed</strong>
               <p>Invite managers and fill franchise seats. Draft setup unlocks at {draftMinimum} claimed franchises.</p>
               {query.invite_error && <p className="errorNotice" role="alert">{query.invite_error}</p>}
-              {query.invite_created && query.invite_token && <div className="inviteLinkBox" role="status"><span>{inviteConfirmation(Number(query.invite_count??1),query.invite_email??'manager',query.email_status)}</span><code aria-label={`Accessible invite link ${appUrl}/invite/${query.invite_token}`}>{`${appUrl}/invite/${query.invite_token}`}</code></div>}
-              {query.invite_resent && <p className="successNotice" role="status">{inviteConfirmation(1,query.invite_email??'manager',query.email_status)}</p>}
+              {query.invite_created && <p className="successNotice" role="status">{inviteConfirmation(Number(query.invite_count??1),'manager',query.email_status)} The secure links are available in Invitations Needing Action below.</p>}
+              {query.invite_resent && <p className="successNotice" role="status">{inviteConfirmation(1,'manager',query.email_status)}</p>}
               {memberCount < leagueCapacity ? (
                 <>
                   <InviteManagersForm leagueId={leagueId} pendingEmails={(invites??[]).filter(invite=>invite.status==='pending' && !isShareInvite(invite.email)).map(invite=>invite.email)} />
@@ -175,7 +175,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
       <section className="panel frontOfficeNews" id="league-news">
         <p className="eyebrow">LEAGUE NEWS</p><h2>From around the league</h2>
         <div className="frontOfficeNewsList">{(leagueNews??[]).map(item=><article key={item.id}><span>{item.event_type.replaceAll('_',' ')}</span><strong>{item.body}</strong><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</time></article>)}{!leagueNews?.length&&<p>No league headlines yet. Draft picks, trades, results, and awards will appear here.</p>}</div>
-        <a className="secondary" href={`/leagues/${leagueId}/locker-room`}>See all league activity</a>
+        <a className="secondary" href={`/leagues/${leagueId}/news`}>Open League News</a>
       </section>
       </section>
 

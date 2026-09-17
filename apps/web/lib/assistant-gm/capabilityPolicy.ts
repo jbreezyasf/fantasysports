@@ -203,6 +203,12 @@ function isFreeAccessibilityTier(capability: BigExecCapability) {
   return capability.tier === 'free_accessibility';
 }
 
+function audienceCanUse(required: CapabilityAudience, actual: CapabilityAudience) {
+  if(required==='league_member') return actual==='league_member'||actual==='manager'||actual==='commissioner';
+  if(required==='manager') return actual==='manager'||actual==='commissioner';
+  return required===actual;
+}
+
 export function evaluateAssistantGmIntent(
   intentId: string,
   context: AssistantGmPolicyContext
@@ -284,7 +290,7 @@ function evaluateCapability(
 
   // Audience is checked before entitlement so a manager is never shown an
   // Executive upgrade prompt for a commissioner-only intent they still could not run.
-  if (capability.audience !== 'league_member' && capability.audience !== context.audience) {
+  if (!audienceCanUse(capability.audience, context.audience)) {
     return {
       allowed: false,
       intentId,
