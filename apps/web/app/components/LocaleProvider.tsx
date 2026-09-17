@@ -8,6 +8,75 @@ const STORAGE_KEY = 'big-exec-locale';
 const COOKIE_KEY = 'big_exec_locale';
 
 const spanish: Record<string, string> = {
+  'The Experience': 'La Experiencia',
+  'Franchise Legacy': 'Legado de Franquicia',
+  'Sign In': 'Iniciar Sesión',
+  'THE FRONT OFFICE IS YOURS': 'LA OFICINA PRINCIPAL ES TUYA',
+  'Don’t just play fantasy.': 'No solo juegues fantasy.',
+  'Run the franchise.': 'Dirige la franquicia.',
+  'Draft the roster. Command the room. Build a stadium that remembers every rivalry, every upset, and every championship.': 'Arma la plantilla. Lidera la liga. Construye un estadio que recuerde cada rivalidad, cada sorpresa y cada campeonato.',
+  'Create Your Front Office': 'Crea Tu Oficina Principal',
+  'Enter Big Exec': 'Entrar a Big Exec',
+  'PRO FOOTBALL': 'FÚTBOL AMERICANO PROFESIONAL',
+  'Launching first': 'Primer deporte disponible',
+  'FRANCHISE LEGACY': 'LEGADO DE FRANQUICIA',
+  'Built to persist': 'Diseñado para perdurar',
+  'ARCADE RECAPS': 'RESÚMENES ARCADE',
+  'Your season, cinematic': 'Tu temporada, como una película',
+  EXPLORE: 'EXPLORAR',
+  'EVERYBODY DRAFTS.': 'TODOS PARTICIPAN EN EL DRAFT.',
+  'Big Execs build franchises.': 'Los Big Exec construyen franquicias.',
+  BUILD: 'CONSTRUYE',
+  COMMAND: 'LIDERA',
+  'BECOME LEGENDARY': 'CONVIÉRTETE EN LEYENDA',
+  'Create a franchise identity that survives beyond a single matchup.': 'Crea una identidad de franquicia que dure más que un solo enfrentamiento.',
+  'Draft, trade, set the lineup, and control the room.': 'Participa en el draft, negocia cambios, prepara la alineación y lidera la liga.',
+  'Turn rivalries, championships, and weekly moments into permanent history.': 'Convierte rivalidades, campeonatos y momentos semanales en historia permanente.',
+  'YOUR HOUSE. YOUR COLORS. YOUR HISTORY.': 'TU CASA. TUS COLORES. TU HISTORIA.',
+  'A stadium that earns its story.': 'Un estadio que se gana su historia.',
+  'Every new franchise begins with a real home. Achievements unlock monuments, banners, and permanent upgrades in your colors—turning a fantasy team into a place worth returning to.': 'Cada franquicia comienza con un verdadero hogar. Los logros desbloquean monumentos, banderines y mejoras permanentes con tus colores, convirtiendo un equipo fantasy en un lugar al que siempre querrás volver.',
+  'Start Building': 'Comienza a Construir',
+  'STARTER STADIUM': 'ESTADIO INICIAL',
+  'YOUR LEGACY': 'TU LEGADO',
+  'STARTS HERE.': 'COMIENZA AQUÍ.',
+  'Create account →': 'Crear cuenta →',
+  'WELCOME BACK, EXEC': 'BIENVENIDO DE NUEVO, EXEC',
+  'YOUR LEGACY STARTS HERE': 'TU LEGADO COMIENZA AQUÍ',
+  'Take your seat in the front office.': 'Toma tu lugar en la oficina principal.',
+  'Already have a seat?': '¿Ya tienes una cuenta?',
+  'New to Big Exec?': '¿Eres nuevo en Big Exec?',
+  'Create your account': 'Crea tu cuenta',
+  'Password requirements': 'Requisitos de contraseña',
+  '8+ characters, uppercase, lowercase, number, and symbol.': '8 o más caracteres, mayúscula, minúscula, número y símbolo.',
+  'By continuing, you agree to our': 'Al continuar, aceptas nuestros',
+  Terms: 'Términos',
+  'Privacy Policy': 'Política de Privacidad',
+  'Create the league.': 'Crea la liga.',
+  'League name': 'Nombre de la liga',
+  'Your franchise name': 'Nombre de tu franquicia',
+  'Create league + franchise': 'Crear liga y franquicia',
+  'MAKE YOUR MOVE': 'HAZ TU JUGADA',
+  'What needs attention': 'Lo que necesita atención',
+  'LEAGUE CONVERSATION': 'CONVERSACIÓN DE LA LIGA',
+  'Talk with managers and follow league activity.': 'Habla con los mánagers y sigue la actividad de la liga.',
+  'DEALS & NEGOTIATIONS': 'ACUERDOS Y NEGOCIACIONES',
+  'Build offers and review proposals.': 'Crea ofertas y revisa propuestas.',
+  'Add players and manage waiver claims.': 'Añade jugadores y administra reclamos de waivers.',
+  'Standings, moves, and weekly headlines appear here.': 'Las posiciones, movimientos y noticias semanales aparecen aquí.',
+  'No league headlines yet. Draft picks, trades, results, and awards will appear here.': 'Todavía no hay noticias. Las selecciones del draft, cambios, resultados y premios aparecerán aquí.',
+  'No scoring stats yet': 'Todavía no hay estadísticas de puntuación',
+  'Refresh Scores': 'Actualizar Puntuaciones',
+  'Watch Arcade Recap': 'Ver Resumen Arcade',
+  'Build Arcade Recap': 'Crear Resumen Arcade',
+  'STARTING LINEUPS': 'ALINEACIONES TITULARES',
+  'Head to head': 'Cara a cara',
+  'No commissioner approval is required': 'No se requiere aprobación del comisionado',
+  'The league never sleeps.': 'La liga nunca duerme.',
+  'Results, roster moves, rivalries, awards, and the decisions shaping this season.': 'Resultados, movimientos de plantilla, rivalidades, premios y las decisiones que definen esta temporada.',
+  'Around the league': 'Alrededor de la liga',
+  'Top five': 'Primeros cinco',
+  'Weekly awards': 'Premios semanales',
+  'Trade pulse': 'Pulso de cambios',
   'Front Office': 'Oficina Principal',
   Matchup: 'Enfrentamiento',
   'Locker Room': 'Vestidor',
@@ -109,12 +178,14 @@ type LocaleContextValue = {
 
 const LocaleContext = createContext<LocaleContextValue>({ locale: 'en', setLocale: () => undefined, t: message => message });
 
+export function translateMessage(value:string){return spanish[value]??value}
+
 function translateText(value: string) {
   const leading = value.match(/^\s*/)?.[0] ?? '';
   const trailing = value.match(/\s*$/)?.[0] ?? '';
   const core = value.trim();
   if (!core) return value;
-  return `${leading}${spanish[core] ?? core}${trailing}`;
+  return `${leading}${translateMessage(core)}${trailing}`;
 }
 
 function translateTree(root: ParentNode) {
@@ -176,7 +247,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [locale]);
 
-  const value = useMemo<LocaleContextValue>(() => ({ locale, setLocale, t: message => (locale === 'es-419' ? spanish[message] ?? message : message) }), [locale, setLocale]);
+  const value = useMemo<LocaleContextValue>(() => ({ locale, setLocale, t: message => (locale === 'es-419' ? translateMessage(message) : message) }), [locale, setLocale]);
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 
