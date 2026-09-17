@@ -24,7 +24,7 @@ const scoringFormat = args.get('scoring-format') ?? 'half_ppr';
 const dryRun = args.has('dry-run');
 const apiKey = process.env.BALLDONTLIE_API_KEY || process.env.balldontlie || (process.env.SPORTS_DATA_PROVIDER === 'balldontlie' ? process.env.SPORTS_DATA_API_KEY : '');
 const baseUrl = (process.env.BALLDONTLIE_BASE_URL || process.env.SPORTS_DATA_BASE_URL || 'https://api.balldontlie.io').replace(/\/$/, '');
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://njjiqdqhmcbxblwhfade.supabase.co';
 const serviceRoleKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const minRequestMs = Number(process.env.BALLDONTLIE_MIN_REQUEST_MS || 12_500);
 if (!Number.isInteger(season)) throw new Error('--season must be a four-digit year.');
@@ -91,7 +91,7 @@ export function projectedPoints(row) {
 
 export async function runMarketImport() {
   if (!apiKey) throw new Error('BALLDONTLIE_API_KEY, balldontlie, or SPORTS_DATA_API_KEY is required.');
-  if (!supabase) throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+  if (!supabase) throw new Error('SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is required.');
   const rankings = await getAll('/nfl/v1/fantasy/rankings', { season, ranking_type: 'ppr' });
   const adpRows = await getAll('/nfl/v1/fantasy/adp', { season });
   const projectionRows = await getAll('/nfl/v1/fantasy/projections', { season });

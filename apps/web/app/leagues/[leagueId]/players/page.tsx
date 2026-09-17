@@ -178,7 +178,7 @@ export default async function PlayersPage({
       .filter(Number.isFinite)
       .sort((a, b) => b - a)[0] ?? 0;
   const marketAgeHours = latestMarketAt ? (Date.now() - latestMarketAt) / 3_600_000 : Infinity;
-  const marketStatus = !marketValues.length ? 'Historical fallback — current provider guidance is unavailable' : marketAgeHours > 48 ? 'Data delayed — provider guidance is older than 48 hours' : `Current provider data • updated ${new Date(latestMarketAt).toLocaleString()}`;
+  const marketStatus = !marketValues.length ? 'Recent performance mode' : marketAgeHours > 48 ? 'Provider update delayed' : `Current provider data • updated ${new Date(latestMarketAt).toLocaleString()}`;
   const sortOrder = marketValues.length ? 'health, recent fantasy production, provider projection, roster rate, then provider rank' : 'health, recent fantasy production, then player name';
   const resultCount = filtered.length + filteredTeams.length;
   const detailList = (details: { position: string; team: string; availability: string; injuryStatus?: string | null; opponent?: string | null; projection?: number | null }) => (
@@ -376,8 +376,11 @@ export default async function PlayersPage({
   };
   return (
     <main>
-      <p className={marketAgeHours > 48 ? 'errorNotice' : 'successNotice'} role="status">
-        {marketStatus}. Waiver recommendations prioritize recent production after games begin; draft ADP is only a tie-breaker.
+      <p className={marketAgeHours > 48 ? 'dataStatusNotice is-delayed' : 'dataStatusNotice is-current'} role="status">
+        <strong>{marketStatus}.</strong>{' '}
+        {marketValues.length
+          ? 'Waiver recommendations prioritize recent production, provider projections, and availability.'
+          : 'Players are ranked by health and verified recent fantasy production while the next provider rankings update completes.'}
       </p>
       <section className="leagueHero" style={{ minHeight: 320 }}>
         <div className="leagueHeroGlow" />

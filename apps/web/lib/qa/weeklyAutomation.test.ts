@@ -28,4 +28,16 @@ describe('weekly automation production configuration', () => {
     );
     expect(source).not.toContain("!dbUrl && 'NEXT_PUBLIC_SUPABASE_URL'");
   });
+
+  it('uses the known public project URL when the rankings cron lacks the public binding', () => {
+    const source = readFileSync(
+      resolve(repoRoot, 'scripts/import-balldontlie-nfl-market-values.mjs'),
+      'utf8',
+    );
+
+    expect(source).toContain(
+      "process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://njjiqdqhmcbxblwhfade.supabase.co'",
+    );
+    expect(source).not.toContain('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+  });
 });
