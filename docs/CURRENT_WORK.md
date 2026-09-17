@@ -765,7 +765,7 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Change in-season waiver ordering to health, recent fantasy production, provider projection, roster rate, provider rank/ADP, then deterministic name/id fallback.
 - [x] Display an explicit current, delayed, or historical-fallback data status on Free Agency instead of silently presenting stale guidance.
 - [x] Add BALLDONTLIE weekly-stat ingestion into canonical raw player/team game-stat tables, followed by deterministic Big Exec score recalculation and non-final matchup recomputation.
-- [x] Ingest BALLDONTLIE live player/team stats every minute during the regular-season game window and refresh open matchup pages every 30 seconds; retain the weekly feed as a 15-minute reconciliation job. Do not automatically finalize matchups because the provider documents no correction-finality signal.
+- [x] Ingest BALLDONTLIE live player/team stats every minute during the regular-season game window and refresh open matchup pages every 30 seconds; retain the weekly feed as a 15-minute reconciliation job. Finalize only after every real game in the week reaches a terminal final state; no commissioner action is involved.
 - [x] Route Matchup navigation to the earliest open matchup, with the league schedule as a usable fallback instead of an inert control.
 - [x] Repair Stress Test 2026 with its 45-matchup, Weeks 1–9 Circuit schedule and verify the active post-draft schedule trigger in production.
 - [x] Automatically create the 45-matchup Circuit schedule whenever a future 10-franchise draft completes.
@@ -785,5 +785,9 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [x] Add a participant-only Set Lineup action to the matchup header.
 - [x] Offset bottom-corner Front Office Advisor controls above the mobile navigation with a shared mobile-nav height variable; desktop positioning is unchanged.
 - [x] Add regression coverage for terminal provider-state normalization and stale-game classification.
-- [ ] UNVERIFIED: the production recovery sweep corrected the reported Stress Test 2026 Week 1 game and allowed the reconciliation cron to finalize its matchups.
-- [ ] UNVERIFIED: all ten Week 2 lineups are populated in production; this depends on the separate QA participation cron and production runtime configuration.
+- [x] Repair the Stress Test 2026 Week 1/2 QA lineups. Evidence: production verification on 2026-09-17 found all eight QA manager franchises at 9 legal slots in both weeks; the two human franchises were preserved at their existing 9 and 8 slots.
+- [x] Finalize all five Stress Test 2026 Week 1 matchups and update standings after verifying all 16 real games were final. Evidence: production readback on 2026-09-17 showed five final matchups, five teams at 1–0, five at 0–1, and non-zero points for every franchise.
+- [x] Diagnose the unattended automation failures from production runtime evidence. Vercel logged 393 weekly reconciliation failures because `NEXT_PUBLIC_SUPABASE_URL` was absent and three QA participation failures because the opt-in switch was disabled.
+- [x] Make the weekly reconciliation use the same known public Supabase URL fallback as live scoring, while continuing to require the private server key and provider key.
+- [x] Permit the protected QA participation cron in Vercel production without the separate manual switch. The script remains hard-restricted to the Stress Test 2026 league and still requires the shared QA password; non-production execution still requires the explicit phrase.
+- [ ] UNVERIFIED: the repaired production deployment has completed a scheduled reconciliation and scheduled QA participation run without errors.
