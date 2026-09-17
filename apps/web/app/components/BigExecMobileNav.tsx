@@ -1,12 +1,13 @@
 import { createClient } from '../../lib/supabase/server';
 import BigExecMobileNavClient, { type BigExecMobileNavItem } from './BigExecMobileNavClient';
+import { currentCompetitionWeek, selectFrontOfficeMatchup } from '../leagues/[leagueId]/frontOfficeMatchup';
 
 export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
   const supabase=await createClient();
   const {data:{user}}=await supabase.auth.getUser();
   if(!user) return null;
   const [{data:season},{data:ownerships}]=await Promise.all([
-    supabase.from('league_seasons').select('id').eq('league_id',leagueId).eq('is_current',true).maybeSingle(),
+    supabase.from('league_seasons').select('id,competition_season_id').eq('league_id',leagueId).eq('is_current',true).maybeSingle(),
     supabase.from('franchise_owners').select('franchise_id').eq('user_id',user.id).is('ends_on',null)
   ]);
   const ownedIds=(ownerships??[]).map(x=>x.franchise_id);
@@ -17,8 +18,11 @@ export default async function BigExecMobileNav({leagueId}:{leagueId:string}){
     const {data:sf}=await supabase.from('season_franchises').select('id,franchise_id').eq('league_season_id',season.id).in('franchise_id',ownedIds).limit(1).maybeSingle();
     franchiseId=sf?.franchise_id; seasonFranchiseId=sf?.id;
     if(seasonFranchiseId){
-      const {data:matchups}=await supabase.from('matchups').select('id,week,is_final').eq('league_season_id',season.id).or(`home_season_franchise_id.eq.${seasonFranchiseId},away_season_franchise_id.eq.${seasonFranchiseId}`).order('week',{ascending:true});
-      matchupId=matchups?.find(matchup=>!matchup.is_final)?.id??matchups?.at(-1)?.id;
+      const [{data:matchups},{data:games}]=await Promise.all([
+        supabase.from('matchups').select('id,week,is_final,home_season_franchise_id,away_season_franchise_id').eq('league_season_id',season.id).or(`home_season_franchise_id.eq.${seasonFranchiseId},away_season_franchise_id.eq.${seasonFranchiseId}`).order('week',{ascending:true}),
+        supabase.from('real_games').select('week,starts_at').eq('competition_season_id',season.competition_season_id).order('starts_at',{ascending:true})
+      ]);
+      matchupId=selectFrontOfficeMatchup(matchups??[],seasonFranchiseId,currentCompetitionWeek(games??[]))?.id;
     }
   }
   const items: BigExecMobileNavItem[] = [

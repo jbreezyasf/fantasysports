@@ -775,3 +775,15 @@ When one item is completed, update this file in the same PR/commit with the evid
 - [ ] UNVERIFIED: the repaired 2026 provider import has executed against production; local runtime credentials were unavailable in this workspace.
 - [ ] UNVERIFIED: production market-row coverage/freshness passes the new health gate after the first scheduled or manually dispatched run.
 - [ ] UNVERIFIED: live ingestion has been reconciled against an active/completed 2026 box score and exercised in the deployed matchup UI.
+
+## Matchup Rollover and Responsive UX — 2026-09-17
+
+- [x] Add a recovery sweep for past non-terminal real games so a provider update missed by the eight-hour live window cannot permanently block weekly finalization.
+- [x] Log provider game-state values that cannot be normalized instead of silently persisting an unexplained unknown state.
+- [x] Route the global Matchup destination by the real competition week before falling back to the first open matchup.
+- [x] Add league standings directly below the matchup score, highlighting both participating franchises on mobile and desktop.
+- [x] Add a participant-only Set Lineup action to the matchup header.
+- [x] Offset bottom-corner Front Office Advisor controls above the mobile navigation with a shared mobile-nav height variable; desktop positioning is unchanged.
+- [x] Add regression coverage for terminal provider-state normalization and stale-game classification.
+- [ ] UNVERIFIED: the production recovery sweep corrected the reported Stress Test 2026 Week 1 game and allowed the reconciliation cron to finalize its matchups.
+- [ ] UNVERIFIED: all ten Week 2 lineups are populated in production; this depends on the separate QA participation cron and production runtime configuration.

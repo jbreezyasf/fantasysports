@@ -11,7 +11,8 @@ if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf
 
 const number = value => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const alias = value => ({ JAX: 'JAC', WAS: 'WSH', LA: 'LAR' }[String(value)] ?? String(value));
-const state = value => ({ inprogress: 'in_progress', post: 'final', complete: 'final', completed: 'final', closed: 'final' }[String(value ?? '').toLowerCase()] ?? (['scheduled', 'in_progress', 'final', 'postponed', 'canceled', 'delayed', 'suspended'].includes(value) ? value : 'unknown'));
+export const providerGameState = value => ({ inprogress: 'in_progress', post: 'final', complete: 'final', completed: 'final', closed: 'final' }[String(value ?? '').toLowerCase()] ?? (['scheduled', 'in_progress', 'final', 'postponed', 'canceled', 'delayed', 'suspended'].includes(String(value ?? '').toLowerCase()) ? String(value).toLowerCase() : 'unknown'));
+export const isStaleNonTerminalGame = (game, cutoff) => Date.parse(game.starts_at) < cutoff.getTime() && !['final', 'canceled'].includes(String(game.state).toLowerCase());
 export const cleanName = value => String(value ?? '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b/g, '').replace(/[^a-z0-9]/g, '');
 const playerName = row => String(row?.player?.display_name ?? row?.player?.full_name ?? `${row?.player?.first_name ?? ''} ${row?.player?.last_name ?? ''}`).trim();
 const playerPosition = row => String(row?.player?.position_abbreviation ?? row?.player?.position ?? '').toUpperCase();
@@ -113,9 +114,28 @@ export async function runLiveStatsImport() {
   const { data: competitionSeason, error: seasonError } = await db.from('competition_seasons').select('id').eq('competition_id', competition.id).eq('season_year', season).single();
   if (seasonError) throw new Error(seasonError.message);
   const lower = new Date(now.getTime() - 8 * 60 * 60 * 1000).toISOString(); const upper = new Date(now.getTime() + 20 * 60 * 1000).toISOString();
+  const { data: staleCandidates, error: staleCandidatesError } = await db.from('real_games').select('id,provider_game_id,week,starts_at,state').eq('competition_season_id', competitionSeason.id).lt('starts_at', lower).not('state', 'in', '("final","canceled")');
+  if (staleCandidatesError) throw new Error(staleCandidatesError.message);
+  let staleGamesChecked = 0; let staleGamesRecovered = 0;
+  if (staleCandidates?.length) {
+    const staleProviderIds = new Set(staleCandidates.map(game => String(game.provider_game_id).replace(/^balldontlie:/, '')));
+    const staleWeeks = [...new Set(staleCandidates.map(game => game.week))];
+    const staleProviderGames = (await all('/nfl/v1/games', { seasons: [season], weeks: staleWeeks, season_types: [2] })).filter(game => staleProviderIds.has(String(game.id)));
+    staleGamesChecked = staleProviderGames.length;
+    const staleByProvider = new Map(staleCandidates.map(game => [String(game.provider_game_id).replace(/^balldontlie:/, ''), game]));
+    for (const game of staleProviderGames) {
+      const mappedState = providerGameState(game.status_state);
+      if (mappedState === 'unknown') console.error(JSON.stringify({ job: 'live-scoring', warning: 'unknown-provider-game-state', providerGameId: game.id, statusState: game.status_state }));
+      const stale = staleByProvider.get(String(game.id));
+      if (!stale) continue;
+      const { error } = await db.from('real_games').update({ state: mappedState, home_score: game.home_team_score, away_score: game.visitor_team_score, updated_at: new Date().toISOString() }).eq('id', stale.id);
+      if (error) throw new Error(error.message);
+      if (['final', 'canceled'].includes(mappedState)) staleGamesRecovered += 1;
+    }
+  }
   const { data: candidates, error: candidatesError } = await db.from('real_games').select('id,provider_game_id,week').eq('competition_season_id', competitionSeason.id).gte('starts_at', lower).lte('starts_at', upper);
   if (candidatesError) throw new Error(candidatesError.message);
-  if (!candidates?.length) return { season, skipped: true, reason: 'no games in active window', requests: 0 };
+  if (!candidates?.length) return { season, skipped: true, reason: 'no games in active window', requests, staleGamesChecked, staleGamesRecovered };
   const providerIds = candidates.map(game => String(game.provider_game_id).replace(/^balldontlie:/, ''));
   const games = await all('/nfl/v1/games', { seasons: [season], weeks: [...new Set(candidates.map(game => game.week))], season_types: [2] });
   const activeGames = games.filter(game => providerIds.includes(String(game.id)));
@@ -177,9 +197,9 @@ export async function runLiveStatsImport() {
     sportradarFallback = { enabled: true, games: 0, playerStats: 0, requests: 0, error: error instanceof Error ? error.message : String(error) };
     console.error(JSON.stringify({ job: 'live-scoring', provider: 'sportradar-fallback', ...sportradarFallback }));
   }
-  for (const game of activeGames) { const { error } = await db.from('real_games').update({ state: state(game.status_state), home_score: game.home_team_score, away_score: game.visitor_team_score, updated_at: ingestedAt }).eq('id', gameByProvider.get(String(game.id))); if (error) throw new Error(error.message); }
+  for (const game of activeGames) { const mappedState = providerGameState(game.status_state); if (mappedState === 'unknown') console.error(JSON.stringify({ job: 'live-scoring', warning: 'unknown-provider-game-state', providerGameId: game.id, statusState: game.status_state })); const { error } = await db.from('real_games').update({ state: mappedState, home_score: game.home_team_score, away_score: game.visitor_team_score, updated_at: ingestedAt }).eq('id', gameByProvider.get(String(game.id))); if (error) throw new Error(error.message); }
   for (const week of weeks) for (const leagueSeason of leagueSeasons ?? []) { const { error } = await db.rpc('calculate_pro_football_week_scores', { p_league_season_id: leagueSeason.id, p_week: week }); if (error) throw new Error(error.message); const { data: matchups, error: matchupsError } = await db.from('matchups').select('id').eq('league_season_id', leagueSeason.id).eq('week', week).eq('is_final', false); if (matchupsError) throw new Error(matchupsError.message); for (const matchup of matchups ?? []) { const { error: matchupError } = await db.rpc('recompute_matchup', { p_matchup_id: matchup.id, p_finalize: false }); if (matchupError) throw new Error(matchupError.message); } }
-  const report = { season, weeks, games: activeGames.length, playerStats: playerStats.length, weeklyPlayerStats: weeklyPlayers.length, rawPlayerStats: players.length, teamStats: teamStats.length, requests, sportradarFallback, ingestedAt }; console.log(JSON.stringify(report)); return report;
+  const report = { season, weeks, games: activeGames.length, playerStats: playerStats.length, weeklyPlayerStats: weeklyPlayers.length, rawPlayerStats: players.length, teamStats: teamStats.length, staleGamesChecked, staleGamesRecovered, requests, sportradarFallback, ingestedAt }; console.log(JSON.stringify(report)); return report;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) runLiveStatsImport().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });

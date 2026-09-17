@@ -46,7 +46,7 @@ export default async function MatchupPage({
   if (!user) redirect('/login');
   const { data: matchup } = await supabase.from('matchups').select('id,league_season_id,week,event_type,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,winner_season_franchise_id').eq('id', matchupId).maybeSingle();
   if (!matchup) notFound();
-  const { data: sf } = await supabase.from('season_franchises').select('id,franchise_id,franchises(name,abbreviation,primary_color,secondary_color,avatar_key)').in('id', [matchup.home_season_franchise_id, matchup.away_season_franchise_id]);
+  const { data: sf } = await supabase.from('season_franchises').select('id,franchise_id,franchises(name,abbreviation,primary_color,secondary_color,avatar_key)').eq('league_season_id', matchup.league_season_id);
   const home = sf?.find((x) => x.id === matchup.home_season_franchise_id),
     away = sf?.find((x) => x.id === matchup.away_season_franchise_id);
   const homeFranchise = firstRelation(home?.franchises as FranchiseCard | FranchiseCard[] | null | undefined),
@@ -55,12 +55,13 @@ export default async function MatchupPage({
   const { data: ownerships } = await supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null);
   const ownedIds = new Set((ownerships ?? []).map((o) => o.franchise_id));
   const isParticipant = (sf ?? []).some((x) => ownedIds.has(x.franchise_id));
-  const [{ data: lineups }, { data: playerScores }, { data: teamScores }, { data: generated }, { data: recap }] = await Promise.all([
+  const [{ data: lineups }, { data: playerScores }, { data: teamScores }, { data: generated }, { data: recap }, { data: standings }] = await Promise.all([
     supabase.from('lineups').select('season_franchise_id,slot,slot_index,athlete_id,real_team_id,athletes(display_name,position,real_teams(abbreviation)),real_teams(abbreviation)').eq('week', matchup.week).in('season_franchise_id', [matchup.home_season_franchise_id, matchup.away_season_franchise_id]),
     supabase.from('fantasy_player_scores').select('athlete_id,game_id,points,breakdown,calculated_at').eq('league_season_id', matchup.league_season_id).eq('week', matchup.week),
     supabase.from('fantasy_team_scores').select('real_team_id,game_id,points,breakdown,calculated_at').eq('league_season_id', matchup.league_season_id).eq('week', matchup.week),
     query.talk ? supabase.from('generated_messages').select('id,tone,body,provider,created_at').eq('matchup_id', matchupId).eq('requested_by', user.id).eq('tone', query.talk).order('created_at', { ascending: false }).limit(3) : Promise.resolve({ data: [] }),
     matchup.is_final ? supabase.from('recap_scripts').select('id,title').eq('matchup_id', matchupId).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from('standings').select('season_franchise_id,wins,losses,ties,points_for,points_against').eq('league_season_id',matchup.league_season_id).order('wins',{ascending:false}).order('points_for',{ascending:false}),
   ]);
   const {data:weekGames}=member?.competition_season_id?await supabase.from('real_games').select('starts_at,state').eq('competition_season_id',member.competition_season_id).eq('week',matchup.week).order('starts_at',{ascending:true}):{data:[] as Array<{starts_at:string;state:string}>};
   const now=Date.now();
@@ -142,6 +143,7 @@ export default async function MatchupPage({
       .at(-1) ?? null;
   const userIsHome = ownedIds.has(home?.franchise_id ?? ''),
     userIsAway = ownedIds.has(away?.franchise_id ?? '');
+  const userFranchiseId = userIsHome ? home?.franchise_id : userIsAway ? away?.franchise_id : null;
   const summary = matchupStatus({
     userTeam: userIsHome ? homeName : userIsAway ? awayName : null,
     opponentTeam: userIsHome ? awayName : userIsAway ? homeName : null,
@@ -218,6 +220,25 @@ export default async function MatchupPage({
               Locker Room
             </a>
           )}
+          {userFranchiseId && <a className="primary" href={`/franchises/${userFranchiseId}/team`}>Set Lineup</a>}
+        </div>
+      </section>
+      <section className="panel matchupStandingsPanel" aria-labelledby="matchup-standings-heading">
+        <div className="lineupSectionHeading">
+          <div><p className="eyebrow">LEAGUE STANDINGS</p><h2 id="matchup-standings-heading">Where this matchup stands</h2></div>
+          {member?.league_id&&<a className="secondary" href={`/leagues/${member.league_id}/schedule`}>Full League</a>}
+        </div>
+        <div className="standingsList">
+          {(standings??[]).map((standing,index)=>{
+            const team=sf?.find(row=>row.id===standing.season_franchise_id);
+            const franchise=firstRelation(team?.franchises as FranchiseCard | FranchiseCard[] | null | undefined);
+            const inMatchup=[matchup.home_season_franchise_id,matchup.away_season_franchise_id].includes(standing.season_franchise_id);
+            const record=`${standing.wins}-${standing.losses}${standing.ties?`-${standing.ties}`:''}`;
+            return <div className={`standingRow${inMatchup?' isMatchupTeam':''}`} key={standing.season_franchise_id} aria-label={`Rank ${index+1}. ${franchise?.name??'Franchise'}. Record ${record}. Points for ${Number(standing.points_for).toFixed(2)}.`}>
+              <b>{index+1}</b><span>{franchise?.name??'Franchise'}</span><small>{record}</small><small>{Number(standing.points_for).toFixed(2)} PF</small>
+            </div>;
+          })}
+          {!standings?.length&&<p className="lede matchupStandingsEmpty">Standings will appear after the first completed matchup.</p>}
         </div>
       </section>
       {matchup.is_final && isParticipant && (
