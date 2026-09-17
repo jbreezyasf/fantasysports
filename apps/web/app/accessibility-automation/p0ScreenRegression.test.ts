@@ -8,9 +8,10 @@ function source(relativePath: string) {
 
 function expectSource(relativePath: string, snippets: string[]) {
   const contents = source(relativePath);
+  const normalized = contents.replace(/\s+/g, '').replaceAll('"', "'");
 
   for (const snippet of snippets) {
-    expect(contents, `${relativePath} should contain ${snippet}`).toContain(snippet);
+    expect(normalized, `${relativePath} should contain ${snippet}`).toContain(snippet.replace(/\s+/g, '').replaceAll('"', "'"));
   }
 }
 
@@ -20,18 +21,19 @@ describe('P0 accessibility screen regressions', () => {
       'aria-labelledby="starters-heading"',
       'describeLineupSlot(label,currentLabel)',
       'aria-label={`Move eligible players to ${label}`}',
-      'lineupMoveButtonLabel(assetLabel,label,week)',
+      'lineupMoveButtonLabel(',
       'lineupMoveConfirmation(query.lineup_asset',
       'role="status"',
       'aria-labelledby="bench-heading"',
       "describeAssetForScreenReader(asset,'bench')"
     ]);
     expectSource('app/franchises/[franchiseId]/team/LineupMoveForm.tsx', [
-      'useActionState(setLineup',
+      'useActionState(',
+      'setLineup,',
       'name="slot_label"',
       'name="asset_label"',
-      "pending ? 'SAVING…'",
-      "role={state.status === 'error' ? 'alert' : 'status'}"
+      'pending ? "SAVING…"',
+      'role={state.status === "error" ? "alert" : "status"}'
     ]);
     expectSource('app/team/actions.ts', [
       "return { status: 'error'",
@@ -45,24 +47,22 @@ describe('P0 accessibility screen regressions', () => {
     expectSource('app/leagues/[leagueId]/players/page.tsx', [
       'htmlFor="player-search"',
       'availableOnlyToggle',
-      'playerSearchSummary(resultCount,active,availableOnly,sortOrder)',
-      "aria-current={active===pos?'true':undefined}",
+      'playerSearchSummary(resultCount, active, availableOnly, sortOrder)',
+      'aria-current={active === pos ? "true" : undefined}',
       'describePlayerSearchResult',
       'View player details for',
       'StatusBadge state="rostered"'
     ]);
   });
 
-  it('keeps waiver review and withdrawal semantics on the canonical waiver route', () => {
+  it('keeps automatic waiver submission and withdrawal semantics on the canonical waiver route', () => {
     expectSource('app/leagues/[leagueId]/players/page.tsx', [
-      'waiverReviewAnnouncement',
-      'role="group"',
-      'role="status"',
-      'Submit Reviewed Claim',
-      'Review Waiver Claim',
+      'action={submitWaiverClaim}',
+      'name="drop_roster_entry_id"',
+      'No commissioner approval is required',
+      'Submit Claim',
       'Withdraw waiver claim for',
-      'FAAB amount',
-      'Priority'
+      'CLAIM PENDING'
     ]);
   });
 

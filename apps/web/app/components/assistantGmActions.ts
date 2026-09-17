@@ -215,7 +215,7 @@ function composeAnswer(question: string, response: AssistantGmGatewayResponse): 
     const claims = asArray(waiverState?.requesterClaims);
     return {
       ok: true,
-      text: `Waiver desk: ${holds.length} open waiver holds, ${claims.length} of your claims on those holds, and ${available.length} currently available players in the pool. First names I can see: ${available.slice(0, 5).map(row => `${text(row.display_name, 'Player')} (${text(row.position, 'FLEX')})`).join('; ') || 'none'}.`,
+      text: `Waiver desk: ${holds.length} open waiver holds, ${claims.length} of your claims on those holds, and ${available.length} currently available players in the pool. Best recent options: ${available.slice(0, 5).map(row => { const performance=isRecord(row.performance)?row.performance:null; return `${text(row.display_name, 'Player')} (${text(row.position, 'FLEX')}), ${numberText(performance?.lastThreeAverage)} average over the last ${Math.min(3,Number(performance?.games??0))} scored weeks, ${numberText(performance?.lastWeek)} last week${Number(performance?.bestWeek??0)?`, best was ${numberText(performance?.bestPoints)} in Week ${String(performance?.bestWeek)}`:''}`; }).join('; ') || 'none with scored weeks yet'}.`,
       detail: 'This is availability help, not a transaction. Claims and add/drop moves still require the existing waiver or free-agent forms.'
     };
   }

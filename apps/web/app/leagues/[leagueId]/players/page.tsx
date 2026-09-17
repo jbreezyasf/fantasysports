@@ -6,93 +6,613 @@ import { StatusBadge } from '../../../components/accessibility';
 import { describePlayerSearchResult, playerSearchSummary } from './playerSearchAccessibility';
 import { waiverReviewAnnouncement } from './waiverAccessibility';
 import { rankWaiverPlayers, type WaiverMarketValue } from '../../../../lib/fantasy/waiverRankings';
+import { buildPlayerPerformance, performanceSummary } from '../../../../lib/fantasy/playerPerformance';
 
-const POSITIONS=['ALL','QB','RB','WR','TE','FLEX','K','D/ST'] as const;
-type AthleteTeam={abbreviation?:string};
-type Franchise={name?:string;abbreviation?:string};
-type Athlete={display_name?:string;position?:string;injury_status?:string|null};
-type Team={display_name?:string;abbreviation?:string};
-type MarketRow={athlete_id:string;overall_rank:number|string|null;position_rank:number|string|null;adp:number|string|null;projected_points:number|string|null;percent_rostered:number|string|null;percent_started:number|string|null;imported_at:string|null;source:string|null};
-type RecentScore={athlete_id:string|null;points:number|string|null;calculated_at:string|null};
-type UpcomingGame={home_team_id:string|null;away_team_id:string|null;starts_at:string};
-function first<T>(value:T|T[]|null|undefined):T|null{return !value?null:Array.isArray(value)?value[0]??null:value;}
-function numeric(value:number|string|null|undefined){const parsed=Number(value);return Number.isFinite(parsed)?parsed:null;}
+const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'D/ST'] as const;
+type AthleteTeam = { abbreviation?: string };
+type Franchise = { name?: string; abbreviation?: string };
+type Athlete = {
+  display_name?: string;
+  position?: string;
+  injury_status?: string | null;
+};
+type Team = { display_name?: string; abbreviation?: string };
+type MarketRow = {
+  athlete_id: string;
+  overall_rank: number | string | null;
+  position_rank: number | string | null;
+  adp: number | string | null;
+  projected_points: number | string | null;
+  percent_rostered: number | string | null;
+  percent_started: number | string | null;
+  imported_at: string | null;
+  source: string | null;
+};
+type RecentScore = {
+  athlete_id: string | null;
+  week: number;
+  points: number | string | null;
+  calculated_at: string | null;
+};
+type UpcomingGame = {
+  home_team_id: string | null;
+  away_team_id: string | null;
+  starts_at: string;
+};
+function first<T>(value: T | T[] | null | undefined): T | null {
+  return !value ? null : Array.isArray(value) ? (value[0] ?? null) : value;
+}
+function numeric(value: number | string | null | undefined) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
-export default async function PlayersPage({params,searchParams}:{params:Promise<{leagueId:string}>;searchParams:Promise<{position?:string;q?:string;available?:string;review_waiver_hold_id?:string;review_drop_roster_entry_id?:string;transaction_status?:string;transaction_error?:string;waiver_status?:string;waiver_error?:string}>}){
-  const {leagueId}=await params;const query=await searchParams;const supabase=await createClient();
-  const {data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login');
-  const [{data:league},{data:member},{data:season},{data:ownerships}]=await Promise.all([
-    supabase.from('fantasy_leagues').select('name').eq('id',leagueId).maybeSingle(),
-    supabase.from('league_members').select('role').eq('league_id',leagueId).eq('user_id',user.id).maybeSingle(),
-    supabase.from('league_seasons').select('id,competition_season_id,roster_config').eq('league_id',leagueId).eq('is_current',true).maybeSingle(),
-    supabase.from('franchise_owners').select('franchise_id').eq('user_id',user.id).is('ends_on',null)
-  ]);
-  if(!league||!member||!season)notFound();
-  const [{data:competitionSeason},{data:sfs}]=await Promise.all([
-    supabase.from('competition_seasons').select('competition_id,season_year').eq('id',season.competition_season_id).maybeSingle(),
-    supabase.from('season_franchises').select('id,franchise_id,franchises(name,abbreviation)').eq('league_season_id',season.id)
-  ]);
-  const sfIds=(sfs??[]).map(sf=>sf.id);
-  const rosterPromise=sfIds.length?supabase.from('roster_entries').select('id,season_franchise_id,athlete_id,real_team_id,athletes(display_name,position),real_teams(display_name,abbreviation)').in('season_franchise_id',sfIds).is('dropped_at',null):Promise.resolve({data:[] as Array<{id:string;season_franchise_id:string;athlete_id:string|null;real_team_id:string|null;athletes:Athlete|null;real_teams:Team|null}>,error:null});
-  const waiverPromise=supabase.from('waiver_holds').select('id,athlete_id,real_team_id,source_season_franchise_id,starts_at,clears_at,status,athletes(display_name,position,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('league_season_id',season.id).eq('status','open').order('clears_at',{ascending:true});
-  const [{data:rosters,error:rosterError},{data:athletes,error:athleteError},{data:teams,error:teamError},{data:waiverHolds,error:waiverError},{data:marketRows,error:marketError},{data:recentScoreRows},{data:upcomingGames}]=await Promise.all([
+export default async function PlayersPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ leagueId: string }>;
+  searchParams: Promise<{
+    position?: string;
+    q?: string;
+    available?: string;
+    review_waiver_hold_id?: string;
+    review_drop_roster_entry_id?: string;
+    transaction_status?: string;
+    transaction_error?: string;
+    waiver_status?: string;
+    waiver_error?: string;
+  }>;
+}) {
+  const { leagueId } = await params;
+  const query = await searchParams;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+  const [{ data: league }, { data: member }, { data: season }, { data: ownerships }] = await Promise.all([supabase.from('fantasy_leagues').select('name').eq('id', leagueId).maybeSingle(), supabase.from('league_members').select('role').eq('league_id', leagueId).eq('user_id', user.id).maybeSingle(), supabase.from('league_seasons').select('id,competition_season_id,roster_config').eq('league_id', leagueId).eq('is_current', true).maybeSingle(), supabase.from('franchise_owners').select('franchise_id').eq('user_id', user.id).is('ends_on', null)]);
+  if (!league || !member || !season) notFound();
+  const [{ data: competitionSeason }, { data: sfs }] = await Promise.all([supabase.from('competition_seasons').select('competition_id,season_year').eq('id', season.competition_season_id).maybeSingle(), supabase.from('season_franchises').select('id,franchise_id,franchises(name,abbreviation)').eq('league_season_id', season.id)]);
+  const sfIds = (sfs ?? []).map((sf) => sf.id);
+  const rosterPromise = sfIds.length
+    ? supabase.from('roster_entries').select('id,season_franchise_id,athlete_id,real_team_id,athletes(display_name,position),real_teams(display_name,abbreviation)').in('season_franchise_id', sfIds).is('dropped_at', null)
+    : Promise.resolve({
+        data: [] as Array<{
+          id: string;
+          season_franchise_id: string;
+          athlete_id: string | null;
+          real_team_id: string | null;
+          athletes: Athlete | null;
+          real_teams: Team | null;
+        }>,
+        error: null,
+      });
+  const waiverPromise = supabase.from('waiver_holds').select('id,athlete_id,real_team_id,source_season_franchise_id,starts_at,clears_at,status,athletes(display_name,position,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('league_season_id', season.id).eq('status', 'open').order('clears_at', { ascending: true });
+  const [{ data: rosters, error: rosterError }, { data: athletes, error: athleteError }, { data: teams, error: teamError }, { data: waiverHolds, error: waiverError }, { data: marketRows, error: marketError }, { data: recentScoreRows }, { data: upcomingGames }] = await Promise.all([
     rosterPromise,
     loadFantasyEligibleAthletes(supabase),
-    competitionSeason?.competition_id?supabase.from('real_teams').select('id,display_name,abbreviation').eq('competition_id',competitionSeason.competition_id).order('abbreviation'):Promise.resolve({data:[],error:null}),
+    competitionSeason?.competition_id ? supabase.from('real_teams').select('id,display_name,abbreviation').eq('competition_id', competitionSeason.competition_id).order('abbreviation') : Promise.resolve({ data: [], error: null }),
     waiverPromise,
-    competitionSeason?.competition_id&&competitionSeason?.season_year?supabase.from('fantasy_player_market_values').select('athlete_id,overall_rank,position_rank,adp,projected_points,percent_rostered,percent_started,imported_at,source').eq('competition_id',competitionSeason.competition_id).eq('season_year',competitionSeason.season_year).eq('scoring_format','half_ppr').limit(5000):Promise.resolve({data:[],error:null}),
-    supabase.from('fantasy_player_scores').select('athlete_id,points,calculated_at').eq('league_season_id',season.id).order('calculated_at',{ascending:false}).limit(5000),
-    supabase.from('real_games').select('home_team_id,away_team_id,starts_at').eq('competition_season_id',season.competition_season_id).gte('starts_at',new Date().toISOString()).order('starts_at').limit(32)
+    competitionSeason?.competition_id && competitionSeason?.season_year ? supabase.from('fantasy_player_market_values').select('athlete_id,overall_rank,position_rank,adp,projected_points,percent_rostered,percent_started,imported_at,source').eq('competition_id', competitionSeason.competition_id).eq('season_year', competitionSeason.season_year).eq('scoring_format', 'half_ppr').limit(5000) : Promise.resolve({ data: [], error: null }),
+    supabase.from('fantasy_player_scores').select('athlete_id,week,points,calculated_at').eq('league_season_id', season.id).order('week', { ascending: false }).limit(5000),
+    supabase.from('real_games').select('home_team_id,away_team_id,starts_at').eq('competition_season_id', season.competition_season_id).gte('starts_at', new Date().toISOString()).order('starts_at').limit(32),
   ]);
-  const loadError=rosterError?.message||athleteError?.message||teamError?.message||waiverError?.message||marketError?.message;
-  const franchiseBySf=new Map((sfs??[]).map(sf=>[sf.id,first(sf.franchises as Franchise|Franchise[]|null)]));
-  const athleteOwner=new Map<string,string>();const teamOwner=new Map<string,string>();
-  for(const row of rosters??[]){const owner=franchiseBySf.get(row.season_franchise_id)?.abbreviation??franchiseBySf.get(row.season_franchise_id)?.name??'ROSTERED';if(row.athlete_id)athleteOwner.set(row.athlete_id,owner);if(row.real_team_id)teamOwner.set(row.real_team_id,owner);}
-  const marketValues:WaiverMarketValue[]=((marketRows??[]) as MarketRow[]).map(row=>({athleteId:row.athlete_id,overallRank:numeric(row.overall_rank),positionRank:numeric(row.position_rank),adp:numeric(row.adp),projectedPoints:numeric(row.projected_points),percentRostered:numeric(row.percent_rostered),importedAt:row.imported_at,source:row.source}));
-  const marketByAthleteId=new Map(marketValues.map(value=>[value.athleteId,value]));
-  const recentByAthleteId=new Map<string,number>();
-  const newestScoreAt=Math.max(0,...((recentScoreRows??[]) as RecentScore[]).map(score=>Date.parse(score.calculated_at??'')).filter(Number.isFinite));
-  const recentCutoff=newestScoreAt-(21*24*60*60*1000);
-  for(const score of (recentScoreRows??[]) as RecentScore[]){if(score.athlete_id&&Date.parse(score.calculated_at??'')>=recentCutoff)recentByAthleteId.set(score.athlete_id,(recentByAthleteId.get(score.athlete_id)??0)+(numeric(score.points)??0));}
-  const rankedIds=rankWaiverPlayers((athletes??[]).map(a=>({id:a.id,displayName:a.display_name,injuryStatus:a.injury_status})),marketValues,recentByAthleteId).map(player=>player.id);
-  const waiverRankByAthleteId=new Map(rankedIds.map((id,index)=>[id,index+1]));
-  const opponentByTeamId=new Map<string,string>();
-  for(const game of (upcomingGames??[]) as UpcomingGame[]){if(game.home_team_id&&game.away_team_id){const home=(teams??[]).find(team=>team.id===game.home_team_id);const away=(teams??[]).find(team=>team.id===game.away_team_id);if(!opponentByTeamId.has(game.home_team_id))opponentByTeamId.set(game.home_team_id,away?.abbreviation??away?.display_name??'TBD');if(!opponentByTeamId.has(game.away_team_id))opponentByTeamId.set(game.away_team_id,home?.abbreviation??home?.display_name??'TBD');}}
-  const requested=(query.position??'ALL').toUpperCase();const active=POSITIONS.includes(requested as typeof POSITIONS[number])?requested:'ALL';const q=(query.q??'').trim().toLowerCase();const availableOnly=query.available==='true';
-  const filtered=(athletes??[]).filter(a=>(active==='ALL'||(active==='FLEX'&&['RB','WR','TE'].includes(a.position))||a.position===active)&&active!=='D/ST').filter(a=>!q||a.display_name.toLowerCase().includes(q)).filter(a=>!availableOnly||!athleteOwner.has(a.id)).sort((a,b)=>(waiverRankByAthleteId.get(a.id)??Infinity)-(waiverRankByAthleteId.get(b.id)??Infinity));
-  const filteredTeams=(teams??[]).filter(t=>(active==='ALL'||active==='D/ST')&&(!q||`${t.abbreviation??''} ${t.display_name??''}`.toLowerCase().includes(q))).filter(t=>!availableOnly||!teamOwner.has(t.id));
-  const ownedFranchiseIds=new Set((ownerships??[]).map(row=>row.franchise_id));
-  const mySf=(sfs??[]).find(sf=>ownedFranchiseIds.has(sf.franchise_id));
-  const myRoster=(rosters??[]).filter(row=>row.season_franchise_id===mySf?.id);
-  const waiverHoldIds=(waiverHolds??[]).map(row=>row.id);
-  const {data:myWaiverClaims}=mySf&&waiverHoldIds.length?await supabase.from('waiver_claims').select('id,waiver_hold_id,status,drop_roster_entry_id,created_at,failure_reason').eq('season_franchise_id',mySf.id).in('waiver_hold_id',waiverHoldIds):({data:[]});
-  const claimByHold=new Map((myWaiverClaims??[]).map(row=>[row.waiver_hold_id,row]));
-  const starterCount=Object.values((season.roster_config as {starters?:Record<string,number>}|null)?.starters??{}).reduce((sum,value)=>sum+Number(value),0);
-  const rosterLimit=starterCount+Number((season.roster_config as {bench?:number}|null)?.bench??0);
-  const rosterFull=myRoster.length>=rosterLimit;
-  const dropLabel=(row:typeof myRoster[number])=>{if(row.athlete_id){const athlete=first(row.athletes as Athlete|Athlete[]|null);return `${athlete?.position??''} • ${athlete?.display_name??'Player'}`;}const team=first(row.real_teams as Team|Team[]|null);return `D/ST • ${team?.abbreviation??team?.display_name??'Defense'}`;};
-  const querySuffix=`${query.q?`&q=${encodeURIComponent(query.q)}`:''}${availableOnly?'&available=true':''}`;
-  const latestMarketAt=marketValues.map(value=>Date.parse(value.importedAt??'')).filter(Number.isFinite).sort((a,b)=>b-a)[0]??0;
-  const marketAgeHours=latestMarketAt?(Date.now()-latestMarketAt)/3_600_000:Infinity;
-  const marketStatus=!marketValues.length?'Historical fallback — current provider guidance is unavailable':marketAgeHours>48?'Data delayed — provider guidance is older than 48 hours':`Current provider data • updated ${new Date(latestMarketAt).toLocaleString()}`;
-  const sortOrder=marketValues.length?'health, recent fantasy production, provider projection, roster rate, then provider rank':'health, recent fantasy production, then player name';
-  const resultCount=filtered.length+filteredTeams.length;
-  const detailList=(details:{position:string;team:string;availability:string;injuryStatus?:string|null;opponent?:string|null;projection?:number|null})=><dl className="playerDetailsList"><div><dt>Position</dt><dd>{details.position}</dd></div><div><dt>NFL team</dt><dd>{details.team}</dd></div><div><dt>Availability</dt><dd>{details.availability}</dd></div><div><dt>Injury status</dt><dd>{details.injuryStatus||'Not available'}</dd></div><div><dt>Opponent</dt><dd>{details.opponent||'Not displayed'}</dd></div><div><dt>Projection</dt><dd>{details.projection==null?'Not displayed':details.projection}</dd></div></dl>;
-  const claimForm=(asset:{athleteId?:string;realTeamId?:string;label:string})=>!mySf?<StatusBadge state="inactive" label={`No franchise available to add ${asset.label}`} className="freeAgentUnavailable">NO FRANCHISE</StatusBadge>:<details className="freeAgentClaim"><summary aria-label={`Add ${asset.label}`}>ADD</summary><form action={claimFreeAgent}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="season_franchise_id" value={mySf.id}/><input type="hidden" name="position" value={active}/>{asset.athleteId&&<input type="hidden" name="athlete_id" value={asset.athleteId}/>} {asset.realTeamId&&<input type="hidden" name="real_team_id" value={asset.realTeamId}/>}<label>{rosterFull?'Choose a player to drop':'Optional: drop a player'}<select name="drop_roster_entry_id" required={rosterFull}><option value="">{rosterFull?'Select from your roster':'No drop needed'}</option>{myRoster.map(row=><option key={row.id} value={row.id}>{dropLabel(row)}</option>)}</select></label><button className="primary" type="submit">Confirm Add</button></form></details>;
-  const waiverLabel=(hold:NonNullable<typeof waiverHolds>[number])=>{if(hold.athlete_id){const athlete=first(hold.athletes as (Athlete&{real_teams?:AthleteTeam|AthleteTeam[]|null})|(Athlete&{real_teams?:AthleteTeam|AthleteTeam[]|null})[]|null);const team=first(athlete?.real_teams);return `${athlete?.position??''} • ${athlete?.display_name??'Player'} • ${team?.abbreviation??'FA'}`;}const team=first(hold.real_teams as Team|Team[]|null);return `D/ST • ${team?.abbreviation??team?.display_name??'Defense'}`;};
-  const waiverClaimForm=(hold:NonNullable<typeof waiverHolds>[number])=>{const existing=claimByHold.get(hold.id);const label=waiverLabel(hold);const source=hold.source_season_franchise_id?franchiseBySf.get(hold.source_season_franchise_id):null;const sourceLabel=source?.abbreviation??source?.name??null;const clearsAt=new Date(hold.clears_at).toLocaleString();const reviewing=query.review_waiver_hold_id===hold.id;const selectedDrop=myRoster.find(row=>row.id===query.review_drop_roster_entry_id);const selectedDropLabel=selectedDrop?dropLabel(selectedDrop):null;if(!mySf)return <StatusBadge state="inactive" label={`No franchise available to claim ${label}`} className="freeAgentUnavailable">NO FRANCHISE</StatusBadge>;if(existing?.status==='pending')return <form action={withdrawWaiverClaim} className="inlineForm" aria-label={`Pending waiver claim for ${label}`}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="position" value={active}/><input type="hidden" name="waiver_claim_id" value={existing.id}/><StatusBadge state="pending" label={`Waiver claim pending for ${label}. Clears ${clearsAt}. ${sourceLabel?`Dropped by ${sourceLabel}.`:''}`} className="commandBadge">CLAIM PENDING</StatusBadge><button className="secondary" type="submit" aria-label={`Withdraw waiver claim for ${label}`}>Withdraw</button></form>;if(reviewing){const missingRequiredDrop=rosterFull&&!selectedDrop;return <div className="waiverReview" role="group" aria-label={waiverReviewAnnouncement({addLabel:label,dropLabel:selectedDropLabel,clearsAt,source:sourceLabel,faabEnabled:false})}><p className="srOnly" role="status">{waiverReviewAnnouncement({addLabel:label,dropLabel:selectedDropLabel,clearsAt,source:sourceLabel,faabEnabled:false})}</p><dl className="playerDetailsList staticDetails"><div><dt>Add player</dt><dd>{label}</dd></div><div><dt>Drop player</dt><dd>{selectedDropLabel??'None selected'}</dd></div><div><dt>FAAB amount</dt><dd>Not used by this league</dd></div><div><dt>Priority</dt><dd>Inverse standings at processing</dd></div><div><dt>Clears</dt><dd>{clearsAt}</dd></div></dl>{missingRequiredDrop?<p className="errorNotice" role="alert">Your roster is full. Choose a player to drop before submitting this claim.</p>:<form action={submitWaiverClaim}><input type="hidden" name="league_id" value={leagueId}/><input type="hidden" name="season_franchise_id" value={mySf.id}/><input type="hidden" name="waiver_hold_id" value={hold.id}/><input type="hidden" name="position" value={active}/>{selectedDrop&&<input type="hidden" name="drop_roster_entry_id" value={selectedDrop.id}/>}<button className="primary" type="submit" aria-label={`Submit reviewed waiver claim for ${label}`}>Submit Reviewed Claim</button></form>}<a className="secondary" href={`?position=${encodeURIComponent(active)}${querySuffix}`}>Cancel Review</a></div>;}return <details className="freeAgentClaim"><summary aria-label={`Claim ${label}`}>CLAIM</summary><form method="get"><input type="hidden" name="position" value={active}/>{query.q&&<input type="hidden" name="q" value={query.q}/>} {availableOnly&&<input type="hidden" name="available" value="true"/>}<input type="hidden" name="review_waiver_hold_id" value={hold.id}/><label>{rosterFull?'Choose a player to drop':'Optional: drop a player'}<select name="review_drop_roster_entry_id" required={rosterFull} aria-label={`Drop player for waiver claim on ${label}`}><option value="">{rosterFull?'Select from your roster':'No drop needed'}</option>{myRoster.map(row=><option key={row.id} value={row.id}>{dropLabel(row)}</option>)}</select></label>{existing?.status==='failed'&&<small>{existing.failure_reason??'Previous claim failed.'}</small>}<p className="srOnly">Review will announce add player, drop player, FAAB status, and waiver priority information before submission.</p><button className="primary" type="submit">Review Waiver Claim</button></form></details>;};
-  return <main>
-    <p className={marketAgeHours>48?'errorNotice':'successNotice'} role="status">{marketStatus}. Waiver recommendations prioritize recent production after games begin; draft ADP is only a tie-breaker.</p>
-    <section className="leagueHero" style={{minHeight:320}}><div className="leagueHeroGlow"/><div className="leagueTopline"><a className="backLink" href={`/leagues/${leagueId}`}>← LEAGUE HQ</a><span className="leagueRole">PLAYER INDEX</span></div><div className="leagueHeroContent"><p className="eyebrow">BIG EXEC • {league.name}</p><h1>Players.</h1><p className="leagueTagline">Know the pool. Know who is rostered. Build the next move.</p><div className="leagueMetaRow"><span>QB / RB / WR / TE / K</span><span>D/ST</span></div></div></section>
-    {loadError&&<p className="errorNotice" role="alert">Player status could not be fully loaded: {loadError}</p>}
-    {query.transaction_status==='added'&&<p className="successNotice" role="status">Free agent added to your roster.</p>}
-    {query.transaction_error&&<p className="errorNotice" role="alert">{query.transaction_error}</p>}
-    {query.waiver_status==='claimed'&&<p className="successNotice" role="status">Waiver claim submitted.</p>}
-    {query.waiver_status==='withdrawn'&&<p className="successNotice" role="status">Waiver claim withdrawn.</p>}
-    {query.waiver_error&&<p className="errorNotice" role="alert">{query.waiver_error}</p>}
-    <section className="panel"><form className="inlineForm playerSearchForm" method="get"><label className="srOnly" htmlFor="player-search">Search players</label><input id="player-search" name="q" defaultValue={query.q??''} placeholder="Search player or team"/><input type="hidden" name="position" value={active}/><label className="availableOnlyToggle"><input type="checkbox" name="available" value="true" defaultChecked={availableOnly}/>Available only</label><button className="secondary">Search</button></form><p className="srOnly" role="status">{playerSearchSummary(resultCount,active,availableOnly,sortOrder)}</p><div className="actions" aria-label="Position filters">{POSITIONS.map(pos=><a key={pos} className={active===pos?'primary':'secondary'} aria-current={active===pos?'true':undefined} href={`?position=${encodeURIComponent(pos)}${querySuffix}`}>{pos}<span className="srOnly">{active===pos?' selected':''}</span></a>)}</div></section>
-    <section className="panel"><div className="sectionTitleRow"><div><p className="eyebrow">WAIVER WIRE</p><h2>Claims awaiting priority.</h2></div><span className="sectionCounter">{waiverHolds?.length??0}</span></div><p className="lede">Players released from rosters enter a waiver hold first. Claims resolve by the league's authoritative waiver process; the original franchise cannot reclaim its own drop during the initial hold.</p><div className="playerList">{(waiverHolds??[]).map(hold=>{const source=hold.source_season_franchise_id?franchiseBySf.get(hold.source_season_franchise_id):null;const existing=claimByHold.get(hold.id);return <article className="playerRow" key={hold.id}><div><span>WAIVERS • CLEARS {new Date(hold.clears_at).toLocaleString()} {source?`• FROM ${source.abbreviation??source.name}`:''}</span><strong>{waiverLabel(hold)}</strong>{existing&&<small>Your claim: {existing.status.toUpperCase()}</small>}</div>{waiverClaimForm(hold)}</article>;})}{!waiverHolds?.length&&<p className="successNotice">No players are currently on waivers.</p>}</div></section>
-    {active!=='D/ST'&&<section className="panel"><p className="eyebrow">INDIVIDUAL PLAYERS</p><div className="playerList">{filtered.map(a=>{const team=first(a.real_teams as AthleteTeam|AthleteTeam[]|null);const owner=athleteOwner.get(a.id);const assetLabel=`${a.position} ${a.display_name}`;const availability=owner?`Rostered by ${owner}`:'Available';const teamLabel=team?.abbreviation??'FA';const market=marketByAthleteId.get(a.id);const projection=market?.projectedPoints??null;const opponent=a.real_team_id?opponentByTeamId.get(a.real_team_id)??null:null;const waiverRank=waiverRankByAthleteId.get(a.id);return <article className="playerRow" aria-label={describePlayerSearchResult({name:a.display_name,position:a.position,team:teamLabel,availability,injuryStatus:a.injury_status,opponent,projection,action:owner?'View player':'Add player'})} key={a.id}><div><span>{waiverRank?`WAIVER #${waiverRank} • `:''}{a.position} • {teamLabel} • {owner?`ROSTERED: ${owner}`:'AVAILABLE'}</span><strong>{a.display_name}</strong>{market&&<small>{market.overallRank?`PROVIDER RANK #${market.overallRank} • `:''}{projection==null?'NO PROJECTION':`${projection.toFixed(1)} PROJECTED PTS`}</small>}</div><div className="playerResultActions"><details className="playerDetailDisclosure"><summary aria-label={`View player details for ${a.display_name}`}>VIEW</summary>{detailList({position:a.position,team:teamLabel,availability,injuryStatus:a.injury_status,opponent,projection})}</details>{owner?<StatusBadge state="rostered" label={`${a.display_name} is rostered by ${owner}`} className="rosteredStatus">ROSTERED</StatusBadge>:claimForm({athleteId:a.id,label:assetLabel})}</div></article>})}{!filtered.length&&<p className="lede">No players match this filter.</p>}</div></section>}
-    {(active==='ALL'||active==='D/ST')&&<section className="panel"><p className="eyebrow">D/ST</p><h2>Available defenses.</h2><div className="playerList">{filteredTeams.map(t=>{const owner=teamOwner.get(t.id);const teamName=`${t.abbreviation??t.display_name} D/ST`;const availability=owner?`Rostered by ${owner}`:'Available';const teamLabel=t.abbreviation??t.display_name??'Defense';return <article className="playerRow" aria-label={describePlayerSearchResult({name:teamName,position:'D/ST',team:teamLabel,availability,action:owner?'View defense':'Add defense'})} key={t.id}><div><span>D/ST • {owner?`ROSTERED: ${owner}`:'AVAILABLE'}</span><strong>{teamName}</strong></div><div className="playerResultActions"><details className="playerDetailDisclosure"><summary aria-label={`View player details for ${teamName}`}>VIEW</summary>{detailList({position:'D/ST',team:teamLabel,availability})}</details>{owner?<StatusBadge state="rostered" label={`${teamName} is rostered by ${owner}`} className="rosteredStatus">ROSTERED</StatusBadge>:claimForm({realTeamId:t.id,label:teamName})}</div></article>})}</div></section>}
-  </main>;
+  const loadError = rosterError?.message || athleteError?.message || teamError?.message || waiverError?.message || marketError?.message;
+  const franchiseBySf = new Map((sfs ?? []).map((sf) => [sf.id, first(sf.franchises as Franchise | Franchise[] | null)]));
+  const athleteOwner = new Map<string, string>();
+  const teamOwner = new Map<string, string>();
+  for (const row of rosters ?? []) {
+    const owner = franchiseBySf.get(row.season_franchise_id)?.abbreviation ?? franchiseBySf.get(row.season_franchise_id)?.name ?? 'ROSTERED';
+    if (row.athlete_id) athleteOwner.set(row.athlete_id, owner);
+    if (row.real_team_id) teamOwner.set(row.real_team_id, owner);
+  }
+  const marketValues: WaiverMarketValue[] = ((marketRows ?? []) as MarketRow[]).map((row) => ({
+    athleteId: row.athlete_id,
+    overallRank: numeric(row.overall_rank),
+    positionRank: numeric(row.position_rank),
+    adp: numeric(row.adp),
+    projectedPoints: numeric(row.projected_points),
+    percentRostered: numeric(row.percent_rostered),
+    importedAt: row.imported_at,
+    source: row.source,
+  }));
+  const marketByAthleteId = new Map(marketValues.map((value) => [value.athleteId, value]));
+  const recentByAthleteId = new Map<string, number>();
+  const performanceByAthleteId = buildPlayerPerformance((recentScoreRows ?? []) as RecentScore[]);
+  const newestScoreAt = Math.max(0, ...((recentScoreRows ?? []) as RecentScore[]).map((score) => Date.parse(score.calculated_at ?? '')).filter(Number.isFinite));
+  const recentCutoff = newestScoreAt - 21 * 24 * 60 * 60 * 1000;
+  for (const score of (recentScoreRows ?? []) as RecentScore[]) {
+    if (score.athlete_id && Date.parse(score.calculated_at ?? '') >= recentCutoff) recentByAthleteId.set(score.athlete_id, (recentByAthleteId.get(score.athlete_id) ?? 0) + (numeric(score.points) ?? 0));
+  }
+  const rankedIds = rankWaiverPlayers(
+    (athletes ?? []).map((a) => ({
+      id: a.id,
+      displayName: a.display_name,
+      injuryStatus: a.injury_status,
+    })),
+    marketValues,
+    recentByAthleteId,
+  ).map((player) => player.id);
+  const waiverRankByAthleteId = new Map(rankedIds.map((id, index) => [id, index + 1]));
+  const opponentByTeamId = new Map<string, string>();
+  for (const game of (upcomingGames ?? []) as UpcomingGame[]) {
+    if (game.home_team_id && game.away_team_id) {
+      const home = (teams ?? []).find((team) => team.id === game.home_team_id);
+      const away = (teams ?? []).find((team) => team.id === game.away_team_id);
+      if (!opponentByTeamId.has(game.home_team_id)) opponentByTeamId.set(game.home_team_id, away?.abbreviation ?? away?.display_name ?? 'TBD');
+      if (!opponentByTeamId.has(game.away_team_id)) opponentByTeamId.set(game.away_team_id, home?.abbreviation ?? home?.display_name ?? 'TBD');
+    }
+  }
+  const requested = (query.position ?? 'ALL').toUpperCase();
+  const active = POSITIONS.includes(requested as (typeof POSITIONS)[number]) ? requested : 'ALL';
+  const q = (query.q ?? '').trim().toLowerCase();
+  const availableOnly = query.available === 'true';
+  const filtered = (athletes ?? [])
+    .filter((a) => (active === 'ALL' || (active === 'FLEX' && ['RB', 'WR', 'TE'].includes(a.position)) || a.position === active) && active !== 'D/ST')
+    .filter((a) => !q || a.display_name.toLowerCase().includes(q))
+    .filter((a) => !availableOnly || !athleteOwner.has(a.id))
+    .sort((a, b) => (waiverRankByAthleteId.get(a.id) ?? Infinity) - (waiverRankByAthleteId.get(b.id) ?? Infinity));
+  const filteredTeams = (teams ?? []).filter((t) => (active === 'ALL' || active === 'D/ST') && (!q || `${t.abbreviation ?? ''} ${t.display_name ?? ''}`.toLowerCase().includes(q))).filter((t) => !availableOnly || !teamOwner.has(t.id));
+  const ownedFranchiseIds = new Set((ownerships ?? []).map((row) => row.franchise_id));
+  const mySf = (sfs ?? []).find((sf) => ownedFranchiseIds.has(sf.franchise_id));
+  const myRoster = (rosters ?? []).filter((row) => row.season_franchise_id === mySf?.id);
+  const waiverHoldIds = (waiverHolds ?? []).map((row) => row.id);
+  const { data: myWaiverClaims } = mySf && waiverHoldIds.length ? await supabase.from('waiver_claims').select('id,waiver_hold_id,status,drop_roster_entry_id,created_at,failure_reason').eq('season_franchise_id', mySf.id).in('waiver_hold_id', waiverHoldIds) : { data: [] };
+  const claimByHold = new Map((myWaiverClaims ?? []).map((row) => [row.waiver_hold_id, row]));
+  const starterCount = Object.values((season.roster_config as { starters?: Record<string, number> } | null)?.starters ?? {}).reduce((sum, value) => sum + Number(value), 0);
+  const rosterLimit = starterCount + Number((season.roster_config as { bench?: number } | null)?.bench ?? 0);
+  const rosterFull = myRoster.length >= rosterLimit;
+  const dropLabel = (row: (typeof myRoster)[number]) => {
+    if (row.athlete_id) {
+      const athlete = first(row.athletes as Athlete | Athlete[] | null);
+      return `${athlete?.position ?? ''} • ${athlete?.display_name ?? 'Player'}`;
+    }
+    const team = first(row.real_teams as Team | Team[] | null);
+    return `D/ST • ${team?.abbreviation ?? team?.display_name ?? 'Defense'}`;
+  };
+  const querySuffix = `${query.q ? `&q=${encodeURIComponent(query.q)}` : ''}${availableOnly ? '&available=true' : ''}`;
+  const latestMarketAt =
+    marketValues
+      .map((value) => Date.parse(value.importedAt ?? ''))
+      .filter(Number.isFinite)
+      .sort((a, b) => b - a)[0] ?? 0;
+  const marketAgeHours = latestMarketAt ? (Date.now() - latestMarketAt) / 3_600_000 : Infinity;
+  const marketStatus = !marketValues.length ? 'Historical fallback — current provider guidance is unavailable' : marketAgeHours > 48 ? 'Data delayed — provider guidance is older than 48 hours' : `Current provider data • updated ${new Date(latestMarketAt).toLocaleString()}`;
+  const sortOrder = marketValues.length ? 'health, recent fantasy production, provider projection, roster rate, then provider rank' : 'health, recent fantasy production, then player name';
+  const resultCount = filtered.length + filteredTeams.length;
+  const detailList = (details: { position: string; team: string; availability: string; injuryStatus?: string | null; opponent?: string | null; projection?: number | null }) => (
+    <dl className="playerDetailsList">
+      <div>
+        <dt>Position</dt>
+        <dd>{details.position}</dd>
+      </div>
+      <div>
+        <dt>NFL team</dt>
+        <dd>{details.team}</dd>
+      </div>
+      <div>
+        <dt>Availability</dt>
+        <dd>{details.availability}</dd>
+      </div>
+      <div>
+        <dt>Injury status</dt>
+        <dd>{details.injuryStatus || 'Not available'}</dd>
+      </div>
+      <div>
+        <dt>Opponent</dt>
+        <dd>{details.opponent || 'Not displayed'}</dd>
+      </div>
+      <div>
+        <dt>Projection</dt>
+        <dd>{details.projection == null ? 'Not displayed' : details.projection}</dd>
+      </div>
+    </dl>
+  );
+  const claimForm = (asset: { athleteId?: string; realTeamId?: string; label: string }) =>
+    !mySf ? (
+      <StatusBadge state="inactive" label={`No franchise available to add ${asset.label}`} className="freeAgentUnavailable">
+        NO FRANCHISE
+      </StatusBadge>
+    ) : (
+      <details className="freeAgentClaim">
+        <summary aria-label={`Add ${asset.label}`}>ADD</summary>
+        <form action={claimFreeAgent}>
+          <input type="hidden" name="league_id" value={leagueId} />
+          <input type="hidden" name="season_franchise_id" value={mySf.id} />
+          <input type="hidden" name="position" value={active} />
+          {asset.athleteId && <input type="hidden" name="athlete_id" value={asset.athleteId} />} {asset.realTeamId && <input type="hidden" name="real_team_id" value={asset.realTeamId} />}
+          <label>
+            {rosterFull ? 'Choose a player to drop' : 'Optional: drop a player'}
+            <select name="drop_roster_entry_id" required={rosterFull}>
+              <option value="">{rosterFull ? 'Select from your roster' : 'No drop needed'}</option>
+              {myRoster.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {dropLabel(row)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="primary" type="submit">
+            Confirm Add
+          </button>
+        </form>
+      </details>
+    );
+  const waiverLabel = (hold: NonNullable<typeof waiverHolds>[number]) => {
+    if (hold.athlete_id) {
+      const athlete = first(hold.athletes as (Athlete & { real_teams?: AthleteTeam | AthleteTeam[] | null }) | (Athlete & { real_teams?: AthleteTeam | AthleteTeam[] | null })[] | null);
+      const team = first(athlete?.real_teams);
+      return `${athlete?.position ?? ''} • ${athlete?.display_name ?? 'Player'} • ${team?.abbreviation ?? 'FA'}`;
+    }
+    const team = first(hold.real_teams as Team | Team[] | null);
+    return `D/ST • ${team?.abbreviation ?? team?.display_name ?? 'Defense'}`;
+  };
+  const waiverClaimForm = (hold: NonNullable<typeof waiverHolds>[number]) => {
+    const existing = claimByHold.get(hold.id);
+    const label = waiverLabel(hold);
+    const source = hold.source_season_franchise_id ? franchiseBySf.get(hold.source_season_franchise_id) : null;
+    const sourceLabel = source?.abbreviation ?? source?.name ?? null;
+    const clearsAt = new Date(hold.clears_at).toLocaleString();
+    const reviewing = query.review_waiver_hold_id === hold.id;
+    const selectedDrop = myRoster.find((row) => row.id === query.review_drop_roster_entry_id);
+    const selectedDropLabel = selectedDrop ? dropLabel(selectedDrop) : null;
+    if (!mySf)
+      return (
+        <StatusBadge state="inactive" label={`No franchise available to claim ${label}`} className="freeAgentUnavailable">
+          NO FRANCHISE
+        </StatusBadge>
+      );
+    if (existing?.status === 'pending')
+      return (
+        <form action={withdrawWaiverClaim} className="inlineForm" aria-label={`Pending waiver claim for ${label}`}>
+          <input type="hidden" name="league_id" value={leagueId} />
+          <input type="hidden" name="position" value={active} />
+          <input type="hidden" name="waiver_claim_id" value={existing.id} />
+          <StatusBadge state="pending" label={`Waiver claim pending for ${label}. Clears ${clearsAt}. ${sourceLabel ? `Dropped by ${sourceLabel}.` : ''}`} className="commandBadge">
+            CLAIM PENDING
+          </StatusBadge>
+          <button className="secondary" type="submit" aria-label={`Withdraw waiver claim for ${label}`}>
+            Withdraw
+          </button>
+        </form>
+      );
+    if (reviewing) {
+      const missingRequiredDrop = rosterFull && !selectedDrop;
+      return (
+        <div
+          className="waiverReview"
+          role="group"
+          aria-label={waiverReviewAnnouncement({
+            addLabel: label,
+            dropLabel: selectedDropLabel,
+            clearsAt,
+            source: sourceLabel,
+            faabEnabled: false,
+          })}
+        >
+          <p className="srOnly" role="status">
+            {waiverReviewAnnouncement({
+              addLabel: label,
+              dropLabel: selectedDropLabel,
+              clearsAt,
+              source: sourceLabel,
+              faabEnabled: false,
+            })}
+          </p>
+          <dl className="playerDetailsList staticDetails">
+            <div>
+              <dt>Add player</dt>
+              <dd>{label}</dd>
+            </div>
+            <div>
+              <dt>Drop player</dt>
+              <dd>{selectedDropLabel ?? 'None selected'}</dd>
+            </div>
+            <div>
+              <dt>FAAB amount</dt>
+              <dd>Not used by this league</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>Inverse standings at processing</dd>
+            </div>
+            <div>
+              <dt>Clears</dt>
+              <dd>{clearsAt}</dd>
+            </div>
+          </dl>
+          {missingRequiredDrop ? (
+            <p className="errorNotice" role="alert">
+              Your roster is full. Choose a player to drop before submitting this claim.
+            </p>
+          ) : (
+            <form action={submitWaiverClaim}>
+              <input type="hidden" name="league_id" value={leagueId} />
+              <input type="hidden" name="season_franchise_id" value={mySf.id} />
+              <input type="hidden" name="waiver_hold_id" value={hold.id} />
+              <input type="hidden" name="position" value={active} />
+              {selectedDrop && <input type="hidden" name="drop_roster_entry_id" value={selectedDrop.id} />}
+              <button className="primary" type="submit" aria-label={`Submit reviewed waiver claim for ${label}`}>
+                Submit Reviewed Claim
+              </button>
+            </form>
+          )}
+          <a className="secondary" href={`?position=${encodeURIComponent(active)}${querySuffix}`}>
+            Cancel Review
+          </a>
+        </div>
+      );
+    }
+    return (
+      <details className="freeAgentClaim">
+        <summary aria-label={`Claim ${label}`}>CLAIM</summary>
+        <form action={submitWaiverClaim}>
+          <input type="hidden" name="league_id" value={leagueId} />
+          <input type="hidden" name="season_franchise_id" value={mySf.id} />
+          <input type="hidden" name="waiver_hold_id" value={hold.id} />
+          <input type="hidden" name="position" value={active} />
+          {query.q && <input type="hidden" name="q" value={query.q} />} {availableOnly && <input type="hidden" name="available" value="true" />}
+          <input type="hidden" name="review_waiver_hold_id" value={hold.id} />
+          <label>
+            {rosterFull ? 'Choose a player to drop' : 'Optional: drop a player'}
+            <select name="drop_roster_entry_id" required={rosterFull} aria-label={`Drop player for waiver claim on ${label}`}>
+              <option value="">{rosterFull ? 'Select from your roster' : 'No drop needed'}</option>
+              {myRoster.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {dropLabel(row)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {existing?.status === 'failed' && <small>{existing.failure_reason ?? 'Previous claim failed.'}</small>}
+          <small>Valid claims process automatically at {clearsAt}. No commissioner approval is required.</small>
+          <button className="primary" type="submit">
+            Submit Claim
+          </button>
+        </form>
+      </details>
+    );
+  };
+  return (
+    <main>
+      <p className={marketAgeHours > 48 ? 'errorNotice' : 'successNotice'} role="status">
+        {marketStatus}. Waiver recommendations prioritize recent production after games begin; draft ADP is only a tie-breaker.
+      </p>
+      <section className="leagueHero" style={{ minHeight: 320 }}>
+        <div className="leagueHeroGlow" />
+        <div className="leagueTopline">
+          <a className="backLink" href={`/leagues/${leagueId}`}>
+            ← LEAGUE HQ
+          </a>
+          <span className="leagueRole">PLAYER INDEX</span>
+        </div>
+        <div className="leagueHeroContent">
+          <p className="eyebrow">BIG EXEC • {league.name}</p>
+          <h1>Players.</h1>
+          <p className="leagueTagline">Know the pool. Know who is rostered. Build the next move.</p>
+          <div className="leagueMetaRow">
+            <span>QB / RB / WR / TE / K</span>
+            <span>D/ST</span>
+          </div>
+        </div>
+      </section>
+      {loadError && (
+        <p className="errorNotice" role="alert">
+          Player status could not be fully loaded: {loadError}
+        </p>
+      )}
+      {query.transaction_status === 'added' && (
+        <p className="successNotice" role="status">
+          Free agent added to your roster.
+        </p>
+      )}
+      {query.transaction_error && (
+        <p className="errorNotice" role="alert">
+          {query.transaction_error}
+        </p>
+      )}
+      {query.waiver_status === 'claimed' && (
+        <p className="successNotice" role="status">
+          Waiver claim submitted.
+        </p>
+      )}
+      {query.waiver_status === 'withdrawn' && (
+        <p className="successNotice" role="status">
+          Waiver claim withdrawn.
+        </p>
+      )}
+      {query.waiver_error && (
+        <p className="errorNotice" role="alert">
+          {query.waiver_error}
+        </p>
+      )}
+      <section className="panel">
+        <form className="inlineForm playerSearchForm" method="get">
+          <label className="srOnly" htmlFor="player-search">
+            Search players
+          </label>
+          <input id="player-search" name="q" defaultValue={query.q ?? ''} placeholder="Search player or team" />
+          <input type="hidden" name="position" value={active} />
+          <label className="availableOnlyToggle">
+            <input type="checkbox" name="available" value="true" defaultChecked={availableOnly} />
+            Available only
+          </label>
+          <button className="secondary">Search</button>
+        </form>
+        <p className="srOnly" role="status">
+          {playerSearchSummary(resultCount, active, availableOnly, sortOrder)}
+        </p>
+        <div className="actions" aria-label="Position filters">
+          {POSITIONS.map((pos) => (
+            <a key={pos} className={active === pos ? 'primary' : 'secondary'} aria-current={active === pos ? 'true' : undefined} href={`?position=${encodeURIComponent(pos)}${querySuffix}`}>
+              {pos}
+              <span className="srOnly">{active === pos ? ' selected' : ''}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <div className="sectionTitleRow">
+          <div>
+            <p className="eyebrow">WAIVER WIRE</p>
+            <h2>Available through league priority.</h2>
+          </div>
+          <span className="sectionCounter">{waiverHolds?.length ?? 0}</span>
+        </div>
+        <p className="lede">Submit a valid claim and Big Exec processes it automatically at the clearing time. No commissioner approval is required.</p>
+        <div className="playerList">
+          {(waiverHolds ?? []).map((hold) => {
+            const source = hold.source_season_franchise_id ? franchiseBySf.get(hold.source_season_franchise_id) : null;
+            const existing = claimByHold.get(hold.id);
+            const performance = hold.athlete_id ? performanceByAthleteId.get(hold.athlete_id) : undefined;
+            return (
+              <article className="playerRow waiverPerformanceRow" key={hold.id}>
+                <div>
+                  <span>
+                    WAIVERS • CLEARS {new Date(hold.clears_at).toLocaleString()} {source ? `• FROM ${source.abbreviation ?? source.name}` : ''}
+                  </span>
+                  <strong>{waiverLabel(hold)}</strong>
+                  <small>{performanceSummary(performance)}</small>
+                  {existing && <small>Your claim: {existing.status.toUpperCase()}</small>}
+                </div>
+                {performance && (
+                  <b className="lineupAssetPoints">
+                    {performance.lastWeek.toFixed(2)} <small>LAST WEEK</small>
+                  </b>
+                )}
+                {waiverClaimForm(hold)}
+              </article>
+            );
+          })}
+          {!waiverHolds?.length && <p className="successNotice">No players are currently on waivers.</p>}
+        </div>
+      </section>
+      {active !== 'D/ST' && (
+        <section className="panel">
+          <p className="eyebrow">INDIVIDUAL PLAYERS</p>
+          <div className="playerList">
+            {filtered.map((a) => {
+              const team = first(a.real_teams as AthleteTeam | AthleteTeam[] | null);
+              const owner = athleteOwner.get(a.id);
+              const assetLabel = `${a.position} ${a.display_name}`;
+              const availability = owner ? `Rostered by ${owner}` : 'Available';
+              const teamLabel = team?.abbreviation ?? 'FA';
+              const market = marketByAthleteId.get(a.id);
+              const projection = market?.projectedPoints ?? null;
+              const opponent = a.real_team_id ? (opponentByTeamId.get(a.real_team_id) ?? null) : null;
+              const waiverRank = waiverRankByAthleteId.get(a.id);
+              const performance = performanceByAthleteId.get(a.id);
+              return (
+                <article
+                  className="playerRow"
+                  aria-label={describePlayerSearchResult({
+                    name: a.display_name,
+                    position: a.position,
+                    team: teamLabel,
+                    availability,
+                    injuryStatus: a.injury_status,
+                    opponent,
+                    projection,
+                    action: owner ? 'View player' : 'Add player',
+                  })}
+                  key={a.id}
+                >
+                  <div>
+                    <span>
+                      {waiverRank ? `WAIVER #${waiverRank} • ` : ''}
+                      {a.position} • {teamLabel} • {owner ? `ROSTERED: ${owner}` : 'AVAILABLE'}
+                    </span>
+                    <strong>{a.display_name}</strong>
+                    <small>{performanceSummary(performance)}</small>
+                    {market && (
+                      <small>
+                        {market.overallRank ? `PROVIDER RANK #${market.overallRank} • ` : ''}
+                        {projection == null ? 'NO PROJECTION' : `${projection.toFixed(1)} PROJECTED PTS`}
+                      </small>
+                    )}
+                  </div>
+                  {performance && (
+                    <b className="lineupAssetPoints">
+                      {performance.lastWeek.toFixed(2)} <small>LAST WEEK</small>
+                    </b>
+                  )}
+                  <div className="playerResultActions">
+                    <details className="playerDetailDisclosure">
+                      <summary aria-label={`View player details for ${a.display_name}`}>VIEW</summary>
+                      {detailList({
+                        position: a.position,
+                        team: teamLabel,
+                        availability,
+                        injuryStatus: a.injury_status,
+                        opponent,
+                        projection,
+                      })}
+                    </details>
+                    {owner ? (
+                      <StatusBadge state="rostered" label={`${a.display_name} is rostered by ${owner}`} className="rosteredStatus">
+                        ROSTERED
+                      </StatusBadge>
+                    ) : (
+                      claimForm({ athleteId: a.id, label: assetLabel })
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+            {!filtered.length && <p className="lede">No players match this filter.</p>}
+          </div>
+        </section>
+      )}
+      {(active === 'ALL' || active === 'D/ST') && (
+        <section className="panel">
+          <p className="eyebrow">D/ST</p>
+          <h2>Available defenses.</h2>
+          <div className="playerList">
+            {filteredTeams.map((t) => {
+              const owner = teamOwner.get(t.id);
+              const teamName = `${t.abbreviation ?? t.display_name} D/ST`;
+              const availability = owner ? `Rostered by ${owner}` : 'Available';
+              const teamLabel = t.abbreviation ?? t.display_name ?? 'Defense';
+              return (
+                <article
+                  className="playerRow"
+                  aria-label={describePlayerSearchResult({
+                    name: teamName,
+                    position: 'D/ST',
+                    team: teamLabel,
+                    availability,
+                    action: owner ? 'View defense' : 'Add defense',
+                  })}
+                  key={t.id}
+                >
+                  <div>
+                    <span>D/ST • {owner ? `ROSTERED: ${owner}` : 'AVAILABLE'}</span>
+                    <strong>{teamName}</strong>
+                  </div>
+                  <div className="playerResultActions">
+                    <details className="playerDetailDisclosure">
+                      <summary aria-label={`View player details for ${teamName}`}>VIEW</summary>
+                      {detailList({
+                        position: 'D/ST',
+                        team: teamLabel,
+                        availability,
+                      })}
+                    </details>
+                    {owner ? (
+                      <StatusBadge state="rostered" label={`${teamName} is rostered by ${owner}`} className="rosteredStatus">
+                        ROSTERED
+                      </StatusBadge>
+                    ) : (
+                      claimForm({ realTeamId: t.id, label: teamName })
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </main>
+  );
 }

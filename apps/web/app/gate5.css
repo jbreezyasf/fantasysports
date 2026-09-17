@@ -124,6 +124,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .freeAgentClaim{position:relative;justify-self:end}.freeAgentClaim summary{list-style:none;cursor:pointer;min-width:70px;min-height:44px;display:grid;place-items:center;border:1px solid #d9b43b;color:#f0d77c;font-size:.7rem;font-weight:950;letter-spacing:.09em}.freeAgentClaim summary::-webkit-details-marker{display:none}.freeAgentClaim[open] summary{background:#d9b43b;color:#08090a}.freeAgentClaim form{position:absolute;z-index:24;right:0;top:50px;width:min(310px,calc(100vw - 42px));display:grid;gap:10px;padding:14px;border:1px solid #6b592e;background:#0c0d10;box-shadow:0 18px 60px #000}.freeAgentClaim label{display:grid;gap:7px;color:#d8d3c9;font-size:.68rem;font-weight:800}.freeAgentClaim select{width:100%;min-height:48px;padding:10px;border:1px solid #454039;background:#17181b;color:#fff;font:inherit}.freeAgentClaim .primary{width:100%;margin:0}.rosteredStatus,.freeAgentUnavailable{color:#aaa69d;font-size:.68rem;letter-spacing:.08em}.freeAgentUnavailable{font-weight:900}
 @media(max-width:620px){.freeAgentClaim form{position:fixed;left:14px;right:14px;top:auto;bottom:calc(98px + env(safe-area-inset-bottom));width:auto}.freeAgentClaim form:before{content:'ADD FREE AGENT';color:#f0d77c;font-size:.65rem;font-weight:950;letter-spacing:.11em}}
 
+/* Lineup confirmations remain available to assistive technology without intercepting player choices. */
+.lineupChange .lineupMoveStatus{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important;pointer-events:none!important}
+.waiverPerformanceRow{grid-template-columns:minmax(0,1fr) auto auto!important;align-items:center}.waiverPerformanceRow>.lineupAssetPoints{white-space:nowrap;text-align:right}
+
 /* BE-A11Y-014: large-text reflow for core fantasy workflows. */
 .primary,.secondary,.miniAction,.draftPickButton,.draftQueueButton,.freeAgentClaim summary,.statusBadge,.lockerReaction,.askGmButton{white-space:normal;overflow-wrap:anywhere;line-height:1.2}
 .actions,.draftCommissionerTools,.slotChoices{min-width:0;flex-wrap:wrap}
