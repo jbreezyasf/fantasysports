@@ -4,7 +4,7 @@ import test from 'node:test';
 
 test('matchup navigation always has a useful destination', async () => {
   const source = await readFile('apps/web/app/components/BigExecMobileNav.tsx', 'utf8');
-  assert.match(source, /find\(matchup=>!matchup\.is_final\)/);
+  assert.match(source, /selectFrontOfficeMatchup\(matchups\?\?\[\],seasonFranchiseId,currentCompetitionWeek\(games\?\?\[\]\)\)/);
   assert.match(source, /`\/leagues\/\$\{leagueId\}\/schedule`/);
 });
 
