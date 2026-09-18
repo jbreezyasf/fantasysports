@@ -15,6 +15,8 @@ describe('weekly automation production configuration', () => {
 
     expect(source).toContain("env.VERCEL_ENV==='production'");
     expect(source).toContain("leagueId!==STRESS_LEAGUE_ID");
+    expect(source).not.toContain('QA_AUTH_PASSWORD');
+    expect(source).toContain('authenticateQaActor');
   });
 
   it('uses the known public project URL when the weekly cron lacks the public binding', () => {

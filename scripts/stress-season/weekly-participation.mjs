@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { QA_ACTORS } from '../qa-actors.mjs';
+import { authenticateQaActor, qaClient } from './bot-auth.mjs';
 
 const STRESS_LEAGUE_ID = 'e72ef311-1de9-4af4-a3b5-9fb1326a9c5f';
 const EXECUTION_PHRASE = 'BIG_EXEC_INTERNAL_STRESS_TEST_2026';
@@ -16,7 +16,6 @@ const BANTER = {
   Manager08: week => `Week ${week}: Sunday Scramblers checked in before Thursday for once. Lineup set. No excuses.`
 };
 
-function client(url,key){return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});}
 function relation(value){return Array.isArray(value)?value[0]:value;}
 function positionOf(row){return row.real_team_id?'DST':relation(row.athletes)?.position??'';}
 
@@ -33,11 +32,11 @@ export function stressExecutionEnabled(env=process.env){
   return env.BIG_EXEC_STRESS_EXECUTE===EXECUTION_PHRASE || env.VERCEL_ENV==='production';
 }
 
-async function runManager({actor,password,url,key,leagueId,season,week}){
-  const supabase=client(url,key);
-  const {data:auth,error:authError}=await supabase.auth.signInWithPassword({email:actor.email,password});
-  if(authError||!auth.user)throw new Error(`${actor.label} sign-in failed: ${authError?.message??'missing user'}`);
-  const {data:ownerships,error:ownerError}=await supabase.from('franchise_owners').select('franchise_id').eq('user_id',auth.user.id).is('ends_on',null);
+async function runManager({actor,admin,url,key,leagueId,season,week}){
+  const supabase=await authenticateQaActor({admin,actor,url,publishableKey:key});
+  const {data:{user:authUser}}=await supabase.auth.getUser();
+  if(!authUser)throw new Error(`${actor.label} authenticated user missing`);
+  const {data:ownerships,error:ownerError}=await supabase.from('franchise_owners').select('franchise_id').eq('user_id',authUser.id).is('ends_on',null);
   if(ownerError)throw ownerError;
   const franchiseIds=(ownerships??[]).map(row=>row.franchise_id);
   const {data:franchise,error:franchiseError}=await supabase.from('franchises').select('id').eq('league_id',leagueId).in('id',franchiseIds).maybeSingle();
@@ -58,28 +57,27 @@ async function runManager({actor,password,url,key,leagueId,season,week}){
   const lineup=buildLineup(roster,marketValues??[],actor.label,recentScores);
   for(const item of lineup){const {error}=await supabase.rpc('set_lineup_slot',{p_season_franchise_id:seasonFranchise.id,p_week:week,p_slot:item.slot,p_slot_index:item.slotIndex,p_athlete_id:item.asset.athlete_id,p_real_team_id:item.asset.real_team_id});if(error)throw new Error(`${actor.label} ${item.slot}${item.slotIndex}: ${error.message}`);}
   const body=BANTER[actor.label](week);
-  const {data:existing}=await supabase.from('league_feed_events').select('id').eq('league_id',leagueId).eq('actor_user_id',auth.user.id).eq('event_type','locker_room_message').eq('body',body).limit(1);
+  const {data:existing}=await supabase.from('league_feed_events').select('id').eq('league_id',leagueId).eq('actor_user_id',authUser.id).eq('event_type','locker_room_message').eq('body',body).limit(1);
   if(!existing?.length){const {error}=await supabase.rpc('post_locker_room_message',{p_league_id:leagueId,p_body:body});if(error)throw new Error(`${actor.label} locker room: ${error.message}`);}
   return {actor:actor.label,week,lineupSlots:lineup.length,messagePosted:!existing?.length};
 }
 
 export async function runWeeklyQaParticipation(env=process.env,now=new Date()){
   if(!stressExecutionEnabled(env))throw new Error('Stress execution is disabled');
-  const password=env.QA_AUTH_PASSWORD;if(!password)throw new Error('QA_AUTH_PASSWORD is missing');
   const leagueId=env.STRESS_TEST_LEAGUE_ID||STRESS_LEAGUE_ID;
   if(leagueId!==STRESS_LEAGUE_ID)throw new Error('Weekly QA participation is restricted to Stress Test 2026');
   const url=env.NEXT_PUBLIC_SUPABASE_URL||'https://njjiqdqhmcbxblwhfade.supabase.co';
   const key=env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_-ZgoAQmsSp2bNmrfhk11yw_BzLWKXBP';
-  const reader=client(url,key);
-  const {error:readerAuthError}=await reader.auth.signInWithPassword({email:QA_MANAGERS[0].email,password});
-  if(readerAuthError)throw new Error(`Weekly QA reader sign-in failed: ${readerAuthError.message}`);
+  const serviceKey=env.SUPABASE_SERVICE_ROLE_KEY;if(!serviceKey)throw new Error('SUPABASE_SERVICE_ROLE_KEY is missing');
+  const admin=qaClient(url,serviceKey);
+  const reader=await authenticateQaActor({admin,actor:QA_MANAGERS[0],url,publishableKey:key});
   const {data:season,error:seasonError}=await reader.from('league_seasons').select('id,competition_season_id,competition_seasons(season_year)').eq('league_id',leagueId).eq('is_current',true).maybeSingle();
   if(seasonError||!season)throw new Error('Stress Test 2026 current season missing');
   const competition=relation(season.competition_seasons);season.competition_seasons=competition;
   const {data:games,error:gamesError}=await reader.from('real_games').select('week,starts_at').eq('competition_season_id',season.competition_season_id).gte('starts_at',now.toISOString()).order('starts_at').limit(1);
   if(gamesError||!games?.length)throw new Error('No upcoming football week found');
   const week=games[0].week;
-  const settled=await Promise.allSettled(QA_MANAGERS.map(actor=>runManager({actor,password,url,key,leagueId,season,week})));
+  const settled=await Promise.allSettled(QA_MANAGERS.map(actor=>runManager({actor,admin,url,key,leagueId,season,week})));
   const results=settled.map((result,index)=>result.status==='fulfilled'?result.value:{actor:QA_MANAGERS[index].label,error:result.reason instanceof Error?result.reason.message:String(result.reason)});
   if(settled.some(result=>result.status==='rejected'))throw new Error(`One or more QA managers failed: ${JSON.stringify(results)}`);
   return {leagueId,week,managers:results};

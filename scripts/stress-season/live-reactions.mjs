@@ -1,16 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
 import { QA_ACTORS } from '../qa-actors.mjs';
 import { FOOTBALL_PERSONAS } from './personas.mjs';
+import { authenticateQaActor, qaClient } from './bot-auth.mjs';
 
 const STRESS_LEAGUE_ID = 'e72ef311-1de9-4af4-a3b5-9fb1326a9c5f';
 const QA_MANAGERS = QA_ACTORS.filter(actor => /^Manager0[1-8]$/.test(actor.label));
 const TERMINAL = new Set(['final', 'canceled', 'postponed', 'abandoned']);
 const RECENT_GAME_MS = 8 * 60 * 60 * 1000;
 const MAX_POSTS_PER_MOMENT = 3;
-
-function client(url, key) {
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
 
 export function resolveReactionWindow(games, now = new Date()) {
   const nowMs = now.getTime();
@@ -46,13 +42,11 @@ export function selectReactors(personas, week, phase, maximum = MAX_POSTS_PER_MO
   return Array.from({ length: Math.min(maximum, personas.length) }, (_, index) => personas[(offset + index * 3) % personas.length]);
 }
 
-async function postAsManager({ actor, body, password, url, key, leagueId }) {
-  const supabase = client(url, key);
-  const { data: auth, error: authError } = await supabase.auth.signInWithPassword({ email: actor.email, password });
-  if (authError || !auth.user) throw new Error(`${actor.label} sign-in failed: ${authError?.message ?? 'missing user'}`);
-  const { data: existing, error: existingError } = await supabase.from('league_feed_events').select('id').eq('league_id', leagueId).eq('actor_user_id', auth.user.id).eq('event_type', 'locker_room_message').eq('body', body).limit(1);
+async function postAsManager({ actor, body, admin, url, key, leagueId }) {
+  const { data: existing, error: existingError } = await admin.from('league_feed_events').select('id').eq('league_id', leagueId).eq('event_type', 'locker_room_message').eq('body', body).limit(1);
   if (existingError) throw existingError;
   if (existing?.length) return { actor: actor.label, posted: false, reason: 'duplicate' };
+  const supabase = await authenticateQaActor({ admin, actor, url, publishableKey: key });
   const { error } = await supabase.rpc('post_locker_room_message', { p_league_id: leagueId, p_body: body });
   if (error) throw new Error(`${actor.label} locker room: ${error.message}`);
   return { actor: actor.label, posted: true };
@@ -65,7 +59,7 @@ export async function runLiveQaReactions(env = process.env, now = new Date()) {
   const publishableKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_-ZgoAQmsSp2bNmrfhk11yw_BzLWKXBP';
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY is missing');
-  const admin = client(url, serviceKey);
+  const admin = qaClient(url, serviceKey);
   const { data: season, error: seasonError } = await admin.from('league_seasons').select('id,competition_season_id').eq('league_id', leagueId).eq('is_current', true).maybeSingle();
   if (seasonError || !season) throw new Error('Stress Test 2026 current season missing');
   const lowerBound = new Date(now.getTime() - RECENT_GAME_MS).toISOString();
@@ -73,8 +67,6 @@ export async function runLiveQaReactions(env = process.env, now = new Date()) {
   if (gamesError) throw gamesError;
   const window = resolveReactionWindow(games ?? [], now);
   if (!window) return { leagueId, status: 'idle', posted: 0 };
-  const password = env.QA_AUTH_PASSWORD;
-  if (!password) throw new Error('QA_AUTH_PASSWORD is missing');
   const [{ data: topScores, error: scoreError }, { data: matchups, error: matchupError }] = await Promise.all([
     admin.from('fantasy_player_scores').select('points,athletes(display_name)').eq('league_season_id', season.id).eq('week', window.week).order('points', { ascending: false }).limit(1),
     admin.from('matchups').select('home_points,away_points,home:season_franchises!matchups_home_season_franchise_id_fkey(franchises(name)),away:season_franchises!matchups_away_season_franchise_id_fkey(franchises(name))').eq('league_season_id', season.id).eq('week', window.week).order('home_points', { ascending: false }).limit(10)
@@ -92,10 +84,9 @@ export async function runLiveQaReactions(env = process.env, now = new Date()) {
   const reactors = selectReactors(FOOTBALL_PERSONAS, window.week, window.phase);
   const results = await Promise.allSettled(reactors.map(persona => {
     const actor = QA_MANAGERS.find(item => item.label === persona.label);
-    return postAsManager({ actor, body: reactionBody({ persona, ...context }), password, url, key: publishableKey, leagueId });
+    return postAsManager({ actor, body: reactionBody({ persona, ...context }), admin, url, key: publishableKey, leagueId });
   }));
   const normalized = results.map((result, index) => result.status === 'fulfilled' ? result.value : { actor: reactors[index].label, posted: false, error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
   if (results.some(result => result.status === 'rejected')) throw new Error(`One or more live QA reactions failed: ${JSON.stringify(normalized)}`);
   return { leagueId, week: window.week, phase: window.phase, posted: normalized.filter(item => item.posted).length, managers: normalized };
 }
-
