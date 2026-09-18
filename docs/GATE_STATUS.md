@@ -1,5 +1,13 @@
 # Big Exec Authoritative Gate Status
 
+## September 18 QA Manager Game-Day Activity
+
+- **PROVEN:** All eight controlled Stress Test 2026 QA franchises have nine legal Week 2 lineup slots.
+- **PROVEN:** Production deployment `dpl_FMyzNayWFGT6QsNuzdnEJn1aCuPS` executed `/api/cron/qa-live-reactions` successfully at 04:50 UTC.
+- **PROVEN:** Waiver Wire Kings, Rookie Futures, and Chaos Department posted distinct Locker Room reactions grounded in Josh Allen crossing 45 fantasy points; production contained exactly three bot posts after the next observed scheduler window, proving the first moment did not spam duplicates.
+- **PROVEN:** The jobs authenticate only the eight allowlisted QA accounts through server-generated one-time sessions and continue to perform Locker Room writes through the canonical authenticated manager RPC.
+- **UNVERIFIED:** Sunday concurrent-game behavior, lead-change variety, waiver/free-agency activity, trade negotiation, and authenticated mobile/desktop visual readback remain open QA work.
+
 ## September 18 P0 Lineup Lock Containment
 
 - **PROVEN:** Production `set_lineup_slot` previously checked only the incoming asset's kickoff and allowed a started slot occupant to be removed. The reported JLC Week 2 state and orphaned James Cook III points were verified read-only.
