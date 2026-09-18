@@ -30,5 +30,8 @@ export async function setLineup(_previousState: LineupActionState, formData: For
   });
   if (error) return { status: 'error', message: error.message };
   revalidatePath(`/franchises/${franchiseId}/team`);
+  if (!athleteId && !realTeamId) {
+    return { status: 'success', message: `${assetLabel} moved to the bench for week ${week}.` };
+  }
   return { status: 'success', message: `${assetLabel} moved to ${slotLabel} for week ${week}.` };
 }
