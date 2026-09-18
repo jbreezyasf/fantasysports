@@ -5,6 +5,7 @@ import { requestRosterIntegrityReview } from './actions';
 import { describeLineupSlot, describeRosterAsset, lineupMoveButtonLabel, lineupMoveConfirmation } from './lineupAccessibility';
 import { LineupMoveForm } from './LineupMoveForm';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown } from '../../../matchups/[matchupId]/scoreDetails';
+import { gameHasLocked, lineupGameByTeam, lineupLockExplanation } from './lineupLocks';
 
 const slots = [
   ['QB', 1, 'QB'],
@@ -43,19 +44,20 @@ export default async function TeamPage({
   if (!user) redirect('/login');
   const { data: franchise } = await supabase.from('franchises').select('id,name,abbreviation,league_id,primary_color,secondary_color,avatar_key').eq('id', franchiseId).maybeSingle();
   if (!franchise) notFound();
-  const { data: currentLeagueSeason } = await supabase.from('league_seasons').select('id,trade_deadline_at,roster_integrity_mode,roster_integrity_bulk_drop_limit,roster_integrity_bulk_window_hours').eq('league_id', franchise.league_id).eq('is_current', true).maybeSingle();
+  const { data: currentLeagueSeason } = await supabase.from('league_seasons').select('id,competition_season_id,trade_deadline_at,roster_integrity_mode,roster_integrity_bulk_drop_limit,roster_integrity_bulk_window_hours').eq('league_id', franchise.league_id).eq('is_current', true).maybeSingle();
   if (!currentLeagueSeason) notFound();
   const { data: seasonFranchise } = await supabase.from('season_franchises').select('id,league_season_id,roster_locked_at,roster_lock_reason').eq('franchise_id', franchiseId).eq('league_season_id', currentLeagueSeason.id).maybeSingle();
   if (!seasonFranchise) notFound();
   const { data: ownership } = await supabase.from('franchise_owners').select('user_id').eq('franchise_id', franchiseId).eq('user_id', user.id).is('ends_on', null).maybeSingle();
   if (!ownership) redirect(`/leagues/${franchise.league_id}`);
-  const [{ data: roster }, { data: lineup }, { data: stadium }, { data: pendingReviews }, { data: playerScores }, { data: teamScores }] = await Promise.all([
-    supabase.from('roster_entries').select('id,athlete_id,real_team_id,athletes(display_name,position,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('season_franchise_id', seasonFranchise.id).is('dropped_at', null).order('added_at'),
+  const [{ data: roster }, { data: lineup }, { data: stadium }, { data: pendingReviews }, { data: playerScores }, { data: teamScores }, { data: weekGames }] = await Promise.all([
+    supabase.from('roster_entries').select('id,athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('season_franchise_id', seasonFranchise.id).is('dropped_at', null).order('added_at'),
     supabase.from('lineups').select('slot,slot_index,athlete_id,real_team_id').eq('season_franchise_id', seasonFranchise.id).eq('week', week),
     supabase.from('stadiums').select('id,environment_key').eq('franchise_id', franchiseId).maybeSingle(),
     supabase.from('roster_integrity_reviews').select('id,roster_entry_id,status,reason_code,reason_detail,requested_at').eq('season_franchise_id', seasonFranchise.id).eq('status', 'pending'),
     supabase.from('fantasy_player_scores').select('athlete_id,game_id,points,breakdown').eq('league_season_id', currentLeagueSeason.id).eq('week', week),
     supabase.from('fantasy_team_scores').select('real_team_id,game_id,points,breakdown').eq('league_season_id', currentLeagueSeason.id).eq('week', week),
+    supabase.from('real_games').select('home_team_id,away_team_id,starts_at,state').eq('competition_season_id', currentLeagueSeason.competition_season_id).eq('week', week),
   ]);
   const scoredGameIds = [...new Set([...(playerScores ?? []).map((score) => score.game_id), ...(teamScores ?? []).map((score) => score.game_id)].filter((id): id is string => Boolean(id)))];
   const [{ data: rawPlayerStats }, { data: rawTeamStats }] = scoredGameIds.length ? await Promise.all([supabase.from('athlete_game_stats').select('athlete_id,game_id,raw_stats,ingested_at').in('game_id', scoredGameIds).order('ingested_at', { ascending: false }), supabase.from('real_team_game_stats').select('real_team_id,game_id,raw_stats,ingested_at').in('game_id', scoredGameIds).order('ingested_at', { ascending: false })]) : [{ data: [] }, { data: [] }];
@@ -99,6 +101,20 @@ export default async function TeamPage({
   const starterPoints = (lineup ?? []).reduce((total, item) => total + (item.athlete_id ? (playerPoints.get(item.athlete_id) ?? 0) : item.real_team_id ? (teamPoints.get(item.real_team_id) ?? 0) : 0), 0);
   const benchAssets = (roster ?? []).filter((asset) => !starterAssetIds.has(asset.athlete_id ?? asset.real_team_id));
   const benchPoints = benchAssets.reduce((total, asset) => total + pointsForAsset(asset), 0);
+  const gamesByTeam = lineupGameByTeam(weekGames ?? []);
+
+  function teamIdForAsset(asset: NonNullable<typeof roster>[number] | undefined) {
+    if (!asset) return null;
+    if (asset.real_team_id) return asset.real_team_id;
+    const athlete = Array.isArray(asset.athletes) ? asset.athletes[0] : asset.athletes;
+    return athlete?.real_team_id ?? null;
+  }
+
+  function lockForAsset(asset: NonNullable<typeof roster>[number] | undefined) {
+    const teamId = teamIdForAsset(asset);
+    const game = teamId ? gamesByTeam.get(teamId) : undefined;
+    return { locked: gameHasLocked(game), game };
+  }
 
   function labelForAsset(asset: NonNullable<typeof roster>[number]) {
     if (asset.athlete_id && asset.athletes) {
@@ -242,7 +258,9 @@ export default async function TeamPage({
             const current = lineupMap.get(`${slot}:${slotIndex}`);
             const currentRoster = roster?.find((r) => (current?.athlete_id && r.athlete_id === current.athlete_id) || (current?.real_team_id && r.real_team_id === current.real_team_id));
             const currentLabel = currentRoster ? labelForAsset(currentRoster) : undefined;
+            const currentLock = lockForAsset(currentRoster);
             const eligible = (roster ?? []).filter((r) => {
+              if (lockForAsset(r).locked) return false;
               if (r.real_team_id) return slot === 'DST';
               const athlete = Array.isArray(r.athletes) ? r.athletes[0] : (r.athletes as { position?: string } | null);
               const pos = athlete?.position;
@@ -258,7 +276,12 @@ export default async function TeamPage({
                 </b>
                 {currentRoster && <small className="playerStatLine">{statLineForAsset(currentRoster)}</small>}
                 {currentRoster && <small className="srOnly">{describeAssetForScreenReader(currentRoster, 'starter', label)}</small>}
-                {!!eligible.length && (
+                {currentLock.locked ? (
+                  <p className="lineupLockState" role="status" aria-label={`${currentLabel ?? label} is locked. ${lineupLockExplanation(currentLock.game)}`}>
+                    <span className="statusBadge is-locked">Locked</span>
+                    <small>{lineupLockExplanation(currentLock.game)}. This starter cannot be removed.</small>
+                  </p>
+                ) : !!eligible.length && (
                   <details className="lineupChange">
                     <summary>Change</summary>
                     <div className="slotChoices" aria-label={`Move eligible players to ${label}`}>
@@ -333,9 +356,9 @@ export default async function TeamPage({
         </div>
         <div className="playerList">
           {benchAssets.map((asset) => (
-            <div className="playerRow benchScoreRow" aria-label={`${describeAssetForScreenReader(asset, 'bench')} ${pointsForAsset(asset).toFixed(2)} points in week ${week}.`} key={asset.id}>
+            <div className="playerRow benchScoreRow" aria-label={`${describeAssetForScreenReader(asset, 'bench')} ${pointsForAsset(asset).toFixed(2)} points in week ${week}.${lockForAsset(asset).locked ? ` ${lineupLockExplanation(lockForAsset(asset).game)}.` : ''}`} key={asset.id}>
               <div>
-                <span>BENCH</span>
+                <span>{lockForAsset(asset).locked ? 'BENCH • LOCKED' : 'BENCH'}</span>
                 <strong>{labelForAsset(asset)}</strong>
                 <small>
                   Week {week} • {statLineForAsset(asset)}

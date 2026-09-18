@@ -259,6 +259,8 @@
 .lineupTablePanel .lineupSlot>strong{grid-column:2}
 .lineupTablePanel .lineupSlot>.lineupAssetPoints{grid-column:3;grid-row:1/3}
 .lineupTablePanel .lineupChange{grid-column:2/4}
+.lineupTablePanel .lineupLockState{grid-column:2/4;display:flex;align-items:center;gap:10px;margin:0;color:#c9c4bb;font-size:.72rem;line-height:1.4}
+.lineupTablePanel .lineupLockState small{color:#c9c4bb}
 .benchScoreRow{display:flex!important;align-items:center;justify-content:space-between;gap:12px}
 .frontOfficeStandings .standingRow>b {font-size:.8rem;white-space:nowrap}
 .draftQueueItem:has(.queueDraftReview[open]) {grid-template-rows:auto auto}
