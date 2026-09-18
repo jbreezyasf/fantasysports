@@ -281,10 +281,23 @@ export default async function TeamPage({
                     <span className="statusBadge is-locked">Locked</span>
                     <small>{lineupLockExplanation(currentLock.game)}. This starter cannot be removed.</small>
                   </p>
-                ) : !!eligible.length && (
+                ) : (currentRoster || !!eligible.length) && (
                   <details className="lineupChange">
                     <summary>Change</summary>
                     <div className="slotChoices" aria-label={`Move eligible players to ${label}`}>
+                      {currentRoster && (
+                        <LineupMoveForm
+                          seasonFranchiseId={seasonFranchise.id}
+                          franchiseId={franchiseId}
+                          week={week}
+                          slot={slot}
+                          slotIndex={slotIndex}
+                          slotLabel={label}
+                          assetLabel={currentLabel ?? 'Current starter'}
+                          buttonLabel={`Move ${currentLabel ?? 'current starter'} to the bench for week ${week}`}
+                          displayLabel="MOVE TO BENCH"
+                        />
+                      )}
                       {eligible.slice(0, 12).map((asset) => {
                         const assetLabel = labelForAsset(asset);
                         return <LineupMoveForm key={asset.id} seasonFranchiseId={seasonFranchise.id} franchiseId={franchiseId} week={week} slot={slot} slotIndex={slotIndex} slotLabel={label} assetLabel={assetLabel} athleteId={asset.athlete_id} realTeamId={asset.real_team_id} buttonLabel={lineupMoveButtonLabel(assetLabel, label, week)} />;
