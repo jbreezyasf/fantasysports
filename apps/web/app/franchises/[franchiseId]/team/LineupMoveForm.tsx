@@ -19,6 +19,7 @@ type Props = {
   athleteId?: string | null;
   realTeamId?: string | null;
   buttonLabel: string;
+  displayLabel?: string;
 };
 
 export function LineupMoveForm(props: Props) {
@@ -36,7 +37,7 @@ export function LineupMoveForm(props: Props) {
       {props.athleteId && <input type="hidden" name="athlete_id" value={props.athleteId} />}
       {props.realTeamId && <input type="hidden" name="real_team_id" value={props.realTeamId} />}
       <button className="miniAction" type="submit" disabled={pending} aria-label={pending ? `Saving ${props.assetLabel} to ${props.slotLabel}` : props.buttonLabel}>
-        {pending ? 'SAVING…' : props.assetLabel}
+        {pending ? 'SAVING…' : (props.displayLabel ?? props.assetLabel)}
       </button>
       {state.message && (
         <span className="lineupMoveStatus" aria-live="polite" role={state.status === 'error' ? 'alert' : 'status'}>
