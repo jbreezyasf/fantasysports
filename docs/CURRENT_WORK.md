@@ -32,6 +32,8 @@
 
 **Primary objective:** Prepare the standalone Pro Football product for the 10-manager friend beta.
 
+**Progress 2026-09-18 — QA manager game-day activity:** Production inspection confirmed all eight controlled QA franchises have nine legal Week 2 lineup slots, but none had ever posted a Locker Room message. The weekly participation automation covers pregame lineup-setting and one weekly check-in only; it had no live-game behavior, and its production-enabled release occurred after the final scheduled Week 2 pregame run. Added a hard-scoped Stress Test 2026 live-reaction job that reads real game state, fantasy player scores, and matchup totals; selects at most three deterministic persona voices per live/checkpoint moment; posts only through each QA manager's authenticated canonical Locker Room RPC; and deduplicates exact posts. Game-window schedules cover Thursday, Sunday, and Monday football in UTC without running continuously all week. Production execution and Locker Room readback remain required before this behavior is PROVEN.
+
 ## September 11 Internal Season Stress Harness
 
 **AUTHORIZED / IN PROGRESS:** Build football-only internal QA infrastructure for Juanita versus nine controlled QA managers in a designated 2026 stress league. This is expressly not a customer feature, Front Office Advisor autonomy mode, commissioner setting, entitlement, or public API capability. The human account remains human-controlled.

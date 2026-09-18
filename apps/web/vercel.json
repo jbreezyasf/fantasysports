@@ -16,6 +16,18 @@
     {
       "path": "/api/cron/qa-weekly-participation",
       "schedule": "30 14 * * 2,3,4"
+    },
+    {
+      "path": "/api/cron/qa-live-reactions",
+      "schedule": "*/5 0-6 * 9-12,1 2,5"
+    },
+    {
+      "path": "/api/cron/qa-live-reactions",
+      "schedule": "*/5 17-23 * 9-12,1 0"
+    },
+    {
+      "path": "/api/cron/qa-live-reactions",
+      "schedule": "*/5 23 * 9-12,1 1"
     }
   ]
 }
