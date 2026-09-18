@@ -1,5 +1,13 @@
 # Big Exec Authoritative Gate Status
 
+## September 18 P0 Lineup Lock Containment
+
+- **PROVEN:** Production `set_lineup_slot` previously checked only the incoming asset's kickoff and allowed a started slot occupant to be removed. The reported JLC Week 2 state and orphaned James Cook III points were verified read-only.
+- **PROVEN:** Production migration `bidirectional_lineup_lock_and_audit` now enforces kickoff locks on both the outgoing occupant and incoming asset and records successful lineup moves in a league-scoped audit table.
+- **PROVEN:** A rollback-only authenticated production test rejected both started-outgoing and started-incoming moves, preserved the locked starter row, allowed an unlocked move, and created the expected audit row inside the rolled-back transaction.
+- **PENDING DEPLOYMENT EVIDENCE:** The Team page source disables changes to locked starters and removes locked assets from choices; authenticated mobile and desktop production readback is still required before this UI criterion is marked proven.
+- **NOT EXECUTED:** The one-time JLC Week 2 James Cook III restoration is a distinct direct production-data correction and still requires explicit owner approval.
+
 > **CANONICAL STATUS DOCUMENT**
 >
 > Gate numbering is controlled by `docs/PRODUCT_PRD.md`. The older Gate 1–5 numbering is retired.
