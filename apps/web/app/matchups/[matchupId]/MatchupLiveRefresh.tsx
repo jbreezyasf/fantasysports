@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 
 const REFRESH_MS = 30_000;
 
-export type MatchupFeedState = 'upcoming' | 'live' | 'idle' | 'final';
+export type MatchupFeedState = 'upcoming' | 'live' | 'idle' | 'final' | 'unavailable';
 
 export function matchupFeedMessage({state,updatedAt,nextGameAt,now}:{state:MatchupFeedState;updatedAt:string|null;nextGameAt:string|null;now:number}) {
   if(state==='final') return 'Final score';
+  if(state==='unavailable') return 'Live game status is temporarily unavailable • Scores continue updating automatically';
   if(state==='upcoming' || state==='idle') {
     if(nextGameAt) return `No games in progress • Live scoring resumes ${new Date(nextGameAt).toLocaleString([], { weekday:'short', hour:'numeric', minute:'2-digit' })}`;
     return 'No games in progress';

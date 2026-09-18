@@ -50,7 +50,7 @@ export default async function TeamPage({
   if (!seasonFranchise) notFound();
   const { data: ownership } = await supabase.from('franchise_owners').select('user_id').eq('franchise_id', franchiseId).eq('user_id', user.id).is('ends_on', null).maybeSingle();
   if (!ownership) redirect(`/leagues/${franchise.league_id}`);
-  const [{ data: roster }, { data: lineup }, { data: stadium }, { data: pendingReviews }, { data: playerScores }, { data: teamScores }, { data: weekGames }] = await Promise.all([
+  const [{ data: roster }, { data: lineup }, { data: stadium }, { data: pendingReviews }, { data: playerScores }, { data: teamScores }, { data: weekGames, error: weekGamesError }] = await Promise.all([
     supabase.from('roster_entries').select('id,athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('season_franchise_id', seasonFranchise.id).is('dropped_at', null).order('added_at'),
     supabase.from('lineups').select('slot,slot_index,athlete_id,real_team_id').eq('season_franchise_id', seasonFranchise.id).eq('week', week),
     supabase.from('stadiums').select('id,environment_key').eq('franchise_id', franchiseId).maybeSingle(),
@@ -111,6 +111,7 @@ export default async function TeamPage({
   }
 
   function lockForAsset(asset: NonNullable<typeof roster>[number] | undefined) {
+    if (weekGamesError) return { locked: true, game: undefined };
     const teamId = teamIdForAsset(asset);
     const game = teamId ? gamesByTeam.get(teamId) : undefined;
     return { locked: gameHasLocked(game), game };
@@ -225,6 +226,11 @@ export default async function TeamPage({
             {lineupMoveConfirmation(query.lineup_asset ?? 'Selected player', query.lineup_slot ?? 'lineup slot', week)}
           </p>
         )}
+        {weekGamesError && (
+          <p className="errorNotice" role="alert">
+            Lineup changes are temporarily unavailable while the NFL schedule refreshes. Existing starters remain protected.
+          </p>
+        )}
         <div className="actions">
           {week > 1 && (
             <a className="secondary" href={`/franchises/${franchiseId}/team?week=${week - 1}`}>
@@ -277,9 +283,9 @@ export default async function TeamPage({
                 {currentRoster && <small className="playerStatLine">{statLineForAsset(currentRoster)}</small>}
                 {currentRoster && <small className="srOnly">{describeAssetForScreenReader(currentRoster, 'starter', label)}</small>}
                 {currentLock.locked ? (
-                  <p className="lineupLockState" role="status" aria-label={`${currentLabel ?? label} is locked. ${lineupLockExplanation(currentLock.game)}`}>
+                  <p className="lineupLockState" role="status" aria-label={`${currentLabel ?? label} is locked. ${weekGamesError ? 'Schedule unavailable; starter remains protected' : lineupLockExplanation(currentLock.game)}`}>
                     <span className="statusBadge is-locked">Locked</span>
-                    <small>{lineupLockExplanation(currentLock.game)}. This starter cannot be removed.</small>
+                    <small>{weekGamesError ? 'Schedule unavailable. This starter remains protected.' : `${lineupLockExplanation(currentLock.game)}. This starter cannot be removed.`}</small>
                   </p>
                 ) : (currentRoster || !!eligible.length) && (
                   <details className="lineupChange">

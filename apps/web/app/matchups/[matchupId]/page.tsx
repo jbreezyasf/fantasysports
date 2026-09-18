@@ -6,6 +6,7 @@ import MatchupScoreAnnouncer from './MatchupScoreAnnouncer';
 import MatchupLiveRefresh from './MatchupLiveRefresh';
 import { matchupRowLabel, matchupStatus } from './matchupAccessibility';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown, type ScoreDetail } from './scoreDetails';
+import { gameIsLive } from './matchupGameState';
 
 type FranchiseCard = {
   name?: string;
@@ -63,11 +64,11 @@ export default async function MatchupPage({
     matchup.is_final ? supabase.from('recap_scripts').select('id,title').eq('league_season_id', matchup.league_season_id).eq('week', matchup.week).eq('recap_kind', 'league_week').maybeSingle() : Promise.resolve({ data: null }),
     supabase.from('standings').select('season_franchise_id,wins,losses,ties,points_for,points_against').eq('league_season_id',matchup.league_season_id).order('wins',{ascending:false}).order('points_for',{ascending:false}),
   ]);
-  const {data:weekGames}=member?.competition_season_id?await supabase.from('real_games').select('starts_at,state').eq('competition_season_id',member.competition_season_id).eq('week',matchup.week).order('starts_at',{ascending:true}):{data:[] as Array<{starts_at:string;state:string}>};
+  const {data:weekGames,error:weekGamesError}=member?.competition_season_id?await supabase.from('real_games').select('starts_at,state').eq('competition_season_id',member.competition_season_id).eq('week',matchup.week).order('starts_at',{ascending:true}):{data:[] as Array<{starts_at:string;state:string}>,error:null};
   const now=Date.now();
-  const liveGame=(weekGames??[]).some(game=>['in_progress','live','halftime'].includes(String(game.state).toLowerCase()));
+  const liveGame=(weekGames??[]).some(game=>gameIsLive(game,now));
   const nextGame=(weekGames??[]).find(game=>Date.parse(game.starts_at)>now&&!['final','canceled'].includes(String(game.state).toLowerCase()));
-  const feedState=matchup.is_final?'final':liveGame?'live':nextGame?'upcoming':'idle';
+  const feedState=matchup.is_final?'final':weekGamesError?'unavailable':liveGame?'live':nextGame?'upcoming':'idle';
   const scoredGameIds = [...new Set([...(playerScores ?? []).map((score) => score.game_id), ...(teamScores ?? []).map((score) => score.game_id)].filter((id): id is string => Boolean(id)))];
   const [{ data: rawPlayerStats }, { data: rawTeamStats }] = scoredGameIds.length ? await Promise.all([supabase.from('athlete_game_stats').select('athlete_id,game_id,raw_stats,ingested_at').in('game_id', scoredGameIds).order('ingested_at', { ascending: false }), supabase.from('real_team_game_stats').select('real_team_id,game_id,raw_stats,ingested_at').in('game_id', scoredGameIds).order('ingested_at', { ascending: false })]) : [{ data: [] }, { data: [] }];
   const rawStatsByAssetGame = new Map<string, RawFootballStats>();
