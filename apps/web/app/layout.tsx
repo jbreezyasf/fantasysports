@@ -11,7 +11,7 @@ import './ops.css';
 import './product-shell.css';
 import ScreenReaderAnnouncer from './components/ScreenReaderAnnouncer';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
-import { LanguageToggle, LocaleProvider } from './components/LocaleProvider';
+import { LocaleProvider } from './components/LocaleProvider';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigexecfs.com'),
@@ -50,7 +50,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <ScreenReaderAnnouncer />
           {children}
           <PwaInstallPrompt />
-          <LanguageToggle />
         </LocaleProvider>
       </body>
     </html>

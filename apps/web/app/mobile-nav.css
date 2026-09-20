@@ -42,3 +42,25 @@
  .mobileGameNav>.mobileGameBrand img{width:46px;height:46px;object-fit:contain}
  .mobileGameNav>.mobileGameBrand:hover{transform:translateX(-50%)}
 }
+
+/* Competitive redesign: one unobstructed mobile dock and a contained More sheet. */
+.mobileGameMore{position:relative;min-width:0}
+.mobileGameMore>summary{min-height:52px;display:flex;align-items:center;gap:12px;padding:12px;color:#c6cdc6;cursor:pointer;list-style:none}
+.mobileGameMore>summary::-webkit-details-marker{display:none}
+.mobileGameMore>summary b{display:grid;place-items:center}
+.mobileGameMore>summary small{font-size:.8rem}
+.mobileGameMorePanel{display:grid;gap:8px;padding:14px;background:#0b1210;border:1px solid #8c7646;box-shadow:0 18px 50px #000b}
+.mobileGameMorePanel>a{min-height:44px;display:flex;align-items:center;padding:9px 10px;border:1px solid #39342b;border-radius:6px}
+.mobileGameMorePanel .languageToggle{position:static!important;box-shadow:none!important}
+@media(max-width:720px){
+ body:has(.mobileGameNav){padding-top:calc(58px + env(safe-area-inset-top));padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+ body:has(.mobileGameNav)::before{content:'LEAGUE HQ';position:fixed;z-index:990;inset:0 0 auto 0;height:calc(52px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 76px 0 14px;display:flex;align-items:center;border-bottom:1px solid #5b5036;background:#080e0dfa;color:#e3c98e;font-size:.68rem;font-weight:900;letter-spacing:.12em}
+ .mobileGameNav>.mobileGameBrand{display:none!important}
+ .mobileGameMore>summary{min-height:64px;flex-direction:column;justify-content:center;gap:5px;padding:7px 2px;text-align:center}
+ .mobileGameMore>summary small{font-size:.625rem}
+ .mobileGameMorePanel{position:fixed;z-index:1050;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));max-height:65dvh;overflow:auto;border-radius:14px}
+ .askGmDock[data-position]{z-index:1100;right:8px!important;left:auto!important;top:calc(4px + env(safe-area-inset-top))!important;bottom:auto!important}
+ .askGmBubble{width:44px!important;height:44px!important;border-width:1px!important}
+ .askGmCoachIcon{width:30px!important;height:30px!important}
+ .askGmControl{position:fixed;left:12px;right:12px;top:auto;bottom:calc(76px + env(safe-area-inset-bottom));width:auto;max-height:72dvh;overflow:auto;border-radius:16px 16px 0 0}
+}

@@ -4,17 +4,19 @@ import { resolve } from 'node:path';
 
 const appRoot = resolve(process.cwd(), 'app');
 
-describe('fixed control layout', () => {
-  it('keeps language controls away from top-right account actions', () => {
+describe('competitive shell collision contract', () => {
+  it('keeps language settings in normal flow inside More', () => {
     const css = readFileSync(resolve(appRoot, 'product-shell.css'), 'utf8');
-    expect(css).toContain('.languageToggle{position:fixed;left:14px;bottom:14px');
-    expect(css).toContain('bottom:calc(var(--mobile-nav-height,72px) + 12px)');
-    expect(css).not.toMatch(/\.languageToggle\{[^}]*right:14px;top:14px/);
+    expect(css).toContain('.languageToggle{position:static;left:auto;bottom:auto');
   });
 
-  it('stacks the temporary PWA prompt above the language control', () => {
+  it('keeps install suggestions in document flow', () => {
     const css = readFileSync(resolve(appRoot, 'globals.css'), 'utf8');
-    expect(css).toContain('bottom:76px');
-    expect(css).toContain('bottom:calc(var(--mobile-nav-height,72px) + 64px)');
+    expect(css).toContain('.pwaInstallPrompt{position:relative');
+  });
+
+  it('expands score detail rows in flow on mobile', () => {
+    const css = readFileSync(resolve(appRoot, 'product-shell.css'), 'utf8');
+    expect(css).toContain('.scoreBreakdownGrid{position:static!important');
   });
 });

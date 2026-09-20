@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import { VisuallyHidden } from './accessibility';
 import BigExecCrownMark from './BigExecCrownMark';
-import { useLocale } from './LocaleProvider';
+import { LanguageToggle, useLocale } from './LocaleProvider';
 
 export type BigExecMobileNavItem = {
   label: string;
@@ -13,6 +13,7 @@ export type BigExecMobileNavItem = {
   match?: 'exact' | 'prefix' | 'manual';
   activePrefixes?: string[];
   unavailableLabel?: string;
+  menu?: boolean;
 };
 
 function NavIcon({name}:{name:string}) {
@@ -21,6 +22,7 @@ function NavIcon({name}:{name:string}) {
   if(name==='matchup')return <svg {...common}><path d="M7 5 3 9l4 4M17 19l4-4-4-4M4 9h7a4 4 0 0 1 4 4v2M20 15h-7a4 4 0 0 1-4-4V9"/></svg>;
   if(name==='locker')return <svg {...common}><path d="M5 3h14v18H5zM9 3v18M9 8h10M9 14h10"/><path d="M7 11h.01M12 11h.01M12 17h.01"/></svg>;
   if(name==='league')return <svg {...common}><path d="M4 5h16v14H4zM4 10h16M10 5v14"/><path d="M13 13h4M13 16h3M7 13h.01M7 16h.01"/></svg>;
+  if(name==='more')return <svg {...common}><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>;
   if(name==='stadium')return <svg {...common}><path d="M3 8c3-4 15-4 18 0v9c-3 4-15 4-18 0Z"/><ellipse cx="12" cy="12.5" rx="5" ry="2.5"/><path d="M3 8c3 3 15 3 18 0M7 6v3M12 5v4M17 6v3"/></svg>;
   return <span aria-hidden="true">{name}</span>;
 }
@@ -41,6 +43,15 @@ export default function BigExecMobileNavClient({ items }: { items: BigExecMobile
     {current && <VisuallyHidden>Current section: {t(current.label)}</VisuallyHidden>}
     {items.map(item => {
       const active = isActive(item);
+      if (item.menu) return <details className="mobileGameMore" key={item.label}>
+        <summary aria-label={t('Open more destinations')}><b aria-hidden="true"><NavIcon name={item.icon}/></b><small>{t(item.label)}</small></summary>
+        <div className="mobileGameMorePanel">
+          <strong>{t('More')}</strong>
+          <a href={item.href}>{t('League')}</a>
+          <a href="/dashboard">{t('All Leagues')}</a>
+          <LanguageToggle />
+        </div>
+      </details>;
       if (!item.href) {
         return <span aria-disabled="true" aria-label={item.unavailableLabel ?? `${item.label} unavailable`} key={item.label}>
           <b aria-hidden="true"><NavIcon name={item.icon}/></b><small>{t(item.label)}</small>

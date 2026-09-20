@@ -197,7 +197,7 @@ export default async function MatchupPage({
         )}
         {query.score_status === 'refreshed' && (
           <p className="successNotice" role="status">
-            Scores refreshed. {summary}
+            Scores refreshed.
           </p>
         )}
         <div className="actions">

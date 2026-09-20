@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { useLocale } from './LocaleProvider';
 
@@ -30,6 +31,8 @@ function isIosBrowser() {
 
 export default function PwaInstallPrompt() {
   const { t } = useLocale();
+  const pathname = usePathname();
+  const gameplayRoute = Boolean(pathname && (pathname.startsWith('/matchups/') || pathname.startsWith('/drafts/') || pathname.includes('/team')));
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosHelp, setShowIosHelp] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -80,7 +83,7 @@ export default function PwaInstallPrompt() {
     setInstallEvent(null);
   };
 
-  if (!visible || (!installEvent && !showIosHelp)) return null;
+  if (!visible || gameplayRoute || (!installEvent && !showIosHelp)) return null;
 
   return (
     <aside className="pwaInstallPrompt" aria-labelledby="pwa-install-title" aria-live="polite">
