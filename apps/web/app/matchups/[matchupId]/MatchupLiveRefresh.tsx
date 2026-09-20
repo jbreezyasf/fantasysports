@@ -9,13 +9,13 @@ export type MatchupFeedState = 'upcoming' | 'live' | 'idle' | 'final' | 'unavail
 
 export function matchupFeedMessage({state,updatedAt,nextGameAt,now}:{state:MatchupFeedState;updatedAt:string|null;nextGameAt:string|null;now:number}) {
   if(state==='final') return 'Final score';
-  if(state==='unavailable') return 'Live game status is temporarily unavailable • Scores continue updating automatically';
+  if(state==='unavailable') return 'Live data delayed • Automatic updates continue';
   if(state==='upcoming' || state==='idle') {
     if(nextGameAt) return `No games in progress • Live scoring resumes ${new Date(nextGameAt).toLocaleString([], { weekday:'short', hour:'numeric', minute:'2-digit' })}`;
     return 'No games in progress';
   }
   const ageSeconds=updatedAt?Math.max(0,Math.round((now-Date.parse(updatedAt))/1000)):null;
-  return `Live scoring updates automatically every 30 seconds${ageSeconds===null?'':` • Data updated ${ageSeconds<60?`${ageSeconds} seconds`:`${Math.floor(ageSeconds/60)} minutes`} ago`}`;
+  return `Auto-updates on${ageSeconds===null?'':` • Updated ${ageSeconds<60?`${ageSeconds}s`:`${Math.floor(ageSeconds/60)}m`} ago`}`;
 }
 
 export default function MatchupLiveRefresh({ isFinal, updatedAt, feedState='live', nextGameAt=null }: { isFinal: boolean; updatedAt: string | null; feedState?: MatchupFeedState; nextGameAt?: string | null }) {
