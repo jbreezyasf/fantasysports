@@ -338,4 +338,4 @@ export default async function MatchupPage({
       </section>
     </main>
   );
-              }
+}
