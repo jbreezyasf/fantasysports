@@ -155,7 +155,11 @@ function Bloom() {
     composer.setSize(size.width, size.height);
   }, [composer, gl, size]);
   useEffect(() => () => composer.dispose(), [composer]);
-  useFrame(() => composer.render(), 1);
+  useFrame(() => {
+    composer.render();
+    // Signals QA that a full frame (scene + bloom) has been drawn to the canvas.
+    if (gl.domElement.dataset.frame !== 'drawn') gl.domElement.dataset.frame = 'drawn';
+  }, 1);
   return null;
 }
 

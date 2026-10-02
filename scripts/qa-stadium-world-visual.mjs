@@ -34,7 +34,10 @@ async function canvasMetrics(page) {
 async function settle(page) {
   await page.locator(`${canvas}[data-camera="moving"]`).waitFor({ timeout: 8000 }).catch(() => {});
   await page.locator(`${canvas}[data-camera="settled"]`).waitFor({ timeout: 90000 });
-  await page.waitForTimeout(500);
+  // Sample pixels only after a frame has actually been composited, not just after the canvas exists.
+  await page.locator(`${canvas}[data-frame="drawn"]`).waitFor({ timeout: 30000 });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.waitForTimeout(300);
 }
 
 async function open(page, query = '') {
