@@ -331,21 +331,26 @@ function useLogoTexture() {
   return texture;
 }
 
+function seeded(seed: number) {
+  let value = seed;
+  return () => {
+    value = (value * 16807) % 2147483647;
+    return value / 2147483647;
+  };
+}
+
+// Blue-hour sky: deep blue zenith, warm sunset band at the horizon, drifting clouds, a few stars.
 function NightSky() {
   const geometry = useMemo(() => {
-    const count = 1100;
+    const count = 500;
     const positions = new Float32Array(count * 3);
-    let seed = 7;
-    const random = () => {
-      seed = (seed * 16807) % 2147483647;
-      return seed / 2147483647;
-    };
+    const random = seeded(7);
     for (let i = 0; i < count; i++) {
       const theta = random() * Math.PI * 2;
-      const phi = Math.acos(0.22 + random() * 0.78);
-      positions[i * 3] = 380 * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = 380 * Math.cos(phi);
-      positions[i * 3 + 2] = 380 * Math.sin(phi) * Math.sin(theta);
+      const phi = Math.acos(0.45 + random() * 0.55);
+      positions[i * 3] = 650 * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = 650 * Math.cos(phi);
+      positions[i * 3 + 2] = 650 * Math.sin(phi) * Math.sin(theta);
     }
     const next = new BufferGeometry();
     next.setAttribute('position', new BufferAttribute(positions, 3));
@@ -356,42 +361,242 @@ function NightSky() {
     side: BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: {},
+    uniforms: { uTime: { value: 0 } },
     vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `varying vec3 vDir;
+    fragmentShader: `uniform float uTime; varying vec3 vDir;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p) {
+        vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+      float fbm(vec2 p) { float v = 0.0; float a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
       void main() {
-        float h = clamp(vDir.y, -0.2, 1.0);
-        vec3 horizon = vec3(0.075, 0.115, 0.215);
-        vec3 glow = vec3(0.20, 0.16, 0.10);
-        vec3 zenith = vec3(0.006, 0.012, 0.035);
-        vec3 col = mix(horizon, zenith, smoothstep(0.0, 0.6, h));
-        col += glow * exp(-abs(h) * 14.0) * 0.6;
+        float h = vDir.y;
+        vec3 zenith = vec3(0.035, 0.07, 0.19);
+        vec3 upper = vec3(0.09, 0.17, 0.38);
+        vec3 horizonBlue = vec3(0.30, 0.36, 0.58);
+        vec3 sunset = vec3(0.98, 0.58, 0.36);
+        vec3 col = mix(horizonBlue, upper, smoothstep(0.02, 0.22, h));
+        col = mix(col, zenith, smoothstep(0.22, 0.75, h));
+        // warm band strongest behind the stadium (toward -z), fading around the horizon
+        float warmSide = 0.55 + 0.45 * smoothstep(0.2, -0.9, vDir.z);
+        col = mix(col, sunset, exp(-max(h, 0.0) * 16.0) * 0.75 * warmSide);
+        // clouds lit from below by the sunset
+        vec2 uv = vDir.xz / max(h + 0.12, 0.05) * 1.4 + vec2(uTime * 0.004, 0.0);
+        float c = smoothstep(0.52, 0.82, fbm(uv));
+        vec3 cloudCol = mix(vec3(0.18, 0.22, 0.38), vec3(0.95, 0.62, 0.48), exp(-max(h, 0.0) * 7.0) * warmSide);
+        col = mix(col, cloudCol, c * smoothstep(0.0, 0.08, h) * 0.85);
+        if (h < 0.0) col = mix(horizonBlue * 0.55, vec3(0.06, 0.08, 0.12), smoothstep(0.0, -0.25, h));
         gl_FragColor = vec4(col, 1.0);
       }`
   }), []);
   useEffect(() => () => skyMaterial.dispose(), [skyMaterial]);
+  useFrame((state) => { skyMaterial.uniforms.uTime.value = state.clock.elapsedTime; });
   return <>
     <mesh material={skyMaterial}>
-      <sphereGeometry args={[420, 32, 16]} />
+      <sphereGeometry args={[700, 48, 24]} />
     </mesh>
     <points geometry={geometry}>
-      <pointsMaterial color="#dfe6f2" size={1.5} sizeAttenuation={false} fog={false} transparent opacity={0.8} />
+      <pointsMaterial color="#e6ecf8" size={1.3} sizeAttenuation={false} fog={false} transparent opacity={0.55} />
     </points>
   </>;
 }
 
-function Ground() {
-  return <>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
-      <planeGeometry args={[500, 500]} />
-      <meshStandardMaterial color="#080c16" roughness={0.42} metalness={0.5} />
+// Landscaped grounds: lawns, ring road, promenade, trees, hedges, lamps, skyline and hills.
+function Grounds({ palette }: { palette: Palette }) {
+  const lawnTexture = useCanvasTexture(1024, 1024, (ctx, w, h) => {
+    ctx.fillStyle = '#24452a';
+    ctx.fillRect(0, 0, w, h);
+    const random = seeded(19);
+    for (let i = 0; i < 9000; i++) {
+      const shade = random();
+      ctx.fillStyle = shade > 0.5 ? `rgba(70,110,60,${0.15 + random() * 0.2})` : `rgba(10,30,15,${0.15 + random() * 0.2})`;
+      ctx.fillRect(random() * w, random() * h, 2 + random() * 6, 2 + random() * 6);
+    }
+  }, []);
+  useLayoutEffect(() => {
+    lawnTexture.wrapS = RepeatWrapping;
+    lawnTexture.wrapT = RepeatWrapping;
+    lawnTexture.repeat.set(40, 40);
+    lawnTexture.needsUpdate = true;
+  }, [lawnTexture]);
+
+  const windowTexture = useCanvasTexture(256, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#121a2c';
+    ctx.fillRect(0, 0, w, h);
+    const random = seeded(23);
+    for (let y = 8; y < h; y += 16) {
+      for (let x = 8; x < w; x += 14) {
+        const lit = random();
+        ctx.fillStyle = lit > 0.62 ? `rgba(255,${200 + Math.floor(random() * 40)},140,${0.55 + random() * 0.4})` : 'rgba(40,52,80,0.6)';
+        ctx.fillRect(x, y, 7, 9);
+      }
+    }
+  }, []);
+
+  const treesRef = useRef<InstancedMesh>(null);
+  const canopyRef = useRef<InstancedMesh>(null);
+  const pinesRef = useRef<InstancedMesh>(null);
+  const lampsRef = useRef<InstancedMesh>(null);
+  const towersRef = useRef<InstancedMesh>(null);
+
+  const layout = useMemo(() => {
+    const random = seeded(31);
+    const trees: Array<{ x: number; z: number; s: number; tone: number }> = [];
+    const pines: Array<{ x: number; z: number; s: number }> = [];
+    const clear = (x: number, z: number) => {
+      const ellipse = (x / 46) ** 2 + (z / 36) ** 2;
+      if (ellipse < 1) return false; // stadium + ring road
+      if (z > 20 && Math.abs(x) < 17 && z < 90) return false; // plaza and approach
+      return true;
+    };
+    for (let i = 0; i < 520; i++) {
+      const angle = random() * Math.PI * 2;
+      const radius = 50 + Math.pow(random(), 0.7) * 120;
+      const x = Math.cos(angle) * radius * 1.25;
+      const z = Math.sin(angle) * radius;
+      if (!clear(x, z)) continue;
+      if (random() < 0.3) pines.push({ x, z, s: 0.8 + random() * 0.9 });
+      else trees.push({ x, z, s: 0.75 + random() * 0.8, tone: random() });
+    }
+    // avenue of trees lining the approach to the gate
+    for (let z = 34; z <= 86; z += 6) {
+      for (const x of [-15.5, 15.5]) trees.push({ x, z, s: 1.0, tone: 0.5 });
+    }
+    const lamps: Array<{ x: number; z: number }> = [];
+    for (let z = 33; z <= 88; z += 7.5) for (const x of [-11.5, 11.5]) lamps.push({ x, z });
+    for (let i = 0; i < 36; i++) {
+      const angle = (i / 36) * Math.PI * 2;
+      const x = Math.cos(angle) * 41 * 1.25;
+      const z = Math.sin(angle) * 41;
+      if (z > 20 && Math.abs(x) < 17) continue;
+      lamps.push({ x, z });
+    }
+    const buildings: Array<{ x: number; z: number; w: number; d: number; h: number; yaw: number }> = [];
+    for (let i = 0; i < 90; i++) {
+      const angle = random() * Math.PI * 2;
+      const radius = 300 + random() * 110;
+      buildings.push({ x: Math.cos(angle) * radius, z: Math.sin(angle) * radius, w: 10 + random() * 18, d: 10 + random() * 18, h: 14 + Math.pow(random(), 2.2) * 70, yaw: random() * Math.PI });
+    }
+    return { trees, pines, lamps, buildings };
+  }, []);
+
+  useLayoutEffect(() => {
+    const dummy = new Object3D();
+    const trunks = treesRef.current;
+    const canopies = canopyRef.current;
+    const pineMesh = pinesRef.current;
+    const lampMesh = lampsRef.current;
+    const buildingMesh = towersRef.current;
+    if (!trunks || !canopies || !pineMesh || !lampMesh || !buildingMesh) return;
+    const greens = [new Color('#2f5a2c'), new Color('#3d6b33'), new Color('#24492a'), new Color('#4a7a3a')];
+    layout.trees.forEach((tree, index) => {
+      dummy.rotation.set(0, tree.tone * 6, 0);
+      dummy.position.set(tree.x, 1.4 * tree.s, tree.z);
+      dummy.scale.set(tree.s, tree.s, tree.s);
+      dummy.updateMatrix();
+      trunks.setMatrixAt(index, dummy.matrix);
+      dummy.position.set(tree.x, 4.1 * tree.s, tree.z);
+      dummy.scale.set(tree.s * (1 + tree.tone * 0.25), tree.s * (0.9 + tree.tone * 0.3), tree.s * (1 + tree.tone * 0.25));
+      dummy.updateMatrix();
+      canopies.setMatrixAt(index, dummy.matrix);
+      canopies.setColorAt(index, greens[Math.floor(tree.tone * greens.length) % greens.length]);
+    });
+    layout.pines.forEach((pine, index) => {
+      dummy.rotation.set(0, 0, 0);
+      dummy.position.set(pine.x, 3.6 * pine.s, pine.z);
+      dummy.scale.set(pine.s, pine.s, pine.s);
+      dummy.updateMatrix();
+      pineMesh.setMatrixAt(index, dummy.matrix);
+    });
+    layout.lamps.forEach((lamp, index) => {
+      dummy.rotation.set(0, 0, 0);
+      dummy.position.set(lamp.x, 2.2, lamp.z);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      lampMesh.setMatrixAt(index, dummy.matrix);
+    });
+    layout.buildings.forEach((building, index) => {
+      dummy.rotation.set(0, building.yaw, 0);
+      dummy.position.set(building.x, building.h / 2, building.z);
+      dummy.scale.set(building.w, building.h, building.d);
+      dummy.updateMatrix();
+      buildingMesh.setMatrixAt(index, dummy.matrix);
+    });
+    [trunks, canopies, pineMesh, lampMesh, buildingMesh].forEach((mesh) => { mesh.instanceMatrix.needsUpdate = true; });
+    if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true;
+  }, [layout]);
+
+  const hills = useMemo(() => {
+    const random = seeded(41);
+    return Array.from({ length: 14 }, (_, index) => {
+      const angle = (index / 14) * Math.PI * 2 + random() * 0.2;
+      const radius = 470 + random() * 40;
+      return { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius, r: 80 + random() * 60, h: 30 + random() * 35 };
+    });
+  }, []);
+
+  return <group>
+    {/* lawn */}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+      <circleGeometry args={[650, 64]} />
+      <meshStandardMaterial map={lawnTexture} roughness={0.95} metalness={0} />
     </mesh>
-    {/* polished plaza paving in front of the gate */}
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 51]}>
-      <planeGeometry args={[30, 44]} />
-      <meshStandardMaterial color="#141a26" roughness={0.22} metalness={0.55} />
+    {/* ring road and stone promenade around the stadium */}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} scale={[1.25, 1, 1]}>
+      <ringGeometry args={[33, 41.5, 128, 1]} />
+      <meshStandardMaterial color="#262b35" roughness={0.55} metalness={0.25} />
     </mesh>
-  </>;
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]} scale={[1.25, 1, 1]}>
+      <circleGeometry args={[33, 128]} />
+      <meshStandardMaterial color="#8d867a" roughness={0.45} metalness={0.15} />
+    </mesh>
+    {/* polished plaza paving and the approach avenue */}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 58]}>
+      <planeGeometry args={[26, 60]} />
+      <meshStandardMaterial color="#9b9387" roughness={0.3} metalness={0.25} />
+    </mesh>
+    {[-13, 13].map((x) => <mesh key={x} position={[x, 0.35, 58]}>
+      <boxGeometry args={[1.4, 0.7, 60]} />
+      <meshStandardMaterial color="#29482b" roughness={0.9} />
+    </mesh>)}
+    {[-13, 13].map((x) => <mesh key={`edge-${x}`} position={[x + (x < 0 ? 0.75 : -0.75), 0.06, 58]}>
+      <boxGeometry args={[0.12, 0.12, 60]} />
+      <meshBasicMaterial color={palette.primary} toneMapped={false} />
+    </mesh>)}
+
+    {/* trees, pines, lamps */}
+    <instancedMesh ref={treesRef} args={[undefined, undefined, layout.trees.length]}>
+      <cylinderGeometry args={[0.18, 0.28, 2.8, 6]} />
+      <meshStandardMaterial color="#3b2a1e" roughness={0.9} />
+    </instancedMesh>
+    <instancedMesh ref={canopyRef} args={[undefined, undefined, layout.trees.length]}>
+      <icosahedronGeometry args={[2.1, 1]} />
+      <meshStandardMaterial roughness={0.85} metalness={0} flatShading />
+    </instancedMesh>
+    <instancedMesh ref={pinesRef} args={[undefined, undefined, layout.pines.length]}>
+      <coneGeometry args={[1.7, 7.2, 7]} />
+      <meshStandardMaterial color="#1f3d27" roughness={0.9} flatShading />
+    </instancedMesh>
+    <instancedMesh ref={lampsRef} args={[undefined, undefined, layout.lamps.length]}>
+      <cylinderGeometry args={[0.07, 0.1, 4.4, 6]} />
+      <meshStandardMaterial color="#2a2f3a" metalness={0.7} roughness={0.4} />
+    </instancedMesh>
+    {layout.lamps.map((lamp, index) => <mesh key={index} position={[lamp.x, 4.5, lamp.z]}>
+      <sphereGeometry args={[0.22, 10, 8]} />
+      <meshBasicMaterial color="#ffd9a0" toneMapped={false} />
+    </mesh>)}
+
+    {/* city skyline and distant hills */}
+    <instancedMesh ref={towersRef} args={[undefined, undefined, layout.buildings.length]}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color="#1a2236" emissive="#ffffff" emissiveMap={windowTexture} emissiveIntensity={0.55} roughness={0.6} metalness={0.3} />
+    </instancedMesh>
+    {hills.map((hill, index) => <mesh key={index} position={[hill.x, -hill.r + hill.h, hill.z]}>
+      <sphereGeometry args={[hill.r, 18, 10]} />
+      <meshStandardMaterial color="#1c2b2a" roughness={1} />
+    </mesh>)}
+  </group>;
 }
 
 // Volumetric-looking light shaft from a light tower toward the field.
@@ -1348,15 +1553,15 @@ function WorldScene(props: StadiumWorldPrototypeProps & { zone: StadiumWorldZone
   const { palette, onSelect } = props;
   const logo = useLogoTexture();
   return <>
-    <fog attach="fog" args={['#0a1222', 80, 300]} />
+    <fog attach="fog" args={['#3a4a72', 120, 560]} />
     <SceneEnvironment />
     <NightSky />
-    <hemisphereLight args={['#6d82a8', '#05070d', 0.5]} />
+    <hemisphereLight args={['#9fb2dc', '#22301f', 0.8]} />
     <directionalLight position={[10, 40, 18]} intensity={1.25} color="#ffeccc" />
     <directionalLight position={[-20, 25, 60]} intensity={0.5} color="#b9c8e6" />
     <pointLight position={[0, 20, 0]} color="#fff4de" intensity={140} distance={60} decay={2} />
 
-    <Ground />
+    <Grounds palette={palette} />
     <Bowl
       palette={palette}
       abbreviation={props.abbreviation}
@@ -1477,7 +1682,7 @@ export function StadiumWorldPrototype(props: StadiumWorldPrototypeProps) {
         <Canvas
           dpr={[1, 1.75]}
           gl={{ antialias: true, alpha: false, preserveDrawingBuffer: Boolean(props.qaCapture), powerPreference: 'high-performance' }}
-          camera={{ position: ARRIVAL_START, fov: 52, near: 0.1, far: 900 }}
+          camera={{ position: ARRIVAL_START, fov: 52, near: 0.1, far: 1600 }}
           onCreated={({ gl, camera, scene }) => {
             gl.domElement.dataset.renderState = 'ready';
             if (props.qaCapture) Object.assign(window, { __stadiumCamera: camera, __stadiumScene: scene });
