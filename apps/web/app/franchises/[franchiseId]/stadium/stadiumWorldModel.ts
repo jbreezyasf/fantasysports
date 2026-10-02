@@ -46,6 +46,6 @@ export function buildStadiumWorldObjects(state: StadiumWorldState): StadiumWorld
 
 export const STADIUM_WORLD_ZONES: Array<{ id: StadiumWorldZone; label: string; camera: [number, number, number]; yaw: number }> = [
   { id: 'concourse', label: 'Grand Concourse', camera: [0, 2.2, 8.8], yaw: 0 },
-  { id: 'owners-office', label: 'Owner’s Office', camera: [-6.2, 2.1, 2.4], yaw: 0.72 },
-  { id: 'rivalry-hall', label: 'Rivalry Hall', camera: [6.2, 2.1, 2.4], yaw: -0.72 }
+  { id: 'owners-office', label: 'Owner’s Office', camera: [-3.0, 2.15, 4.2], yaw: 0.42 },
+  { id: 'rivalry-hall', label: 'Rivalry Hall', camera: [3.0, 2.15, 4.2], yaw: -0.42 }
 ];
