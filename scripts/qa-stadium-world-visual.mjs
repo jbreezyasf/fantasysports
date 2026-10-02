@@ -54,6 +54,8 @@ async function travel(page, label) {
 async function verifyViewport(browser, name, viewport) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
+  // Software WebGL in CI can take many seconds per desktop frame; screenshots wait for one.
+  page.setDefaultTimeout(120000);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await open(page);
@@ -94,6 +96,7 @@ async function verifyViewport(browser, name, viewport) {
 async function verifyStates(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
+  page.setDefaultTimeout(120000);
 
   // Deep link straight into the Owner's Suite.
   await open(page, '?zone=owners-suite');

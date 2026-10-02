@@ -357,19 +357,43 @@ function NightSky() {
     return next;
   }, []);
   useEffect(() => () => geometry.dispose(), [geometry]);
+  // Soft tiling cloud noise baked once on the CPU; the sky shader only samples it.
+  const cloudTexture = useMemo(() => {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, size, size);
+      const random = seeded(53);
+      for (let i = 0; i < 140; i++) {
+        const x = random() * size;
+        const y = random() * size;
+        const r = 10 + random() * 38;
+        for (const [dx, dy] of [[0, 0], [size, 0], [-size, 0], [0, size], [0, -size]]) {
+          const gradient = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+          gradient.addColorStop(0, `rgba(255,255,255,${0.10 + random() * 0.12})`);
+          gradient.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
+        }
+      }
+    }
+    const texture = new CanvasTexture(canvas);
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    return texture;
+  }, []);
+  useEffect(() => () => cloudTexture.dispose(), [cloudTexture]);
   const skyMaterial = useMemo(() => new ShaderMaterial({
     side: BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uClouds: { value: cloudTexture } },
     vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uTime; varying vec3 vDir;
-      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float noise(vec2 p) {
-        vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
-      }
-      float fbm(vec2 p) { float v = 0.0; float a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
+    fragmentShader: `uniform float uTime; uniform sampler2D uClouds; varying vec3 vDir;
       void main() {
         float h = vDir.y;
         vec3 zenith = vec3(0.035, 0.07, 0.19);
@@ -382,14 +406,15 @@ function NightSky() {
         float warmSide = 0.55 + 0.45 * smoothstep(0.2, -0.9, vDir.z);
         col = mix(col, sunset, exp(-max(h, 0.0) * 16.0) * 0.75 * warmSide);
         // clouds lit from below by the sunset
-        vec2 uv = vDir.xz / max(h + 0.12, 0.05) * 1.4 + vec2(uTime * 0.004, 0.0);
-        float c = smoothstep(0.52, 0.82, fbm(uv));
+        vec2 uv = vDir.xz / max(h + 0.12, 0.05) * 0.35 + vec2(uTime * 0.001, 0.0);
+        float n = texture2D(uClouds, uv).r * 0.65 + texture2D(uClouds, uv * 2.3 + 0.37).r * 0.35;
+        float c = smoothstep(0.16, 0.42, n);
         vec3 cloudCol = mix(vec3(0.18, 0.22, 0.38), vec3(0.95, 0.62, 0.48), exp(-max(h, 0.0) * 7.0) * warmSide);
         col = mix(col, cloudCol, c * smoothstep(0.0, 0.08, h) * 0.85);
         if (h < 0.0) col = mix(horizonBlue * 0.55, vec3(0.06, 0.08, 0.12), smoothstep(0.0, -0.25, h));
         gl_FragColor = vec4(col, 1.0);
       }`
-  }), []);
+  }), [cloudTexture]);
   useEffect(() => () => skyMaterial.dispose(), [skyMaterial]);
   useFrame((state) => { skyMaterial.uniforms.uTime.value = state.clock.elapsedTime; });
   return <>
@@ -438,6 +463,7 @@ function Grounds({ palette }: { palette: Palette }) {
   const canopyRef = useRef<InstancedMesh>(null);
   const pinesRef = useRef<InstancedMesh>(null);
   const lampsRef = useRef<InstancedMesh>(null);
+  const lampHeadsRef = useRef<InstancedMesh>(null);
   const towersRef = useRef<InstancedMesh>(null);
 
   const layout = useMemo(() => {
@@ -487,8 +513,9 @@ function Grounds({ palette }: { palette: Palette }) {
     const canopies = canopyRef.current;
     const pineMesh = pinesRef.current;
     const lampMesh = lampsRef.current;
+    const lampHeads = lampHeadsRef.current;
     const buildingMesh = towersRef.current;
-    if (!trunks || !canopies || !pineMesh || !lampMesh || !buildingMesh) return;
+    if (!trunks || !canopies || !pineMesh || !lampMesh || !lampHeads || !buildingMesh) return;
     const greens = [new Color('#2f5a2c'), new Color('#3d6b33'), new Color('#24492a'), new Color('#4a7a3a')];
     layout.trees.forEach((tree, index) => {
       dummy.rotation.set(0, tree.tone * 6, 0);
@@ -515,6 +542,9 @@ function Grounds({ palette }: { palette: Palette }) {
       dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
       lampMesh.setMatrixAt(index, dummy.matrix);
+      dummy.position.set(lamp.x, 4.5, lamp.z);
+      dummy.updateMatrix();
+      lampHeads.setMatrixAt(index, dummy.matrix);
     });
     layout.buildings.forEach((building, index) => {
       dummy.rotation.set(0, building.yaw, 0);
@@ -523,7 +553,7 @@ function Grounds({ palette }: { palette: Palette }) {
       dummy.updateMatrix();
       buildingMesh.setMatrixAt(index, dummy.matrix);
     });
-    [trunks, canopies, pineMesh, lampMesh, buildingMesh].forEach((mesh) => { mesh.instanceMatrix.needsUpdate = true; });
+    [trunks, canopies, pineMesh, lampMesh, lampHeads, buildingMesh].forEach((mesh) => { mesh.instanceMatrix.needsUpdate = true; });
     if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true;
   }, [layout]);
 
@@ -582,10 +612,10 @@ function Grounds({ palette }: { palette: Palette }) {
       <cylinderGeometry args={[0.07, 0.1, 4.4, 6]} />
       <meshStandardMaterial color="#2a2f3a" metalness={0.7} roughness={0.4} />
     </instancedMesh>
-    {layout.lamps.map((lamp, index) => <mesh key={index} position={[lamp.x, 4.5, lamp.z]}>
+    <instancedMesh ref={lampHeadsRef} args={[undefined, undefined, layout.lamps.length]}>
       <sphereGeometry args={[0.22, 10, 8]} />
       <meshBasicMaterial color="#ffd9a0" toneMapped={false} />
-    </mesh>)}
+    </instancedMesh>
 
     {/* city skyline and distant hills */}
     <instancedMesh ref={towersRef} args={[undefined, undefined, layout.buildings.length]}>
@@ -737,6 +767,7 @@ function Bowl({ palette, abbreviation, franchiseName, titles, rivalryCount, unlo
   const standPoints = useMemo(() => STAND_PROFILE.slice(0, -2).map(([r, y]) => new Vector2(r, y)), []);
   const seatsRef = useRef<InstancedMesh>(null);
   const crowdRef = useRef<InstancedMesh>(null);
+  const finsRef = useRef<InstancedMesh>(null);
 
   const { seats, crowd, flashPositions } = useMemo(() => {
     const seatList: Array<{ x: number; y: number; z: number; yaw: number; accent: boolean }> = [];
@@ -811,6 +842,19 @@ function Bowl({ palette, abbreviation, franchiseName, titles, rivalryCount, unlo
     }
     return list;
   }, []);
+
+  useLayoutEffect(() => {
+    const mesh = finsRef.current;
+    if (!mesh) return;
+    const dummy = new Object3D();
+    fins.forEach((fin, index) => {
+      dummy.position.set(fin.x, 6.05, fin.z);
+      dummy.rotation.set(0, fin.yaw, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(index, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [fins]);
 
   const fieldTexture = useCanvasTexture(4096, 2048, (ctx, w, h) => {
     // turf with mowing stripes and grain
@@ -954,10 +998,10 @@ function Bowl({ palette, abbreviation, franchiseName, titles, rivalryCount, unlo
       <torusGeometry args={[FACADE_R + 0.12, 0.09, 6, 200]} />
       <meshStandardMaterial color={palette.primary} metalness={0.95} roughness={0.25} emissive={palette.primary} emissiveIntensity={0.35} />
     </mesh>)}
-    {fins.map((fin, index) => <mesh key={index} position={[fin.x, 6.05, fin.z]} rotation={[0, fin.yaw, 0]}>
+    <instancedMesh ref={finsRef} args={[undefined, undefined, fins.length]}>
       <boxGeometry args={[0.22, 7.6, 0.22]} />
       <meshStandardMaterial color={palette.primary} metalness={0.9} roughness={0.3} emissive={palette.primary} emissiveIntensity={0.18} />
-    </mesh>)}
+    </instancedMesh>
 
     <instancedMesh ref={seatsRef} args={[undefined, undefined, seats.length]}>
       <boxGeometry args={[0.62, 0.4, 0.5]} />
