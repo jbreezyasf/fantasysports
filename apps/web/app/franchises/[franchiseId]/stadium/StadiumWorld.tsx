@@ -51,16 +51,18 @@ export function StadiumWorld({ fallback, force2d = false, ...props }: StadiumWor
 
   if (mode === 'checking') return <div className="stadiumWorldLoading" role="status">Preparing your stadium…</div>;
 
-  const toggle = webglAvailable
-    ? <button type="button" className="secondary stadiumWorldModeToggle" onClick={() => setMode(mode === '3d' ? '2d' : '3d')}>
-      {mode === '3d' ? 'Switch to standard view' : 'Enter 3D stadium'}
-    </button>
-    : <p className="stadiumWorldNotice" role="status">3D is not available on this device. Your stadium data is shown in the standard view.</p>;
+  if (mode === '3d') {
+    return <div className="stadiumWorldHost" data-stadium-mode="3d">
+      <WorldErrorBoundary fallback={fallback}><StadiumWorldPrototype {...props} onStandardView={() => setMode('2d')} /></WorldErrorBoundary>
+    </div>;
+  }
 
-  return <div className="stadiumWorldHost" data-stadium-mode={mode}>
-    <div className="stadiumWorldModeBar">{toggle}</div>
-    {mode === '3d'
-      ? <WorldErrorBoundary fallback={fallback}><StadiumWorldPrototype {...props} /></WorldErrorBoundary>
-      : fallback}
+  return <div className="stadiumWorldHost" data-stadium-mode="2d">
+    <div className="stadiumWorldModeBar">
+      {webglAvailable
+        ? <button type="button" className="secondary stadiumWorldModeToggle" onClick={() => setMode('3d')}>Enter 3D stadium</button>
+        : <p className="stadiumWorldNotice" role="status">3D is not available on this device. Your stadium data is shown in the standard view.</p>}
+    </div>
+    {fallback}
   </div>;
 }

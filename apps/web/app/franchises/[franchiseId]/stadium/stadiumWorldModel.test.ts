@@ -1,25 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { buildStadiumWorldObjects, parseStadiumWorldZone } from './stadiumWorldModel';
+import { buildStadiumExhibits, parseStadiumWorldZone } from './stadiumWorldModel';
 
-describe('buildStadiumWorldObjects', () => {
-  it('keeps official achievement truth deterministic', () => {
-    const objects = buildStadiumWorldObjects({ titleCount: 2, rivalryCount: 0, unlockedFeatureCount: 3 });
-    expect(objects.find((item) => item.id === 'champions-trophy')).toMatchObject({ earned: true, zone: 'owners-office' });
-    expect(objects.find((item) => item.id === 'rivalry-monument')).toMatchObject({ earned: false, zone: 'rivalry-hall' });
-    expect(objects.find((item) => item.id === 'legacy-wall')?.detail).toContain('3 stadium features');
+const base = { franchiseName: 'High Volts', establishedYear: 2026, titleYears: [], rivalryCount: 0, unlockedFeatures: [], nextUnlock: 'Rivalry Monument' };
+
+describe('buildStadiumExhibits', () => {
+  it('keeps every legacy object locked until Fantasy Core records it', () => {
+    const exhibits = buildStadiumExhibits(base);
+    expect(exhibits.find((item) => item.id === 'champions-trophy')?.status).toBe('locked');
+    expect(exhibits.find((item) => item.id === 'title-banners')?.status).toBe('locked');
+    expect(exhibits.find((item) => item.id === 'rivalry-walk')?.status).toBe('locked');
+    expect(exhibits.find((item) => item.id === 'legacy-wall')?.facts).toContainEqual({ label: 'Next unlock', value: 'Rivalry Monument' });
+  });
+
+  it('shows recorded titles, rivalries and unlocked features exactly', () => {
+    const exhibits = buildStadiumExhibits({
+      ...base,
+      titleYears: [2028, 2026],
+      rivalryCount: 3,
+      unlockedFeatures: [{ name: 'Founders Plaza' }, { name: 'Rivalry Monument' }]
+    });
+    const trophy = exhibits.find((item) => item.id === 'champions-trophy');
+    expect(trophy).toMatchObject({ status: 'earned', zone: 'owners-suite' });
+    expect(trophy?.facts).toContainEqual({ label: 'Seasons', value: '2026, 2028' });
+    expect(exhibits.find((item) => item.id === 'rivalry-walk')?.facts).toEqual([{ label: 'Rivalry wins', value: '3' }]);
+    expect(exhibits.find((item) => item.id === 'legacy-wall')?.facts.filter((fact) => fact.label === 'Unlocked').map((fact) => fact.value)).toEqual(['Founders Plaza', 'Rivalry Monument']);
   });
 });
 
 describe('parseStadiumWorldZone', () => {
-  it('accepts known zone deep links and falls back to the concourse', () => {
-    expect(parseStadiumWorldZone('owners-office')).toBe('owners-office');
-    expect(parseStadiumWorldZone('rivalry-hall')).toBe('rivalry-hall');
-    expect(parseStadiumWorldZone('trophy-vault')).toBe('concourse');
-    expect(parseStadiumWorldZone(null)).toBe('concourse');
-  });
-
-  it('shows a locked trophy until Fantasy Core records a championship', () => {
-    const objects = buildStadiumWorldObjects({ titleCount: 0, rivalryCount: 0, unlockedFeatureCount: 0 });
-    expect(objects.every((item) => !item.earned)).toBe(true);
+  it('accepts zone deep links, maps earlier names, and falls back to the front gate', () => {
+    expect(parseStadiumWorldZone('owners-suite')).toBe('owners-suite');
+    expect(parseStadiumWorldZone('rivalry-walk')).toBe('rivalry-walk');
+    expect(parseStadiumWorldZone('owners-office')).toBe('owners-suite');
+    expect(parseStadiumWorldZone('trophy-vault')).toBe('gate');
+    expect(parseStadiumWorldZone(null)).toBe('gate');
   });
 });

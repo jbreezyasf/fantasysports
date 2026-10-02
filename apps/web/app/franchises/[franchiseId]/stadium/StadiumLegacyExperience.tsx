@@ -150,6 +150,14 @@ export function StadiumLegacyExperience({
   const [selectedId, setSelectedId] = useState(exhibits[0]?.id ?? 'legacy-statue');
   const selected = exhibits.find((exhibit) => exhibit.id === selectedId) ?? exhibits[0];
 
+  // Title years come from recorded championships this franchise won; the count stays tied to official achievements.
+  const wonYears = trophies
+    .filter((award) => award.winnerName === franchise.name)
+    .map((award) => award.seasonYear)
+    .sort((a, b) => (a ?? 0) - (b ?? 0));
+  const titleYears = Array.from({ length: titleCount }, (_, index) => wonYears[index] ?? null);
+  const worldFeatures = unlockedFeatures.map((feature) => ({ name: feature.display_name ?? 'Stadium Feature', zone: feature.zone }));
+
   const standardStadiumView = <>
     <div className="legacyStadiumHeader">
       <div>
@@ -216,9 +224,11 @@ export function StadiumLegacyExperience({
         abbreviation={franchise.abbreviation}
         primary={franchise.primary}
         secondary={franchise.secondary}
-        titleCount={titleCount}
+        establishedYear={franchise.establishedYear}
+        titleYears={titleYears}
         rivalryCount={rivalryCount}
-        unlockedFeatureCount={unlockedFeatures.length}
+        unlockedFeatures={worldFeatures}
+        nextUnlock={nextUnlock}
         fallback={standardStadiumView}
       />
     </div>}
