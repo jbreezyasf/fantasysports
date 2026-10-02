@@ -179,14 +179,15 @@ export function StadiumWorldPrototype(props:Props){
       drawBox(gl,matrixLoc,colorLoc,vp,[-2.5+i,1.8,-5.0],[.36,.52,.12],i%2?ivory:gold);
     }
 
+    gl.finish();
     const pixels=new Uint8Array(canvas.width*canvas.height*4);
     gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
     let visiblePixels=0;
     for(let i=0;i<pixels.length;i+=16){
       if(pixels[i]>48 || pixels[i+1]>48 || pixels[i+2]>48) visiblePixels++;
-      if(visiblePixels>400) break;
+      if(visiblePixels>80) break;
     }
-    setRenderState(visiblePixels>400?'ready':'failed');
+    setRenderState(visiblePixels>80?'ready':'failed');
 
     return ()=>{ gl.deleteProgram(program); gl.deleteBuffer(buffer); };
   },[props.primary,props.secondary,props.titleCount,props.rivalryCount,props.unlockedFeatureCount,zone]);
