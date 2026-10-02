@@ -18,17 +18,30 @@ type Vec3 = [number, number, number];
 const vertexShader = `
 attribute vec3 aPosition;
 uniform mat4 uMatrix;
-void main(){ gl_Position = uMatrix * vec4(aPosition,1.0); }
+varying float vShade;
+void main(){
+  gl_Position = uMatrix * vec4(aPosition,1.0);
+  vShade = 0.72 + 0.28 * max(max(abs(aPosition.x), abs(aPosition.y)), abs(aPosition.z));
+}
 `;
 const fragmentShader = `
 precision mediump float;
 uniform vec4 uColor;
-void main(){ gl_FragColor = uColor; }
+varying float vShade;
+void main(){ gl_FragColor = vec4(uColor.rgb * vShade, uColor.a); }
 `;
 
 function multiply(a:number[],b:number[]){
   const out=new Array(16).fill(0);
-  for(let r=0;r<4;r++) for(let c=0;c<4;c++) for(let k=0;k<4;k++) out[r*4+c]+=a[r*4+k]*b[k*4+c];
+  for(let col=0;col<4;col++){
+    for(let row=0;row<4;row++){
+      out[col*4+row]=
+        a[0*4+row]*b[col*4+0]+
+        a[1*4+row]*b[col*4+1]+
+        a[2*4+row]*b[col*4+2]+
+        a[3*4+row]*b[col*4+3];
+    }
+  }
   return out;
 }
 function perspective(fov:number,aspect:number,near:number,far:number){
@@ -37,9 +50,25 @@ function perspective(fov:number,aspect:number,near:number,far:number){
 }
 function translate(x:number,y:number,z:number){ return [1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]; }
 function scale(x:number,y:number,z:number){ return [x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1]; }
-function rotateY(a:number){ const c=Math.cos(a),s=Math.sin(a); return [c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]; }
-function cameraView(pos:Vec3,yaw:number){
-  return multiply(rotateY(-yaw), translate(-pos[0],-pos[1],-pos[2]));
+function subtract(a:Vec3,b:Vec3):Vec3{return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function normalize(v:Vec3):Vec3{
+  const length=Math.hypot(v[0],v[1],v[2])||1;
+  return [v[0]/length,v[1]/length,v[2]/length];
+}
+function cross(a:Vec3,b:Vec3):Vec3{
+  return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+}
+function dot(a:Vec3,b:Vec3){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function lookAt(eye:Vec3,target:Vec3):number[]{
+  const z=normalize(subtract(eye,target));
+  const x=normalize(cross([0,1,0],z));
+  const y=cross(z,x);
+  return [
+    x[0],y[0],z[0],0,
+    x[1],y[1],z[1],0,
+    x[2],y[2],z[2],0,
+    -dot(x,eye),-dot(y,eye),-dot(z,eye),1
+  ];
 }
 function hexToRgba(hex:string,alpha=1):[number,number,number,number]{
   const safe=/^#[0-9a-fA-F]{6}$/.test(hex)?hex:'#d9b43b';
@@ -103,9 +132,14 @@ export function StadiumWorldPrototype(props:Props){
     gl.enableVertexAttribArray(positionLoc);
     gl.vertexAttribPointer(positionLoc,3,gl.FLOAT,false,0,0);
     gl.enable(gl.DEPTH_TEST);
-    gl.enable(gl.CULL_FACE);
+    gl.disable(gl.CULL_FACE);
 
     const active=STADIUM_WORLD_ZONES.find((item)=>item.id===zone) ?? STADIUM_WORLD_ZONES[0];
+    const targets:Record<StadiumWorldZone,Vec3>={
+      'concourse':[0,.45,-3.5],
+      'owners-office':[-4.15,.3,-1.4],
+      'rivalry-hall':[4.2,.45,-1.2]
+    };
     const resize=()=>{
       const ratio=Math.min(window.devicePixelRatio||1,2);
       const width=Math.max(1,Math.floor(canvas.clientWidth*ratio));
@@ -115,8 +149,8 @@ export function StadiumWorldPrototype(props:Props){
     };
     resize();
     const projection=perspective(Math.PI/3,canvas.width/canvas.height,.1,100);
-    const vp=multiply(projection,cameraView(active.camera,active.yaw));
-    gl.clearColor(.015,.022,.027,1);
+    const vp=multiply(projection,lookAt(active.camera,targets[active.id]));
+    gl.clearColor(.025,.035,.035,1);
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const gold=hexToRgba(props.primary);
     const ivory=hexToRgba(props.secondary);
@@ -124,6 +158,10 @@ export function StadiumWorldPrototype(props:Props){
     const stone:[number,number,number,number]=[.10,.12,.12,1];
 
     drawBox(gl,matrixLoc,colorLoc,vp,[0,-1.2,0],[11,.12,11],dark);
+    drawBox(gl,matrixLoc,colorLoc,vp,[0,-.92,-3.2],[6.8,.05,3.7],[.07,.12,.09,1]);
+    for(let i=-5;i<=5;i+=2){
+      drawBox(gl,matrixLoc,colorLoc,vp,[i,-.84,-3.2],[.035,.03,3.6],[.6,.5,.19,1]);
+    }
     drawBox(gl,matrixLoc,colorLoc,vp,[0,3.5,-5.2],[10.5,4.6,.18],stone);
     drawBox(gl,matrixLoc,colorLoc,vp,[-5.4,2.2,0],[.18,3.4,5.2],stone);
     drawBox(gl,matrixLoc,colorLoc,vp,[5.4,2.2,0],[.18,3.4,5.2],stone);
