@@ -5,9 +5,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Color,
   Group,
-  MathUtils,
-  Mesh,
-  PerspectiveCamera,
   Vector3
 } from 'three';
 import { buildStadiumWorldObjects, STADIUM_WORLD_ZONES, type StadiumWorldZone } from './stadiumWorldModel';
