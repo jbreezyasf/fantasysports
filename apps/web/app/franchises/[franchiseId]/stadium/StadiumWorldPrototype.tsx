@@ -97,6 +97,7 @@ export function StadiumWorldPrototype(props:Props){
   const [zone,setZone]=useState<StadiumWorldZone>('concourse');
   const [selectedId,setSelectedId]=useState<'champions-trophy'|'rivalry-monument'|'legacy-wall'>('legacy-wall');
   const [supported,setSupported]=useState(true);
+  const [renderState,setRenderState]=useState<'loading'|'ready'|'failed'>('loading');
   const objects=useMemo(()=>buildStadiumWorldObjects({
     titleCount:props.titleCount,
     rivalryCount:props.rivalryCount,
@@ -107,8 +108,9 @@ export function StadiumWorldPrototype(props:Props){
   useEffect(()=>{
     const canvas=canvasRef.current;
     if(!canvas) return;
-    const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
-    if(!gl){ setSupported(false); return; }
+    setRenderState('loading');
+    const gl=canvas.getContext('webgl',{antialias:true,alpha:false,preserveDrawingBuffer:true});
+    if(!gl){ setSupported(false); setRenderState('failed'); return; }
 
     const compile=(type:number,source:string)=>{
       const shader=gl.createShader(type);
@@ -176,6 +178,16 @@ export function StadiumWorldPrototype(props:Props){
     for(let i=0;i<Math.min(props.unlockedFeatureCount,6);i++){
       drawBox(gl,matrixLoc,colorLoc,vp,[-2.5+i,1.8,-5.0],[.36,.52,.12],i%2?ivory:gold);
     }
+
+    const pixels=new Uint8Array(canvas.width*canvas.height*4);
+    gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    let visiblePixels=0;
+    for(let i=0;i<pixels.length;i+=16){
+      if(pixels[i]>48 || pixels[i+1]>48 || pixels[i+2]>48) visiblePixels++;
+      if(visiblePixels>400) break;
+    }
+    setRenderState(visiblePixels>400?'ready':'failed');
+
     return ()=>{ gl.deleteProgram(program); gl.deleteBuffer(buffer); };
   },[props.primary,props.secondary,props.titleCount,props.rivalryCount,props.unlockedFeatureCount,zone]);
 
@@ -200,7 +212,9 @@ export function StadiumWorldPrototype(props:Props){
     </div>
 
     <div className="stadiumWorldViewport">
-      {supported ? <canvas ref={canvasRef} className="stadiumWorldCanvas" aria-hidden="true" /> : <div className="stadiumWorldFallback" role="status">3D rendering is unavailable on this device. All Stadium content remains available below.</div>}
+      {supported && renderState !== 'failed'
+        ? <canvas ref={canvasRef} className="stadiumWorldCanvas" aria-hidden="true" data-render-state={renderState} />
+        : <div className="stadiumWorldFallback" role="status">The 3D scene did not render correctly on this device. Stadium data and navigation remain available below.</div>}
       <div className="stadiumWorldHud" aria-hidden="true">
         <span>NOW VISITING</span>
         <strong>{STADIUM_WORLD_ZONES.find((item)=>item.id===zone)?.label}</strong>
