@@ -10,8 +10,8 @@ function assert(condition, message) {
 }
 
 async function canvasMetrics(page) {
-  return page.locator('canvas.stadiumWorldCanvas').evaluate((canvas) => {
-    const gl = canvas.getContext('webgl');
+  return page.locator('.stadiumWorldCanvasShell canvas').evaluate((canvas) => {
+    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
     if (!gl) return { supported: false, gold: 0, light: 0, nonDark: 0, width: canvas.width, height: canvas.height };
     const pixels = new Uint8Array(canvas.width * canvas.height * 4);
     gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
@@ -32,7 +32,7 @@ async function verifyViewport(browser, name, viewport) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   await page.goto(`${appUrl}/visual/stadium-world`, { waitUntil: 'networkidle' });
-  await page.locator('canvas[data-render-state="ready"]').waitFor({ timeout: 15000 });
+  await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 15000 });
 
   const initial = await canvasMetrics(page);
   console.log(JSON.stringify({ viewport: name, stage: 'concourse', metrics: initial }));
@@ -43,7 +43,7 @@ async function verifyViewport(browser, name, viewport) {
   assert(initial.light > 80, `${name}: expected light/ivory geometry is not visible (${initial.light} pixels)`);
 
   await page.getByRole('button', { name: 'Owner’s Office' }).click();
-  await page.locator('canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
+  await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
   await page.getByText('Owner’s Office', { exact: true }).first().waitFor();
   const office = await canvasMetrics(page);
   console.log(JSON.stringify({ viewport: name, stage: 'owners-office', metrics: office }));
@@ -51,7 +51,7 @@ async function verifyViewport(browser, name, viewport) {
   assert(office.gold > 100, `${name}: Owner's Office trophy geometry did not render`);
 
   await page.getByRole('button', { name: 'Rivalry Hall' }).click();
-  await page.locator('canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
+  await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
   const rivalry = await canvasMetrics(page);
   console.log(JSON.stringify({ viewport: name, stage: 'rivalry-hall', metrics: rivalry }));
   await page.screenshot({ path: `${outDir}/${name}-rivalry-hall.png`, fullPage: true });
