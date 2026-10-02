@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import { FranchiseCrest } from '../../../components/FranchiseCrest';
-import { StadiumWorldPrototype } from './StadiumWorldPrototype';
+import { StadiumWorld } from './StadiumWorld';
 
 export type StadiumFeature = {
   code?: string | null;
@@ -150,6 +150,59 @@ export function StadiumLegacyExperience({
   const [selectedId, setSelectedId] = useState(exhibits[0]?.id ?? 'legacy-statue');
   const selected = exhibits.find((exhibit) => exhibit.id === selectedId) ?? exhibits[0];
 
+  const standardStadiumView = <>
+    <div className="legacyStadiumHeader">
+      <div>
+        <p className="eyebrow">STADIUM VIEW</p>
+        <h2>{stadiumName}</h2>
+      </div>
+      <div className="legacyScoreStrip" aria-label={`${franchise.name} has ${titleCount} titles, ${rivalryCount} rivalry wins, and ${unlockedFeatures.length} unlocked stadium features`}>
+        <span>{titleCount} Titles</span>
+        <span>{rivalryCount} Rivalries</span>
+        <span>{unlockedFeatures.length} Features</span>
+      </div>
+    </div>
+
+    <div className="legacyStadiumGrid">
+      <div className="legacyScene" aria-label={`${franchise.name} stadium with selectable banners, statue, office, and monuments`}>
+        <Image className="legacySceneImage" src="/environments/big-exec-starter-stadium-v1.jpg" alt={`${franchise.name} stadium exterior at night`} fill priority sizes="(max-width: 760px) 100vw, 860px" />
+        <div className="legacyAtmosphere" aria-hidden="true" />
+        <div className="legacyScoreboard" aria-hidden="true">
+          <span>HOME OF</span>
+          <FranchiseCrest className="legacyScoreboardCrest" name={franchise.name} abbreviation={franchise.abbreviation} primary={franchise.primary} secondary={franchise.secondary} avatarKey={franchise.avatarKey} />
+          <strong>{franchise.abbreviation}</strong>
+        </div>
+        <div className="legacyRafterLine" aria-hidden="true">
+          {Array.from({ length: Math.max(1, Math.min(titleCount, 5)) }).map((_, index) => <i key={index}>TITLE {index + 1}</i>)}
+        </div>
+        {exhibits.map((exhibit) => <button
+          key={exhibit.id}
+          type="button"
+          className={`${exhibit.className} ${selected?.id === exhibit.id ? 'selected' : ''}`}
+          aria-pressed={selected?.id === exhibit.id}
+          aria-label={`Inspect ${exhibit.label}: ${exhibit.summary}`}
+          onClick={() => setSelectedId(exhibit.id)}
+        >
+          <span>{exhibit.label}</span>
+        </button>)}
+      </div>
+
+      <aside className="legacyZoomPanel" aria-live="polite">
+        <p className="eyebrow">ZOOMED DETAIL</p>
+        <div className="legacyStatueZoom" aria-hidden="true">
+          <span>{selected?.stat}</span>
+          <b>{selected?.label}</b>
+        </div>
+        <h3>{selected?.label}</h3>
+        <p>{selected?.summary}</p>
+        <p>{selected?.detail}</p>
+        <div className="legacyObjectRail" aria-label="Inspectable stadium objects">
+          {exhibits.map((exhibit) => <button key={exhibit.id} type="button" className={selected?.id === exhibit.id ? 'active' : ''} onClick={() => setSelectedId(exhibit.id)}>{exhibit.zone}</button>)}
+        </div>
+      </aside>
+    </div>
+  </>;
+
   return <section className="stadiumLegacyExperience" style={{ '--team-primary': franchise.primary, '--team-secondary': franchise.secondary } as React.CSSProperties}>
     <div className="legacyModeTabs" role="tablist" aria-label="Stadium legacy views">
       <button type="button" role="tab" aria-selected={view === 'stadium'} className={view === 'stadium' ? 'active' : ''} onClick={() => setView('stadium')}>Stadium</button>
@@ -158,7 +211,7 @@ export function StadiumLegacyExperience({
     </div>
 
     {view === 'stadium' && <div className="legacyView legacyStadiumView">
-      <StadiumWorldPrototype
+      <StadiumWorld
         franchiseName={franchise.name}
         abbreviation={franchise.abbreviation}
         primary={franchise.primary}
@@ -166,6 +219,7 @@ export function StadiumLegacyExperience({
         titleCount={titleCount}
         rivalryCount={rivalryCount}
         unlockedFeatureCount={unlockedFeatures.length}
+        fallback={standardStadiumView}
       />
     </div>}
 

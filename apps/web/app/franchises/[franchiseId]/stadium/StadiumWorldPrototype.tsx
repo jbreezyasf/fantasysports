@@ -7,9 +7,9 @@ import {
   Group,
   Vector3
 } from 'three';
-import { buildStadiumWorldObjects, STADIUM_WORLD_ZONES, type StadiumWorldZone } from './stadiumWorldModel';
+import { buildStadiumWorldObjects, parseStadiumWorldZone, STADIUM_WORLD_ZONES, type StadiumWorldZone } from './stadiumWorldModel';
 
-type Props = {
+export type StadiumWorldPrototypeProps = {
   franchiseName: string;
   abbreviation: string;
   primary: string;
@@ -17,6 +17,8 @@ type Props = {
   titleCount: number;
   rivalryCount: number;
   unlockedFeatureCount: number;
+  /** Preview/QA harness only: keeps the frame readable for pixel checks. */
+  qaCapture?: boolean;
 };
 
 const ZONE_TARGETS: Record<StadiumWorldZone, [number, number, number]> = {
@@ -42,6 +44,8 @@ function CameraRig({ zone, reducedMotion }: { zone: StadiumWorldZone; reducedMot
   const zoneSpec = STADIUM_WORLD_ZONES.find((item) => item.id === zone) ?? STADIUM_WORLD_ZONES[0];
   const targetPosition = useMemo(() => new Vector3(...zoneSpec.camera), [zoneSpec.camera]);
   const targetLook = useMemo(() => new Vector3(...ZONE_TARGETS[zone]), [zone]);
+  const direction = useMemo(() => new Vector3(), []);
+  const currentLook = useMemo(() => new Vector3(), []);
 
   useEffect(() => {
     if (!reducedMotion) return;
@@ -53,10 +57,8 @@ function CameraRig({ zone, reducedMotion }: { zone: StadiumWorldZone; reducedMot
     if (reducedMotion) return;
     const t = 1 - Math.exp(-3.8 * delta);
     camera.position.lerp(targetPosition, t);
-    const currentDirection = new Vector3();
-    camera.getWorldDirection(currentDirection);
-    const currentLook = camera.position.clone().add(currentDirection.multiplyScalar(8));
-    currentLook.lerp(targetLook, t);
+    camera.getWorldDirection(direction);
+    currentLook.copy(camera.position).addScaledVector(direction, 8).lerp(targetLook, t);
     camera.lookAt(currentLook);
   });
 
@@ -314,8 +316,8 @@ function WorldScene({
   </>;
 }
 
-export function StadiumWorldPrototype(props: Props) {
-  const [zone, setZone] = useState<StadiumWorldZone>('concourse');
+export function StadiumWorldPrototype(props: StadiumWorldPrototypeProps) {
+  const [zone, setZoneState] = useState<StadiumWorldZone>('concourse');
   const [selectedId, setSelectedId] = useState<'champions-trophy' | 'rivalry-monument' | 'legacy-wall'>('legacy-wall');
   const objects = useMemo(() => buildStadiumWorldObjects({
     titleCount: props.titleCount,
@@ -323,6 +325,23 @@ export function StadiumWorldPrototype(props: Props) {
     unlockedFeatureCount: props.unlockedFeatureCount
   }), [props.titleCount, props.rivalryCount, props.unlockedFeatureCount]);
   const selected = objects.find((item) => item.id === selectedId) ?? objects[0];
+
+  // Each zone is a shareable destination: ?zone=owners-office
+  useEffect(() => {
+    const initial = parseStadiumWorldZone(new URLSearchParams(window.location.search).get('zone'));
+    setZoneState(initial);
+    const preferred = objects.find((item) => item.zone === initial);
+    if (preferred && initial !== 'concourse') setSelectedId(preferred.id);
+    // Read once on mount; after that the URL follows the user.
+  }, []);
+
+  const setZone = (next: StadiumWorldZone) => {
+    setZoneState(next);
+    const url = new URL(window.location.href);
+    if (next === 'concourse') url.searchParams.delete('zone');
+    else url.searchParams.set('zone', next);
+    window.history.replaceState(window.history.state, '', url);
+  };
 
   const travel = (next: StadiumWorldZone) => {
     setZone(next);
@@ -352,11 +371,13 @@ export function StadiumWorldPrototype(props: Props) {
         <Canvas
           shadows
           dpr={[1, 1.5]}
-          gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
+          gl={{ antialias: true, alpha: false, preserveDrawingBuffer: Boolean(props.qaCapture) }}
           camera={{ position: [0, 2.2, 8.8], fov: 54, near: 0.1, far: 70 }}
           onCreated={({ gl }) => {
             gl.domElement.dataset.renderState = 'ready';
             gl.domElement.classList.add('stadiumWorldCanvasElement');
+            gl.domElement.setAttribute('role', 'img');
+            gl.domElement.setAttribute('aria-label', `3D view of the ${props.franchiseName} stadium. Use the fast travel and inspect buttons below to explore.`);
           }}
           fallback={<div className="stadiumWorldFallback" role="status">3D rendering is unavailable on this device. Stadium data and navigation remain available below.</div>}
         >

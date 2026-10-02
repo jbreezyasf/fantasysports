@@ -45,6 +45,7 @@ async function verifyViewport(browser, name, viewport) {
   await page.getByRole('button', { name: 'Owner’s Office' }).click();
   await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
   await page.getByText('Owner’s Office', { exact: true }).first().waitFor();
+  await page.waitForTimeout(1800); // let the camera finish travelling
   const office = await canvasMetrics(page);
   console.log(JSON.stringify({ viewport: name, stage: 'owners-office', metrics: office }));
   await page.screenshot({ path: `${outDir}/${name}-owners-office.png`, fullPage: true });
@@ -52,20 +53,68 @@ async function verifyViewport(browser, name, viewport) {
 
   await page.getByRole('button', { name: 'Rivalry Hall' }).click();
   await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
+  await page.waitForTimeout(1800);
+  assert(new URL(page.url()).searchParams.get('zone') === 'rivalry-hall', `${name}: fast travel did not update the shareable zone link`);
   const rivalry = await canvasMetrics(page);
   console.log(JSON.stringify({ viewport: name, stage: 'rivalry-hall', metrics: rivalry }));
   await page.screenshot({ path: `${outDir}/${name}-rivalry-hall.png`, fullPage: true });
   assert(rivalry.gold > 100, `${name}: Rivalry Hall monument geometry did not render`);
 
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  assert(overflow <= 0, `${name}: page scrolls horizontally by ${overflow}px`);
   await page.screenshot({ path: `${outDir}/${name}.png`, fullPage: true });
   console.log(JSON.stringify({ viewport: name, initial, office, rivalry }));
   await context.close();
 }
 
-const browser = await chromium.launch({ headless: true });
+async function verifyStates(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+
+  // Deep link straight into the Owner's Office.
+  await page.goto(`${appUrl}/visual/stadium-world?zone=owners-office`, { waitUntil: 'networkidle' });
+  await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 15000 });
+  await page.waitForTimeout(1800);
+  assert((await page.locator('.stadiumWorldTravel button[aria-pressed="true"]').textContent()) === 'Owner’s Office', 'deep link did not open the Owner’s Office');
+  const earned = await canvasMetrics(page);
+  await page.screenshot({ path: `${outDir}/deeplink-owners-office.png`, fullPage: true });
+
+  // Brand-new franchise: trophy must render locked (no Fantasy Core championship).
+  await page.goto(`${appUrl}/visual/stadium-world?zone=owners-office&titles=0&rivalries=0&unlocks=0`, { waitUntil: 'networkidle' });
+  await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 15000 });
+  await page.waitForTimeout(1800);
+  const locked = await canvasMetrics(page);
+  console.log(JSON.stringify({ stage: 'locked-vs-earned-office', earnedGold: earned.gold, lockedGold: locked.gold }));
+  await page.screenshot({ path: `${outDir}/locked-owners-office.png`, fullPage: true });
+  assert(locked.gold < earned.gold * 0.5, `locked trophy still renders as earned gold (${locked.gold} vs ${earned.gold})`);
+  assert(await page.getByText('LOCKED / WAITING').count() === 3, 'locked objects are not labelled as locked');
+
+  // Forced standard view: no canvas, fallback content present, Three.js chunk not needed.
+  await page.goto(`${appUrl}/visual/stadium-world?mode=2d`, { waitUntil: 'networkidle' });
+  await page.locator('.stadiumWorldFallback').waitFor({ timeout: 10000 });
+  assert(await page.locator('canvas').count() === 0, 'standard view still mounted a WebGL canvas');
+  await page.screenshot({ path: `${outDir}/standard-view.png`, fullPage: true });
+
+  // Toggle from 3D to standard and back.
+  await page.goto(`${appUrl}/visual/stadium-world`, { waitUntil: 'networkidle' });
+  await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 15000 });
+  await page.getByRole('button', { name: 'Switch to standard view' }).click();
+  await page.locator('.stadiumWorldFallback').waitFor({ timeout: 5000 });
+  await page.getByRole('button', { name: 'Enter 3D stadium' }).click();
+  await page.locator('.stadiumWorldCanvasShell canvas[data-render-state="ready"]').waitFor({ timeout: 15000 });
+  await context.close();
+}
+
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+});
 try {
   await verifyViewport(browser, 'mobile-390x844', { width: 390, height: 844 });
   await verifyViewport(browser, 'desktop-1440x900', { width: 1440, height: 900 });
+  await verifyStates(browser);
+  console.log('STADIUM WORLD VISUAL QA: PASS');
 } finally {
   await browser.close();
 }

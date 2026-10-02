@@ -49,3 +49,7 @@ export const STADIUM_WORLD_ZONES: Array<{ id: StadiumWorldZone; label: string; c
   { id: 'owners-office', label: 'Owner’s Office', camera: [-3.0, 2.15, 4.2], yaw: 0.42 },
   { id: 'rivalry-hall', label: 'Rivalry Hall', camera: [3.0, 2.15, 4.2], yaw: -0.42 }
 ];
+
+export function parseStadiumWorldZone(value: string | null | undefined): StadiumWorldZone {
+  return STADIUM_WORLD_ZONES.find((zone) => zone.id === value)?.id ?? 'concourse';
+}
