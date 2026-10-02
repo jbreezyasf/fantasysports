@@ -3,24 +3,34 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import {
+  AdditiveBlending,
   BackSide,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
   Color,
+  ConeGeometry,
   DoubleSide,
   Group,
+  HalfFloatType,
   InstancedMesh,
   Object3D,
   PMREMGenerator,
+  PerspectiveCamera,
+  RepeatWrapping,
   SRGBColorSpace,
+  ShaderMaterial,
   Shape,
+  Texture,
+  TextureLoader,
   Vector2,
-  Vector3
+  Vector3,
+  WebGLRenderTarget
 } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
@@ -55,6 +65,7 @@ type Palette = { primary: string; secondary: string; dimPrimary: string };
 // World layout. The bowl is an ellipse (x stretched by BOWL_X) around the
 // field; the front gate faces +z onto the plaza.
 // ---------------------------------------------------------------------------
+const LOGO_URL = '/brand/be-crown-mark-2048.webp';
 const BOWL_X = 1.55;
 const FACADE_R = 28;
 const STAND_PROFILE: Array<[number, number]> = [
@@ -63,7 +74,7 @@ const STAND_PROFILE: Array<[number, number]> = [
 
 const DESTINATIONS: Record<StadiumWorldZone, { position: Vec3; target: Vec3; mobilePullback: boolean }> = {
   gate: { position: [0, 6.2, 68], target: [0, 8, 27], mobilePullback: true },
-  field: { position: [0, 16.5, 21], target: [0, 7, -7], mobilePullback: false },
+  field: { position: [0, 13.5, 26], target: [0, 4.2, -8], mobilePullback: false },
   'owners-suite': { position: [-30.9, 8.15, 3.7], target: [-28.5, 7.6, -1.3], mobilePullback: false },
   'rivalry-walk': { position: [-1.5, 3.6, 63], target: [6.5, 3, 49], mobilePullback: true },
   'legacy-wall': { position: [1.5, 3.4, 61], target: [-8.5, 2.4, 48], mobilePullback: true }
@@ -73,7 +84,7 @@ const ARRIVAL_START: Vec3 = [0, 48, 140];
 const BEACONS: Record<StadiumWorldExhibitId, Vec3> = {
   'front-gate': [6.6, 15.2, 30.2],
   'title-banners': [-12.5, 13.6, 27.6],
-  scoreboard: [0, 21.6, -26],
+  scoreboard: [0, 22.4, -26.2],
   'champions-trophy': [-28.6, 9.75, -1.2],
   'rivalry-walk': [7, 6.6, 50],
   'legacy-wall': [-9, 5.4, 49]
@@ -141,13 +152,38 @@ function SceneEnvironment() {
   return null;
 }
 
+// Cinematic finish applied after tone mapping: navy shadows, warm highlights, vignette, fine grain.
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime; varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float luma = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      vec3 shadows = vec3(0.02, 0.04, 0.10);
+      vec3 highlights = vec3(1.04, 0.99, 0.90);
+      vec3 graded = mix(c.rgb + shadows * (1.0 - luma), c.rgb * highlights, smoothstep(0.25, 0.85, luma));
+      graded = mix(vec3(luma), graded, 1.08);
+      graded = (graded - 0.5) * 1.06 + 0.5;
+      vec2 d = vUv - 0.5;
+      float vignette = smoothstep(0.85, 0.25, length(d * vec2(1.0, 1.15)));
+      graded *= mix(0.62, 1.0, vignette);
+      graded += (hash(vUv * 1000.0 + uTime) - 0.5) * 0.018;
+      gl_FragColor = vec4(clamp(graded, 0.0, 1.0), c.a);
+    }`
+};
+
 function Bloom() {
   const { gl, scene, camera, size } = useThree();
   const composer = useMemo(() => {
-    const next = new EffectComposer(gl);
+    // Multisampled HDR target keeps edges smooth through post-processing.
+    const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples: gl.getPixelRatio() > 1.5 ? 2 : 4 });
+    const next = new EffectComposer(gl, target);
     next.addPass(new RenderPass(scene, camera));
-    next.addPass(new UnrealBloomPass(new Vector2(size.width, size.height), 0.5, 0.45, 0.92));
+    next.addPass(new UnrealBloomPass(new Vector2(size.width, size.height), 0.42, 0.5, 0.95));
     next.addPass(new OutputPass());
+    next.addPass(new ShaderPass(GradeShader));
     return next;
   }, [gl, scene, camera]);
   useEffect(() => {
@@ -155,7 +191,9 @@ function Bloom() {
     composer.setSize(size.width, size.height);
   }, [composer, gl, size]);
   useEffect(() => () => composer.dispose(), [composer]);
-  useFrame(() => {
+  useFrame((state) => {
+    const grade = composer.passes[composer.passes.length - 1] as ShaderPass;
+    grade.uniforms.uTime.value = state.clock.elapsedTime % 10;
     composer.render();
     // Signals QA that a full frame (scene + bloom) has been drawn to the canvas.
     if (gl.domElement.dataset.frame !== 'drawn') gl.domElement.dataset.frame = 'drawn';
@@ -179,6 +217,16 @@ function CameraRig({ zone, look, arriving, reducedMotion }: { zone: StadiumWorld
   }, [destination, aspect, targetPosition]);
   const lookPoint = useRef(new Vector3(0, 6, 10));
   const scratch = useMemo(() => ({ dir: new Vector3(), axis: new Vector3(), desired: new Vector3(), up: new Vector3(0, 1, 0) }), []);
+
+  // Tall phone screens get a wider lens so each destination keeps its context.
+  useLayoutEffect(() => {
+    const perspective = camera as PerspectiveCamera;
+    const fov = aspect < 1 ? 64 : 52;
+    if (perspective.fov !== fov) {
+      perspective.fov = fov;
+      perspective.updateProjectionMatrix();
+    }
+  }, [camera, aspect]);
 
   useLayoutEffect(() => {
     if (arriving.current && !reducedMotion) {
@@ -261,9 +309,31 @@ function Beacon({ id, position, color, active, onSelect }: { id: StadiumWorldExh
 // ---------------------------------------------------------------------------
 // Sky and ground
 // ---------------------------------------------------------------------------
+const NAVY = '#070d1c';
+const IVORY = '#ece3cf';
+
+function useLogoTexture() {
+  const [texture, setTexture] = useState<Texture | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    new TextureLoader().load(LOGO_URL, (loaded) => {
+      if (cancelled) {
+        loaded.dispose();
+        return;
+      }
+      loaded.colorSpace = SRGBColorSpace;
+      loaded.anisotropy = 8;
+      setTexture(loaded);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => () => texture?.dispose(), [texture]);
+  return texture;
+}
+
 function NightSky() {
   const geometry = useMemo(() => {
-    const count = 900;
+    const count = 1100;
     const positions = new Float32Array(count * 3);
     let seed = 7;
     const random = () => {
@@ -272,7 +342,7 @@ function NightSky() {
     };
     for (let i = 0; i < count; i++) {
       const theta = random() * Math.PI * 2;
-      const phi = Math.acos(0.15 + random() * 0.85);
+      const phi = Math.acos(0.22 + random() * 0.78);
       positions[i * 3] = 380 * Math.sin(phi) * Math.cos(theta);
       positions[i * 3 + 1] = 380 * Math.cos(phi);
       positions[i * 3 + 2] = 380 * Math.sin(phi) * Math.sin(theta);
@@ -282,13 +352,30 @@ function NightSky() {
     return next;
   }, []);
   useEffect(() => () => geometry.dispose(), [geometry]);
+  const skyMaterial = useMemo(() => new ShaderMaterial({
+    side: BackSide,
+    depthWrite: false,
+    fog: false,
+    uniforms: {},
+    vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec3 vDir;
+      void main() {
+        float h = clamp(vDir.y, -0.2, 1.0);
+        vec3 horizon = vec3(0.075, 0.115, 0.215);
+        vec3 glow = vec3(0.20, 0.16, 0.10);
+        vec3 zenith = vec3(0.006, 0.012, 0.035);
+        vec3 col = mix(horizon, zenith, smoothstep(0.0, 0.6, h));
+        col += glow * exp(-abs(h) * 14.0) * 0.6;
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  }), []);
+  useEffect(() => () => skyMaterial.dispose(), [skyMaterial]);
   return <>
-    <mesh>
+    <mesh material={skyMaterial}>
       <sphereGeometry args={[420, 32, 16]} />
-      <meshBasicMaterial side={BackSide} color="#040910" fog={false} />
     </mesh>
     <points geometry={geometry}>
-      <pointsMaterial color="#cfd8e6" size={1.6} sizeAttenuation={false} fog={false} transparent opacity={0.85} />
+      <pointsMaterial color="#dfe6f2" size={1.5} sizeAttenuation={false} fog={false} transparent opacity={0.8} />
     </points>
   </>;
 }
@@ -297,221 +384,460 @@ function Ground() {
   return <>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
       <planeGeometry args={[500, 500]} />
-      <meshStandardMaterial color="#07090b" roughness={0.55} metalness={0.4} />
+      <meshStandardMaterial color="#080c16" roughness={0.42} metalness={0.5} />
     </mesh>
-    {/* plaza paving in front of the gate */}
+    {/* polished plaza paving in front of the gate */}
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 51]}>
       <planeGeometry args={[30, 44]} />
-      <meshStandardMaterial color="#121518" roughness={0.5} metalness={0.45} />
+      <meshStandardMaterial color="#141a26" roughness={0.22} metalness={0.55} />
     </mesh>
   </>;
 }
 
-// ---------------------------------------------------------------------------
-// The bowl: stands, seats, roof ring, light towers, field, scoreboard
-// ---------------------------------------------------------------------------
-function Bowl({ palette, abbreviation, franchiseName, titles, rivalryCount, unlocks, onSelect }: { palette: Palette; abbreviation: string; franchiseName: string; titles: number; rivalryCount: number; unlocks: number; onSelect: (id: StadiumWorldExhibitId) => void }) {
-  const standPoints = useMemo(() => STAND_PROFILE.map(([r, y]) => new Vector2(r, y)), []);
-  const seatsRef = useRef<InstancedMesh>(null);
+// Volumetric-looking light shaft from a light tower toward the field.
+function LightBeam({ from, to, color }: { from: Vec3; to: Vec3; color: string }) {
+  const ref = useRef<Group>(null);
+  const length = useMemo(() => new Vector3(...from).distanceTo(new Vector3(...to)), [from, to]);
+  const geometry = useMemo(() => {
+    const next = new ConeGeometry(7.5, length, 40, 1, true);
+    next.translate(0, -length / 2, 0);
+    next.rotateX(-Math.PI / 2);
+    return next;
+  }, [length]);
+  const material = useMemo(() => new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: DoubleSide,
+    blending: AdditiveBlending,
+    fog: false,
+    uniforms: { uColor: { value: new Color(color) } },
+    vertexShader: `varying float vAlong; varying vec3 vNormalV; varying vec3 vViewV;
+      void main() {
+        vAlong = uv.y;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vNormalV = normalize(normalMatrix * normal);
+        vViewV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 uColor; varying float vAlong; varying vec3 vNormalV; varying vec3 vViewV;
+      void main() {
+        float edge = pow(abs(dot(vNormalV, vViewV)), 2.2);
+        float fade = pow(vAlong, 1.6);
+        gl_FragColor = vec4(uColor * edge * fade * 0.16, 1.0);
+      }`
+  }), [color]);
+  useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
+  useLayoutEffect(() => { ref.current?.lookAt(...to); }, [to]);
+  return <group ref={ref} position={from}>
+    <mesh geometry={geometry} material={material} />
+  </group>;
+}
 
-  const seats = useMemo(() => {
-    const list: Array<{ x: number; y: number; z: number; yaw: number; accent: boolean }> = [];
+// Crowd camera flashes and phone lights, animated entirely on the GPU.
+function CrowdLights({ positions }: { positions: Float32Array }) {
+  const geometry = useMemo(() => {
+    const count = positions.length / 3;
+    const phase = new Float32Array(count);
+    const rate = new Float32Array(count);
+    let seed = 11;
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let i = 0; i < count; i++) {
+      phase[i] = random() * 100;
+      rate[i] = 0.4 + random() * 1.6;
+    }
+    const next = new BufferGeometry();
+    next.setAttribute('position', new BufferAttribute(positions, 3));
+    next.setAttribute('aPhase', new BufferAttribute(phase, 1));
+    next.setAttribute('aRate', new BufferAttribute(rate, 1));
+    return next;
+  }, [positions]);
+  const material = useMemo(() => new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `attribute float aPhase; attribute float aRate; uniform float uTime; varying float vAlpha;
+      void main() {
+        float flash = pow(max(0.0, sin(uTime * aRate + aPhase)), 80.0);
+        float phone = step(0.82, fract(aPhase * 0.37)) * 0.22;
+        vAlpha = max(flash, phone);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = min((flash > phone ? 9.0 : 3.5) * (40.0 / -mv.z), 10.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `varying float vAlpha;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.0, d) * vAlpha;
+        gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * a * 2.0, a);
+      }`
+  }), []);
+  useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
+  useFrame((state) => { material.uniforms.uTime.value = state.clock.elapsedTime; });
+  return <points geometry={geometry} material={material} />;
+}
+
+// Scrolling LED ribbon board wrapped around a riser of the bowl.
+function RibbonBoard({ radius, y, height, palette, franchiseName, speed }: { radius: number; y: number; height: number; palette: Palette; franchiseName: string; speed: number }) {
+  const texture = useCanvasTexture(4096, 128, (ctx, w, h) => {
+    ctx.fillStyle = '#05080f';
+    ctx.fillRect(0, 0, w, h);
+    const segment = w / 4;
+    for (let s = 0; s < 4; s++) {
+      const x0 = s * segment;
+      const gradient = ctx.createLinearGradient(x0, 0, x0 + segment, 0);
+      gradient.addColorStop(0, 'rgba(217,180,59,0.05)');
+      gradient.addColorStop(0.5, 'rgba(217,180,59,0.32)');
+      gradient.addColorStop(1, 'rgba(217,180,59,0.05)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x0, 0, segment, h);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = s % 2 ? palette.secondary : palette.primary;
+      ctx.font = `900 72px ${DISPLAY_FONT}`;
+      ctx.fillText(spaced(s % 2 ? 'Big Exec' : franchiseName), x0 + segment / 2, h / 2 + 4);
+      // chevrons
+      ctx.fillStyle = palette.primary;
+      for (let c = 0; c < 3; c++) {
+        const cx = x0 + 40 + c * 34;
+        ctx.beginPath();
+        ctx.moveTo(cx, 30);
+        ctx.lineTo(cx + 22, h / 2);
+        ctx.lineTo(cx, h - 30);
+        ctx.lineTo(cx + 10, h / 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }, [franchiseName, palette.primary, palette.secondary]);
+  useLayoutEffect(() => {
+    texture.wrapS = RepeatWrapping;
+    texture.repeat.set(-3, 1); // viewed from inside the cylinder, so flip to read left-to-right
+    texture.needsUpdate = true;
+  }, [texture]);
+  useFrame((_, delta) => { texture.offset.x = (texture.offset.x + delta * speed) % 1; });
+  return <mesh position={[0, y, 0]} scale={[BOWL_X, 1, 1]}>
+    <cylinderGeometry args={[radius, radius, height, 160, 1, true]} />
+    <meshBasicMaterial map={texture} side={BackSide} toneMapped={false} />
+  </mesh>;
+}
+
+// ---------------------------------------------------------------------------
+// The bowl: stands, crowd, ribbon boards, roof halo, light towers, field, scoreboard
+// ---------------------------------------------------------------------------
+function Bowl({ palette, abbreviation, franchiseName, titles, rivalryCount, unlocks, logo, onSelect }: { palette: Palette; abbreviation: string; franchiseName: string; titles: number; rivalryCount: number; unlocks: number; logo: Texture | null; onSelect: (id: StadiumWorldExhibitId) => void }) {
+  const standPoints = useMemo(() => STAND_PROFILE.slice(0, -2).map(([r, y]) => new Vector2(r, y)), []);
+  const seatsRef = useRef<InstancedMesh>(null);
+  const crowdRef = useRef<InstancedMesh>(null);
+
+  const { seats, crowd, flashPositions } = useMemo(() => {
+    const seatList: Array<{ x: number; y: number; z: number; yaw: number; accent: boolean }> = [];
+    const crowdList: Array<{ x: number; y: number; z: number; yaw: number; tone: number; scale: number }> = [];
+    let seed = 3;
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
     const tiers = [[17, 1.2], [19, 2.6], [21, 4.2], [23, 6], [25, 8]] as const;
     tiers.forEach(([r, y], tier) => {
-      const count = Math.round(r * 7.2);
+      const count = Math.round(r * 10);
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2;
         const x = Math.cos(angle) * r * BOWL_X;
         const z = Math.sin(angle) * r;
-        // leave the owner's suite and gate tunnel clear
+        // leave the owner's suite clear
         if (x < -26 && Math.abs(z) < 5.2 && tier >= 1) continue;
-        const section = Math.floor((angle / (Math.PI * 2)) * 16);
-        list.push({ x, y: y + 0.25, z, yaw: Math.atan2(-x, -z), accent: section % 4 === 0 || tier === 2 });
+        const section = Math.floor((angle / (Math.PI * 2)) * 20);
+        const yaw = Math.atan2(-x, -z);
+        seatList.push({ x, y: y + 0.22, z, yaw, accent: section % 5 === 0 });
+        if (random() < 0.78) crowdList.push({ x: x * 0.995, y: y + 0.75, z: z * 0.995, yaw, tone: Math.floor(random() * 6), scale: 0.85 + random() * 0.3 });
       }
     });
-    return list;
+    const flashes = new Float32Array(crowdList.length * 3);
+    crowdList.forEach((person, index) => {
+      flashes[index * 3] = person.x;
+      flashes[index * 3 + 1] = person.y + 0.45;
+      flashes[index * 3 + 2] = person.z;
+    });
+    return { seats: seatList, crowd: crowdList, flashPositions: flashes };
   }, []);
 
   useLayoutEffect(() => {
-    const mesh = seatsRef.current;
-    if (!mesh) return;
+    const seatMesh = seatsRef.current;
+    const crowdMesh = crowdRef.current;
+    if (!seatMesh || !crowdMesh) return;
     const dummy = new Object3D();
-    const accent = new Color(palette.primary).multiplyScalar(0.55);
-    const base = new Color('#1b1f23');
+    const accent = new Color(palette.primary).multiplyScalar(0.7);
+    const base = new Color('#1a2340');
     seats.forEach((seat, index) => {
       dummy.position.set(seat.x, seat.y, seat.z);
       dummy.rotation.set(0, seat.yaw, 0);
+      dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
-      mesh.setMatrixAt(index, dummy.matrix);
-      mesh.setColorAt(index, seat.accent ? accent : base);
+      seatMesh.setMatrixAt(index, dummy.matrix);
+      seatMesh.setColorAt(index, seat.accent ? accent : base);
     });
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [seats, palette.primary]);
+    const tones = ['#e8e0cc', '#26314f', palette.primary, '#16402f', '#3a3f4c', '#a8a39a'].map((tone) => new Color(tone).multiplyScalar(0.5));
+    crowd.forEach((person, index) => {
+      dummy.position.set(person.x, person.y, person.z);
+      dummy.rotation.set(0, person.yaw, 0);
+      dummy.scale.setScalar(person.scale);
+      dummy.updateMatrix();
+      crowdMesh.setMatrixAt(index, dummy.matrix);
+      crowdMesh.setColorAt(index, tones[person.tone]);
+    });
+    seatMesh.instanceMatrix.needsUpdate = true;
+    crowdMesh.instanceMatrix.needsUpdate = true;
+    if (seatMesh.instanceColor) seatMesh.instanceColor.needsUpdate = true;
+    if (crowdMesh.instanceColor) crowdMesh.instanceColor.needsUpdate = true;
+  }, [seats, crowd, palette.primary]);
 
   const fins = useMemo(() => {
     const list: Array<{ x: number; z: number; yaw: number }> = [];
-    for (let i = 0; i < 96; i++) {
-      const angle = (i / 96) * Math.PI * 2;
-      const x = Math.cos(angle) * (FACADE_R + 0.25) * BOWL_X;
-      const z = Math.sin(angle) * (FACADE_R + 0.25);
+    for (let i = 0; i < 120; i++) {
+      const angle = (i / 120) * Math.PI * 2;
+      const x = Math.cos(angle) * (FACADE_R + 0.2) * BOWL_X;
+      const z = Math.sin(angle) * (FACADE_R + 0.2);
       if (z > 20 && Math.abs(x) < 9) continue;
       list.push({ x, z, yaw: Math.atan2(x / BOWL_X, z) });
     }
     return list;
   }, []);
 
-  const fieldTexture = useCanvasTexture(2048, 1024, (ctx, w, h) => {
-    for (let i = 0; i < 24; i++) {
-      ctx.fillStyle = i % 2 ? '#0f4a2a' : '#125633';
-      ctx.fillRect((i * w) / 24, 0, w / 24 + 1, h);
+  const fieldTexture = useCanvasTexture(4096, 2048, (ctx, w, h) => {
+    // turf with mowing stripes and grain
+    for (let i = 0; i < 20; i++) {
+      ctx.fillStyle = i % 2 ? '#0f5631' : '#126439';
+      ctx.fillRect((i * w) / 20, 0, w / 20 + 1, h);
     }
+    let seed = 5;
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let i = 0; i < 26000; i++) {
+      ctx.fillStyle = random() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.05)';
+      ctx.fillRect(random() * w, random() * h, 3, 3);
+    }
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, w * 0.62);
+    vignette.addColorStop(0, 'rgba(255,240,200,0.06)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.28)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, w, h);
+
+    // gold end zones lettered with the franchise name
     const endZone = w / 12;
-    ctx.fillStyle = palette.primary;
-    ctx.globalAlpha = 0.85;
-    ctx.fillRect(0, 0, endZone, h);
-    ctx.fillRect(w - endZone, 0, endZone, h);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = 'rgba(255,255,255,0.88)';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(3, 3, w - 6, h - 6);
-    for (let i = 1; i < 12; i++) {
-      ctx.lineWidth = i === 6 ? 8 : 4;
-      ctx.beginPath();
-      ctx.moveTo((i * w) / 12, 0);
-      ctx.lineTo((i * w) / 12, h);
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#0b0d0f';
+    [0, w - endZone].forEach((x) => {
+      const gradient = ctx.createLinearGradient(x, 0, x + endZone, h);
+      gradient.addColorStop(0, '#a87f1c');
+      gradient.addColorStop(0.5, '#e2bf55');
+      gradient.addColorStop(1, '#b48a22');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, 0, endZone, h);
+    });
+    ctx.fillStyle = NAVY;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    const endText = spaced(franchiseName);
     [[endZone / 2, -Math.PI / 2], [w - endZone / 2, Math.PI / 2]].forEach(([x, rotation]) => {
       ctx.save();
       ctx.translate(x, h / 2);
       ctx.rotate(rotation);
-      fitText(ctx, spaced(abbreviation), h * 0.8, 150, DISPLAY_FONT);
-      ctx.fillText(spaced(abbreviation), 0, 0);
+      fitText(ctx, endText, h * 0.86, 210, DISPLAY_FONT);
+      ctx.fillText(endText, 0, 6);
       ctx.restore();
     });
-    ctx.beginPath();
-    ctx.arc(w / 2, h / 2, 150, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(8,12,10,0.55)';
-    ctx.fill();
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = palette.primary;
-    ctx.stroke();
-    ctx.fillStyle = palette.secondary;
-    ctx.font = `900 120px ${DISPLAY_FONT}`;
-    ctx.fillText('BE', w / 2, h / 2 + 6);
-  }, [abbreviation, palette.primary, palette.secondary]);
 
-  const scoreboardTexture = useCanvasTexture(2048, 768, (ctx, w, h) => {
-    ctx.fillStyle = '#020405';
+    // lines, yard numbers, hash marks
+    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.lineWidth = 14;
+    ctx.strokeRect(7, 7, w - 14, h - 14);
+    const yard = (w - endZone * 2) / 10;
+    for (let i = 0; i <= 10; i++) {
+      const x = endZone + i * yard;
+      ctx.lineWidth = i === 5 ? 12 : 8;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+      for (let k = 1; k < 5; k++) {
+        const hx = x + (k * yard) / 5;
+        if (i === 10) break;
+        ctx.lineWidth = 4;
+        [h * 0.06, h * 0.36, h * 0.6, h * 0.9].forEach((hy) => {
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(hx, hy + 26);
+          ctx.stroke();
+        });
+      }
+      if (i > 0 && i < 10) {
+        const label = String((i <= 5 ? i : 10 - i) * 10);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = `700 120px ${SERIF_FONT}`;
+        ctx.fillText(label, x, h * 0.16);
+        ctx.save();
+        ctx.translate(x, h * 0.84);
+        ctx.rotate(Math.PI);
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+      }
+    }
+  }, [franchiseName]);
+
+  const scoreboardTexture = useCanvasTexture(2048, 832, (ctx, w, h) => {
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#0b1426');
+    bg.addColorStop(1, '#03060d');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = palette.primary;
-    ctx.lineWidth = 14;
-    ctx.strokeRect(10, 10, w - 20, h - 20);
+    ctx.lineWidth = 6;
+    ctx.strokeRect(24, 24, w - 48, h - 48);
+    ctx.globalAlpha = 0.35;
+    ctx.strokeRect(40, 40, w - 80, h - 80);
+    ctx.globalAlpha = 1;
+    if (logo?.image) ctx.drawImage(logo.image as CanvasImageSource, w / 2 - 80, 50, 160, 160);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = palette.primary;
-    ctx.font = `900 54px ${DISPLAY_FONT}`;
-    ctx.fillText(spaced('Welcome home'), w / 2, 92);
-    ctx.fillStyle = '#ffffff';
-    fitText(ctx, franchiseName.toUpperCase(), w - 200, 150, DISPLAY_FONT);
-    ctx.fillText(franchiseName.toUpperCase(), w / 2, 238);
+    ctx.font = `900 46px ${DISPLAY_FONT}`;
+    ctx.fillText(spaced('Welcome home'), w / 2, 248);
+    ctx.fillStyle = '#f6f0e2';
+    fitText(ctx, franchiseName.toUpperCase(), w - 260, 150, SERIF_FONT, '700');
+    ctx.fillText(franchiseName.toUpperCase(), w / 2, 348);
     const stats: Array<[string, number]> = [['TITLES', titles], ['RIVALRY WINS', rivalryCount], ['UNLOCKS', unlocks]];
     stats.forEach(([label, value], index) => {
       const x = (w / 3) * index + w / 6;
-      ctx.fillStyle = palette.secondary;
-      ctx.font = `900 210px ${DISPLAY_FONT}`;
-      ctx.fillText(String(value), x, 480);
-      ctx.fillStyle = palette.primary;
-      ctx.font = `900 50px ${DISPLAY_FONT}`;
-      ctx.fillText(spaced(label), x, 660);
+      if (index > 0) {
+        ctx.fillStyle = 'rgba(217,180,59,0.45)';
+        ctx.fillRect((w / 3) * index - 2, 470, 4, 260);
+      }
+      const gold = ctx.createLinearGradient(0, 470, 0, 650);
+      gold.addColorStop(0, '#fff2c4');
+      gold.addColorStop(1, palette.primary);
+      ctx.fillStyle = gold;
+      ctx.font = `700 200px ${SERIF_FONT}`;
+      ctx.fillText(String(value), x, 580);
+      ctx.fillStyle = '#c9c2b2';
+      ctx.font = `900 42px ${DISPLAY_FONT}`;
+      ctx.fillText(spaced(label), x, 728);
     });
-  }, [franchiseName, titles, rivalryCount, unlocks, palette.primary, palette.secondary]);
+  }, [franchiseName, titles, rivalryCount, unlocks, palette.primary, logo]);
 
   const towers: Vec3[] = [[-30, 0, -19], [30, 0, -19], [-30, 0, 19], [30, 0, 19]];
 
   return <group>
-    {/* stands + outer wall as one stepped lathe, stretched into an oval */}
+    {/* stands (interior) — midnight concrete */}
     <mesh scale={[BOWL_X, 1, 1]}>
-      <latheGeometry args={[standPoints, 96]} />
-      <meshStandardMaterial color="#23272c" roughness={0.62} metalness={0.35} side={DoubleSide} />
+      <latheGeometry args={[standPoints, 120]} />
+      <meshStandardMaterial color="#121a2e" roughness={0.75} metalness={0.15} side={DoubleSide} />
     </mesh>
-    <instancedMesh ref={seatsRef} args={[undefined, undefined, seats.length]}>
-      <boxGeometry args={[0.9, 0.5, 0.55]} />
-      <meshStandardMaterial roughness={0.5} metalness={0.2} />
-    </instancedMesh>
-
-    {/* facade fins glow in franchise colour */}
-    {fins.map((fin, index) => <mesh key={index} position={[fin.x, 5.2, fin.z]} rotation={[0, fin.yaw, 0]}>
-      <boxGeometry args={[0.16, 10.2, 0.16]} />
-      <meshBasicMaterial color={palette.dimPrimary} toneMapped={false} />
+    {/* outer facade — ivory stone with champagne bands */}
+    <mesh position={[0, 5.1, 0]} scale={[BOWL_X, 1, 1]}>
+      <cylinderGeometry args={[FACADE_R, FACADE_R, 10.2, 160, 1, true]} />
+      <meshStandardMaterial color={IVORY} roughness={0.5} metalness={0.08} side={DoubleSide} />
+    </mesh>
+    <mesh position={[0, 10.2, 0]} scale={[BOWL_X, 1, 1]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[26, FACADE_R, 160, 1]} />
+      <meshStandardMaterial color="#1a2236" roughness={0.6} metalness={0.2} side={DoubleSide} />
+    </mesh>
+    {[2.2, 9.9].map((y) => <mesh key={y} position={[0, y, 0]} scale={[BOWL_X, 1, 1]} rotation={[Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[FACADE_R + 0.12, 0.09, 6, 200]} />
+      <meshStandardMaterial color={palette.primary} metalness={0.95} roughness={0.25} emissive={palette.primary} emissiveIntensity={0.35} />
+    </mesh>)}
+    {fins.map((fin, index) => <mesh key={index} position={[fin.x, 6.05, fin.z]} rotation={[0, fin.yaw, 0]}>
+      <boxGeometry args={[0.22, 7.6, 0.22]} />
+      <meshStandardMaterial color={palette.primary} metalness={0.9} roughness={0.3} emissive={palette.primary} emissiveIntensity={0.18} />
     </mesh>)}
 
-    {/* roof ring */}
-    <mesh position={[0, 12.6, 0]} scale={[BOWL_X, 1, 1]} rotation={[Math.PI / 2, 0, 0]}>
-      <torusGeometry args={[26.6, 0.9, 10, 120]} />
-      <meshStandardMaterial color="#15181b" metalness={0.85} roughness={0.25} />
+    <instancedMesh ref={seatsRef} args={[undefined, undefined, seats.length]}>
+      <boxGeometry args={[0.62, 0.4, 0.5]} />
+      <meshStandardMaterial roughness={0.55} metalness={0.15} />
+    </instancedMesh>
+    <instancedMesh ref={crowdRef} args={[undefined, undefined, crowd.length]}>
+      <capsuleGeometry args={[0.2, 0.42, 2, 6]} />
+      <meshStandardMaterial roughness={0.8} metalness={0} />
+    </instancedMesh>
+    <CrowdLights positions={flashPositions} />
+
+    <RibbonBoard radius={19.92} y={3.4} height={1.2} palette={palette} franchiseName={franchiseName} speed={0.012} />
+    <RibbonBoard radius={23.92} y={7} height={1.5} palette={palette} franchiseName={franchiseName} speed={-0.008} />
+
+    {/* roof halo */}
+    <mesh position={[0, 12.8, 0]} scale={[BOWL_X, 1, 1]} rotation={[Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[26.8, 0.75, 16, 160]} />
+      <meshStandardMaterial color="#1b2338" metalness={0.8} roughness={0.3} />
     </mesh>
-    <mesh position={[0, 11.65, 0]} scale={[BOWL_X, 1, 1]} rotation={[Math.PI / 2, 0, 0]}>
-      <torusGeometry args={[25.9, 0.12, 8, 160]} />
+    <mesh position={[0, 12.05, 0]} scale={[BOWL_X, 1, 1]} rotation={[Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[26.4, 0.16, 8, 200]} />
       <meshBasicMaterial color={palette.primary} toneMapped={false} />
     </mesh>
-    {Array.from({ length: 24 }, (_, index) => {
-      const angle = (index / 24) * Math.PI * 2;
-      return <mesh key={index} position={[Math.cos(angle) * 27.3 * BOWL_X, 11.4, Math.sin(angle) * 27.3]}>
-        <cylinderGeometry args={[0.18, 0.24, 2.4, 8]} />
-        <meshStandardMaterial color="#15181b" metalness={0.8} roughness={0.3} />
+    {Array.from({ length: 28 }, (_, index) => {
+      const angle = (index / 28) * Math.PI * 2;
+      return <mesh key={index} position={[Math.cos(angle) * 27.6 * BOWL_X, 11.4, Math.sin(angle) * 27.6]}>
+        <cylinderGeometry args={[0.14, 0.2, 2.6, 10]} />
+        <meshStandardMaterial color="#2a3248" metalness={0.7} roughness={0.35} />
       </mesh>;
     })}
 
-    {/* light towers */}
+    {/* light towers with beams cutting through the haze */}
     {towers.map((tower, index) => {
       const yaw = Math.atan2(-tower[0], -tower[2]);
-      return <group key={index} position={tower}>
-        <mesh position={[0, 12, 0]}>
-          <cylinderGeometry args={[0.35, 0.6, 24, 10]} />
-          <meshStandardMaterial color="#1a1d21" metalness={0.8} roughness={0.35} />
-        </mesh>
-        <group position={[0, 24.5, 0]} rotation={[0.45, yaw, 0]}>
-          <mesh>
-            <boxGeometry args={[5.6, 2.6, 0.5]} />
-            <meshStandardMaterial color="#111316" metalness={0.7} roughness={0.4} />
+      return <group key={index}>
+        <group position={tower}>
+          <mesh position={[0, 12, 0]}>
+            <cylinderGeometry args={[0.3, 0.55, 24, 12]} />
+            <meshStandardMaterial color={IVORY} metalness={0.4} roughness={0.35} />
           </mesh>
-          <mesh position={[0, 0, 0.27]}>
-            <planeGeometry args={[5.1, 2.1]} />
-            <meshBasicMaterial color="#fff7e6" toneMapped={false} />
-          </mesh>
+          <group position={[0, 24.5, 0]} rotation={[0.45, yaw, 0]}>
+            <mesh>
+              <boxGeometry args={[5.6, 2.6, 0.5]} />
+              <meshStandardMaterial color="#1a2030" metalness={0.7} roughness={0.4} />
+            </mesh>
+            <mesh position={[0, 0, 0.27]}>
+              <planeGeometry args={[5.1, 2.1]} />
+              <meshBasicMaterial color="#fff4dc" toneMapped={false} />
+            </mesh>
+          </group>
         </group>
+        <LightBeam from={[tower[0], 24.3, tower[2]]} to={[tower[0] * 0.25, 0, tower[2] * 0.25]} color="#fff1d2" />
       </group>;
     })}
+    <spotLight position={[-30, 24.5, -19]} angle={0.6} penumbra={0.8} intensity={420} distance={90} decay={2} color="#fff3dc" />
+    <spotLight position={[30, 24.5, 19]} angle={0.6} penumbra={0.8} intensity={420} distance={90} decay={2} color="#fff3dc" />
 
-    {/* field */}
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+    {/* field with the real Big Exec crown logo at midfield */}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} scale={[BOWL_X, 1, 1]}>
+      <circleGeometry args={[16, 96]} />
+      <meshStandardMaterial color="#0b3321" roughness={0.9} />
+    </mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
       <planeGeometry args={[40, 20]} />
-      <meshStandardMaterial map={fieldTexture} roughness={0.85} metalness={0} />
+      <meshStandardMaterial map={fieldTexture} roughness={0.82} metalness={0} />
     </mesh>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} scale={[BOWL_X, 1, 1]}>
-      <circleGeometry args={[16, 64]} />
-      <meshStandardMaterial color="#0b2416" roughness={0.9} />
-    </mesh>
+    {logo && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.07, 0]}>
+      <planeGeometry args={[8.6, 8.6]} />
+      <meshStandardMaterial map={logo} transparent alphaTest={0.08} roughness={0.75} metalness={0} polygonOffset polygonOffsetFactor={-2} />
+    </mesh>}
 
-    {/* scoreboard above the north stands */}
+    {/* floating scoreboard above the north stands */}
     <Clickable id="scoreboard" onSelect={onSelect}>
-      <group position={[0, 16.5, -26.4]}>
-        <mesh position={[0, -5.2, -0.4]}>
-          <boxGeometry args={[1, 6, 1]} />
-          <meshStandardMaterial color="#15181b" metalness={0.8} roughness={0.3} />
-        </mesh>
+      <group position={[0, 17.4, -26.6]}>
         <mesh>
-          <boxGeometry args={[17.4, 6.8, 0.8]} />
-          <meshStandardMaterial color="#0c0e10" metalness={0.75} roughness={0.3} />
+          <boxGeometry args={[18.4, 7.8, 0.9]} />
+          <meshStandardMaterial color="#1b2338" metalness={0.75} roughness={0.3} />
         </mesh>
-        <mesh position={[0, 0, 0.41]}>
-          <planeGeometry args={[16.6, 6.2]} />
-          <meshStandardMaterial color="#000000" emissive="#ffffff" emissiveMap={scoreboardTexture} emissiveIntensity={0.85} roughness={0.6} />
+        <mesh position={[0, 0, 0.46]}>
+          <planeGeometry args={[17.6, 7.15]} />
+          <meshStandardMaterial color="#000000" emissive="#ffffff" emissiveMap={scoreboardTexture} emissiveIntensity={0.8} roughness={0.5} />
+        </mesh>
+        <mesh position={[0, -3.95, 0.3]}>
+          <boxGeometry args={[18.4, 0.1, 0.1]} />
+          <meshBasicMaterial color={palette.primary} toneMapped={false} />
         </mesh>
       </group>
     </Clickable>
@@ -625,7 +951,7 @@ function Banner({ spec, palette, abbreviation, x }: { spec: BannerSpec; palette:
   </group>;
 }
 
-function FrontGate({ palette, franchiseName, abbreviation, establishedYear, titleYears, onSelect }: { palette: Palette; franchiseName: string; abbreviation: string; establishedYear?: number | null; titleYears: Array<number | null>; onSelect: (id: StadiumWorldExhibitId) => void }) {
+function FrontGate({ palette, franchiseName, abbreviation, establishedYear, titleYears, logo, onSelect }: { palette: Palette; franchiseName: string; abbreviation: string; establishedYear?: number | null; titleYears: Array<number | null>; logo: Texture | null; onSelect: (id: StadiumWorldExhibitId) => void }) {
   const signTexture = useCanvasTexture(2048, 256, (ctx, w, h) => {
     ctx.fillStyle = '#050607';
     ctx.fillRect(0, 0, w, h);
@@ -670,7 +996,7 @@ function FrontGate({ palette, franchiseName, abbreviation, establishedYear, titl
       {[-6.6, 6.6].map((x) => <group key={x}>
         <mesh position={[x, 6.6, gateZ]}>
           <boxGeometry args={[2.2, 13.2, 2.4]} />
-          <meshStandardMaterial color="#1a1d21" metalness={0.75} roughness={0.32} />
+          <meshStandardMaterial color="#cdbf9f" metalness={0.1} roughness={0.5} />
         </mesh>
         <mesh position={[x + (x < 0 ? 1.12 : -1.12), 6.6, gateZ + 1.21]}>
           <boxGeometry args={[0.1, 13.2, 0.1]} />
@@ -679,7 +1005,7 @@ function FrontGate({ palette, franchiseName, abbreviation, establishedYear, titl
       </group>)}
       <mesh position={[0, 12.4, gateZ]}>
         <boxGeometry args={[15.4, 2.6, 2.6]} />
-        <meshStandardMaterial color="#121417" metalness={0.8} roughness={0.28} />
+        <meshStandardMaterial color="#cdbf9f" metalness={0.1} roughness={0.5} />
       </mesh>
       <mesh position={[0, 12.4, gateZ + 1.31]}>
         <planeGeometry args={[13.6, 1.7]} />
@@ -689,9 +1015,14 @@ function FrontGate({ palette, franchiseName, abbreviation, establishedYear, titl
         <boxGeometry args={[13.6, 0.08, 0.06]} />
         <meshBasicMaterial color={palette.primary} toneMapped={false} />
       </mesh>
-      <group position={[0, 15.4, gateZ + 0.4]}>
-        <Crest palette={palette} abbreviation={abbreviation} earned={titleYears.length > 0} />
-      </group>
+      {logo
+        ? <mesh position={[0, 16.1, gateZ + 0.6]}>
+          <planeGeometry args={[5.2, 5.2]} />
+          <meshStandardMaterial map={logo} transparent alphaTest={0.08} roughness={0.45} metalness={0.1} emissive="#ffffff" emissiveMap={logo} emissiveIntensity={0} side={DoubleSide} />
+        </mesh>
+        : <group position={[0, 15.4, gateZ + 0.4]}>
+          <Crest palette={palette} abbreviation={abbreviation} earned={titleYears.length > 0} />
+        </group>}
       {/* tunnel mouth: dark passage with the lit field glowing at the far end */}
       <mesh position={[0, 5.4, gateZ - 0.6]}>
         <planeGeometry args={[11, 10.8]} />
@@ -993,7 +1324,7 @@ function Plaza({ palette, rivalryCount, unlockedFeatures, nextUnlock, onSelect }
       <cylinderGeometry args={[0.09, 0.11, 0.7, 8]} />
       <meshBasicMaterial color="#b9ad92" toneMapped={false} />
     </mesh>))}
-    <pointLight position={[0, 7, 50]} color="#fff0d0" intensity={60} distance={30} decay={2} />
+    <pointLight position={[0, 7, 50]} color="#fff0d0" intensity={32} distance={30} decay={2} />
     <pointLight position={[0, 4, 37]} color={palette.primary} intensity={18} distance={20} decay={2} />
   </group>;
 }
@@ -1015,14 +1346,15 @@ function useReducedMotion() {
 
 function WorldScene(props: StadiumWorldPrototypeProps & { zone: StadiumWorldZone; selected: StadiumWorldExhibitId | null; look: MutableRefObject<LookState>; arriving: MutableRefObject<boolean>; reducedMotion: boolean; onSelect: (id: StadiumWorldExhibitId) => void; palette: Palette }) {
   const { palette, onSelect } = props;
+  const logo = useLogoTexture();
   return <>
-    <fog attach="fog" args={['#05080d', 70, 260]} />
+    <fog attach="fog" args={['#0a1222', 80, 300]} />
     <SceneEnvironment />
     <NightSky />
-    <hemisphereLight args={['#8fa3bd', '#050608', 0.55]} />
-    <directionalLight position={[10, 40, 18]} intensity={1.5} color="#fff6e6" />
-    <directionalLight position={[-20, 25, 60]} intensity={0.55} color="#c9d6ea" />
-    <pointLight position={[0, 20, 0]} color="#fff4de" intensity={160} distance={60} decay={2} />
+    <hemisphereLight args={['#6d82a8', '#05070d', 0.5]} />
+    <directionalLight position={[10, 40, 18]} intensity={1.25} color="#ffeccc" />
+    <directionalLight position={[-20, 25, 60]} intensity={0.5} color="#b9c8e6" />
+    <pointLight position={[0, 20, 0]} color="#fff4de" intensity={140} distance={60} decay={2} />
 
     <Ground />
     <Bowl
@@ -1032,9 +1364,10 @@ function WorldScene(props: StadiumWorldPrototypeProps & { zone: StadiumWorldZone
       titles={props.titleYears.length}
       rivalryCount={props.rivalryCount}
       unlocks={props.unlockedFeatures.length}
+      logo={logo}
       onSelect={onSelect}
     />
-    <FrontGate palette={palette} franchiseName={props.franchiseName} abbreviation={props.abbreviation} establishedYear={props.establishedYear} titleYears={props.titleYears} onSelect={onSelect} />
+    <FrontGate palette={palette} franchiseName={props.franchiseName} abbreviation={props.abbreviation} establishedYear={props.establishedYear} titleYears={props.titleYears} logo={logo} onSelect={onSelect} />
     <OwnersSuite palette={palette} titleYears={props.titleYears} franchiseName={props.franchiseName} onSelect={onSelect} />
     <Plaza palette={palette} rivalryCount={props.rivalryCount} unlockedFeatures={props.unlockedFeatures} nextUnlock={props.nextUnlock} onSelect={onSelect} />
 
