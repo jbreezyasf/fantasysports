@@ -25,7 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install pinned 3D runtime
-        run: npm install three@0.186.1 @react-three/fiber@9.8.1 --workspace @fantasy-all-sports/web --save-exact
+        run: npm install three@0.186.1 @react-three/fiber@9.8.1 --workspace @fantasy-all-sports/web --save-exact && npm install @types/three@0.186.0 --workspace @fantasy-all-sports/web --save-dev --save-exact
       - name: Commit lockfile update
         run: |
           if git diff --quiet -- apps/web/package.json package-lock.json; then
