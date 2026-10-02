@@ -1,0 +1,144 @@
+/* Stadium World: full-bleed 3D stage with overlaid HUD (NASA Eyes-style). */
+.stadiumWorldHost { display: grid; gap: 12px; }
+.stadiumWorld { position: relative; }
+
+.stadiumWorldStage {
+  position: relative;
+  height: clamp(540px, calc(100svh - 120px), 940px);
+  overflow: hidden;
+  border: 1px solid rgba(217, 180, 59, 0.35);
+  border-radius: 18px;
+  background: #040910;
+  touch-action: pan-y;
+  user-select: none;
+  outline: none;
+}
+.stadiumWorldStage:focus-visible { box-shadow: 0 0 0 3px #f5f1e8; }
+.stadiumWorldCanvasShell, .stadiumWorldCanvasShell > div { position: absolute; inset: 0; }
+.stadiumWorldCanvasElement { display: block; width: 100%; height: 100%; cursor: grab; }
+.stadiumWorldStage:active .stadiumWorldCanvasElement { cursor: grabbing; }
+
+/* top bar */
+.stadiumWorldTopBar {
+  position: absolute; top: 14px; left: 14px; right: 14px;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  pointer-events: none;
+}
+.stadiumWorldPlace {
+  display: grid; gap: 2px; padding: 10px 14px;
+  background: rgba(4, 7, 10, 0.62); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px;
+}
+.stadiumWorldPlace span { color: #d9b43b; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.14em; }
+.stadiumWorldPlace strong { color: #fff; font-size: 1.15rem; letter-spacing: 0.01em; }
+.stadiumWorldGhostButton {
+  pointer-events: auto; min-height: 40px; padding: 8px 14px;
+  color: #f5f1e8; background: rgba(4, 7, 10, 0.62); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px;
+  font-size: 0.75rem; font-weight: 800; letter-spacing: 0.04em; cursor: pointer;
+}
+.stadiumWorldGhostButton:hover, .stadiumWorldGhostButton:focus-visible { border-color: #d9b43b; }
+
+/* arrival title */
+.stadiumWorldWelcome {
+  position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px;
+  pointer-events: none; color: #fff;
+  animation: stadiumWelcome 5.2s ease forwards;
+}
+.stadiumWorldWelcome span { color: #d9b43b; font-size: clamp(0.75rem, 2.4vw, 1rem); font-weight: 900; letter-spacing: 0.4em; }
+.stadiumWorldWelcome strong {
+  font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.4rem, 9vw, 5.6rem); line-height: 0.95;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.8);
+}
+@keyframes stadiumWelcome {
+  0% { opacity: 0; transform: translateY(10px); }
+  15%, 70% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+.stadiumWorldHint {
+  position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%);
+  margin: 0; padding: 8px 14px; white-space: nowrap;
+  color: #f5f1e8; background: rgba(4, 7, 10, 0.6); border-radius: 999px;
+  font-size: 0.78rem; font-weight: 700; pointer-events: none;
+}
+
+/* inspection card */
+.stadiumWorldCard {
+  position: absolute; right: 14px; top: 86px; width: min(360px, calc(100% - 28px));
+  max-height: calc(100% - 180px); overflow: auto;
+  padding: 16px 18px; color: #e9e3d6;
+  background: rgba(6, 9, 12, 0.82); backdrop-filter: blur(14px);
+  border: 1px solid rgba(217, 180, 59, 0.45); border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  animation: stadiumCard 0.35s ease;
+}
+@keyframes stadiumCard { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.stadiumWorldCardHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.stadiumWorldStatus { font-size: 0.66rem; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; color: #b9bdc1; }
+.stadiumWorldStatus.earned { color: #d9b43b; }
+.stadiumWorldStatus.locked { color: #9aa3ab; }
+.stadiumWorldClose {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent; color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer;
+}
+.stadiumWorldMore { display: none; }
+.stadiumWorldCard h3 { margin: 6px 0 6px; color: #fff; font-family: Georgia, "Times New Roman", serif; font-size: 1.55rem; line-height: 1.1; }
+.stadiumWorldCard p { margin: 0 0 10px; font-size: 0.92rem; line-height: 1.45; }
+.stadiumWorldCard dl { display: grid; gap: 6px; margin: 0; }
+.stadiumWorldCard dl div { display: flex; justify-content: space-between; gap: 12px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.stadiumWorldCard dt { color: #a9a294; font-size: 0.78rem; }
+.stadiumWorldCard dd { margin: 0; color: #fff; font-weight: 800; font-size: 0.85rem; text-align: right; }
+
+/* destinations */
+.stadiumWorldTravel {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; gap: 8px; padding: 14px; overflow-x: auto; scrollbar-width: none;
+  background: linear-gradient(to top, rgba(2, 4, 6, 0.85), rgba(2, 4, 6, 0));
+}
+.stadiumWorldTravel::-webkit-scrollbar { display: none; }
+.stadiumWorldTravel button {
+  flex: 0 0 auto; min-height: 44px; padding: 10px 16px;
+  color: #f5f1e8; background: rgba(10, 13, 16, 0.75); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px;
+  font-size: 0.8rem; font-weight: 800; letter-spacing: 0.04em; cursor: pointer; white-space: nowrap;
+}
+.stadiumWorldTravel button:hover, .stadiumWorldTravel button:focus-visible { border-color: #d9b43b; }
+.stadiumWorldTravel button[aria-pressed="true"] { color: #0a0b0c; background: linear-gradient(135deg, #f5f1e8, #d9b43b); border-color: transparent; }
+
+/* states */
+.stadiumWorldModeBar { display: flex; justify-content: flex-end; }
+.stadiumWorldModeToggle { min-height: 44px; }
+.stadiumWorldNotice { margin: 0; padding: 10px 12px; border: 1px solid #3b362e; background: #101113; color: #d7d0c3; font-size: 0.85rem; }
+.stadiumWorldLoading {
+  display: grid; place-items: center; height: clamp(540px, calc(100svh - 120px), 940px);
+  border: 1px solid #3b362e; border-radius: 18px; background: #040910; color: #d7d0c3; font-weight: 700;
+}
+.stadiumWorldFallback { display: grid; place-items: center; min-height: 440px; padding: 24px; color: #fff; text-align: center; }
+.stadiumWorldHarness { display: grid; gap: 12px; padding: 16px; }
+
+@media (max-width: 760px) {
+  .stadiumWorldStage { height: clamp(520px, calc(100svh - 150px), 820px); border-radius: 14px; margin: 0 -4px; }
+  .stadiumWorldTopBar { top: 10px; left: 10px; right: 10px; }
+  .stadiumWorldPlace { padding: 8px 12px; }
+  .stadiumWorldPlace strong { font-size: 1rem; }
+  .stadiumWorldCard {
+    left: 10px; right: 10px; top: auto; bottom: 74px; width: auto; max-height: 46%;
+    padding: 14px 16px;
+  }
+  .stadiumWorldCard h3 { font-size: 1.2rem; margin-bottom: 2px; }
+  .stadiumWorldCard:not(.expanded) p, .stadiumWorldCard:not(.expanded) dl { display: none; }
+  .stadiumWorldCard.expanded h3 { margin-bottom: 8px; }
+  .stadiumWorldMore {
+    display: inline-flex; align-items: center; min-height: 36px; margin: 4px 0 2px; padding: 6px 14px;
+    color: #0a0b0c; background: #d9b43b; border: 0; border-radius: 999px; font-size: 0.75rem; font-weight: 900; cursor: pointer;
+  }
+  .stadiumWorldCard.expanded .stadiumWorldMore { margin-bottom: 10px; color: #f5f1e8; background: transparent; border: 1px solid rgba(255, 255, 255, 0.25); }
+  .stadiumWorldTravel { padding: 10px; }
+  .stadiumWorldHint { bottom: 72px; font-size: 0.72rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stadiumWorldWelcome, .stadiumWorldCard { animation: none; }
+  .stadiumWorldWelcome { display: none; }
+}

@@ -1,0 +1,46 @@
+name: Stadium World Visual
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/app/franchises/**/stadium/**'
+      - 'apps/web/app/visual/stadium-world/**'
+      - 'apps/web/app/stadium-world.css'
+      - 'scripts/qa-stadium-world-visual.mjs'
+      - '.github/workflows/stadium-world-visual.yml'
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_APP_URL: https://ci.bigexec.invalid
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_only_not_a_real_key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @fantasy-all-sports/web
+      - run: npx playwright install --with-deps chromium
+      - name: Start preview harness
+        run: |
+          npm exec --workspace @fantasy-all-sports/web next start -- -p 3000 > /tmp/stadium-world-next.log 2>&1 &
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:3000/visual/stadium-world >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/stadium-world-next.log
+          exit 1
+      - name: Verify rendered Stadium World pixels and navigation
+        run: node scripts/qa-stadium-world-visual.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stadium-world-visual
+          path: qa-artifacts/stadium-world
+          if-no-files-found: warn
