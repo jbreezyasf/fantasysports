@@ -35,6 +35,8 @@ async function verifyViewport(browser, name, viewport) {
   await page.locator('canvas[data-render-state="ready"]').waitFor({ timeout: 15000 });
 
   const initial = await canvasMetrics(page);
+  console.log(JSON.stringify({ viewport: name, stage: 'concourse', metrics: initial }));
+  await page.screenshot({ path: `${outDir}/${name}-concourse.png`, fullPage: true });
   assert(initial.supported, `${name}: WebGL context unavailable`);
   assert(initial.nonDark > 1500, `${name}: canvas is effectively blank (${initial.nonDark} non-dark pixels)`);
   assert(initial.gold > 150, `${name}: expected Big Exec gold geometry is not visible (${initial.gold} pixels)`);
@@ -44,11 +46,15 @@ async function verifyViewport(browser, name, viewport) {
   await page.locator('canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
   await page.getByText('Owner’s Office', { exact: true }).first().waitFor();
   const office = await canvasMetrics(page);
+  console.log(JSON.stringify({ viewport: name, stage: 'owners-office', metrics: office }));
+  await page.screenshot({ path: `${outDir}/${name}-owners-office.png`, fullPage: true });
   assert(office.gold > 100, `${name}: Owner's Office trophy geometry did not render`);
 
   await page.getByRole('button', { name: 'Rivalry Hall' }).click();
   await page.locator('canvas[data-render-state="ready"]').waitFor({ timeout: 10000 });
   const rivalry = await canvasMetrics(page);
+  console.log(JSON.stringify({ viewport: name, stage: 'rivalry-hall', metrics: rivalry }));
+  await page.screenshot({ path: `${outDir}/${name}-rivalry-hall.png`, fullPage: true });
   assert(rivalry.gold > 100, `${name}: Rivalry Hall monument geometry did not render`);
 
   await page.screenshot({ path: `${outDir}/${name}.png`, fullPage: true });
