@@ -1,6 +1,15 @@
 'use client';
 
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Color,
+  Group,
+  MathUtils,
+  Mesh,
+  PerspectiveCamera,
+  Vector3
+} from 'three';
 import { buildStadiumWorldObjects, STADIUM_WORLD_ZONES, type StadiumWorldZone } from './stadiumWorldModel';
 
 type Props = {
@@ -13,189 +22,326 @@ type Props = {
   unlockedFeatureCount: number;
 };
 
-type Vec3 = [number, number, number];
+const ZONE_TARGETS: Record<StadiumWorldZone, [number, number, number]> = {
+  concourse: [0, 0.55, -3.35],
+  'owners-office': [-4.1, 0.65, -1.4],
+  'rivalry-hall': [4.15, 0.65, -1.25]
+};
 
-const vertexShader = `
-attribute vec3 aPosition;
-uniform mat4 uMatrix;
-varying float vShade;
-void main(){
-  gl_Position = uMatrix * vec4(aPosition,1.0);
-  vShade = 0.72 + 0.28 * max(max(abs(aPosition.x), abs(aPosition.y)), abs(aPosition.z));
-}
-`;
-const fragmentShader = `
-precision mediump float;
-uniform vec4 uColor;
-varying float vShade;
-void main(){ gl_FragColor = vec4(uColor.rgb * vShade, uColor.a); }
-`;
-
-function multiply(a:number[],b:number[]){
-  const out=new Array(16).fill(0);
-  for(let col=0;col<4;col++){
-    for(let row=0;row<4;row++){
-      out[col*4+row]=
-        a[0*4+row]*b[col*4+0]+
-        a[1*4+row]*b[col*4+1]+
-        a[2*4+row]*b[col*4+2]+
-        a[3*4+row]*b[col*4+3];
-    }
-  }
-  return out;
-}
-function perspective(fov:number,aspect:number,near:number,far:number){
-  const f=1/Math.tan(fov/2), nf=1/(near-far);
-  return [f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0];
-}
-function translate(x:number,y:number,z:number){ return [1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]; }
-function scale(x:number,y:number,z:number){ return [x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1]; }
-function subtract(a:Vec3,b:Vec3):Vec3{return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
-function normalize(v:Vec3):Vec3{
-  const length=Math.hypot(v[0],v[1],v[2])||1;
-  return [v[0]/length,v[1]/length,v[2]/length];
-}
-function cross(a:Vec3,b:Vec3):Vec3{
-  return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-}
-function dot(a:Vec3,b:Vec3){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
-function lookAt(eye:Vec3,target:Vec3):number[]{
-  const z=normalize(subtract(eye,target));
-  const x=normalize(cross([0,1,0],z));
-  const y=cross(z,x);
-  return [
-    x[0],y[0],z[0],0,
-    x[1],y[1],z[1],0,
-    x[2],y[2],z[2],0,
-    -dot(x,eye),-dot(y,eye),-dot(z,eye),1
-  ];
-}
-function hexToRgba(hex:string,alpha=1):[number,number,number,number]{
-  const safe=/^#[0-9a-fA-F]{6}$/.test(hex)?hex:'#d9b43b';
-  return [parseInt(safe.slice(1,3),16)/255,parseInt(safe.slice(3,5),16)/255,parseInt(safe.slice(5,7),16)/255,alpha];
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReduced(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+  return reduced;
 }
 
-const cube = new Float32Array([
-  -1,-1,-1, 1,-1,-1, 1,1,-1, -1,-1,-1, 1,1,-1, -1,1,-1,
-  -1,-1,1, 1,1,1, 1,-1,1, -1,-1,1, -1,1,1, 1,1,1,
-  -1,-1,-1, -1,1,-1, -1,1,1, -1,-1,-1, -1,1,1, -1,-1,1,
-  1,-1,-1, 1,-1,1, 1,1,1, 1,-1,-1, 1,1,1, 1,1,-1,
-  -1,1,-1, 1,1,-1, 1,1,1, -1,1,-1, 1,1,1, -1,1,1,
-  -1,-1,-1, 1,-1,1, 1,-1,-1, -1,-1,-1, -1,-1,1, 1,-1,1
-]);
+function CameraRig({ zone, reducedMotion }: { zone: StadiumWorldZone; reducedMotion: boolean }) {
+  const { camera } = useThree();
+  const zoneSpec = STADIUM_WORLD_ZONES.find((item) => item.id === zone) ?? STADIUM_WORLD_ZONES[0];
+  const targetPosition = useMemo(() => new Vector3(...zoneSpec.camera), [zoneSpec.camera]);
+  const targetLook = useMemo(() => new Vector3(...ZONE_TARGETS[zone]), [zone]);
 
-function drawBox(gl:WebGLRenderingContext, matrixLoc:WebGLUniformLocation, colorLoc:WebGLUniformLocation, vp:number[], position:Vec3, size:Vec3, color:[number,number,number,number]){
-  const model=multiply(translate(...position),scale(...size));
-  const matrix=multiply(vp,model);
-  gl.uniformMatrix4fv(matrixLoc,false,new Float32Array(matrix));
-  gl.uniform4fv(colorLoc,new Float32Array(color));
-  gl.drawArrays(gl.TRIANGLES,0,36);
+  useEffect(() => {
+    if (!reducedMotion) return;
+    camera.position.copy(targetPosition);
+    camera.lookAt(targetLook);
+  }, [camera, reducedMotion, targetLook, targetPosition]);
+
+  useFrame((_, delta) => {
+    if (reducedMotion) return;
+    const t = 1 - Math.exp(-3.8 * delta);
+    camera.position.lerp(targetPosition, t);
+    const currentDirection = new Vector3();
+    camera.getWorldDirection(currentDirection);
+    const currentLook = camera.position.clone().add(currentDirection.multiplyScalar(8));
+    currentLook.lerp(targetLook, t);
+    camera.lookAt(currentLook);
+  });
+
+  return null;
 }
 
-export function StadiumWorldPrototype(props:Props){
-  const canvasRef=useRef<HTMLCanvasElement>(null);
-  const [zone,setZone]=useState<StadiumWorldZone>('concourse');
-  const [selectedId,setSelectedId]=useState<'champions-trophy'|'rivalry-monument'|'legacy-wall'>('legacy-wall');
-  const [supported,setSupported]=useState(true);
-  const objects=useMemo(()=>buildStadiumWorldObjects({
-    titleCount:props.titleCount,
-    rivalryCount:props.rivalryCount,
-    unlockedFeatureCount:props.unlockedFeatureCount
-  }),[props.titleCount,props.rivalryCount,props.unlockedFeatureCount]);
-  const selected=objects.find((item)=>item.id===selectedId) ?? objects[0];
+function StadiumShell({ primary, secondary, reducedMotion }: { primary: string; secondary: string; reducedMotion: boolean }) {
+  const ringRef = useRef<Group>(null);
+  useFrame((_, delta) => {
+    if (!reducedMotion && ringRef.current) ringRef.current.rotation.z += delta * 0.018;
+  });
 
-  useEffect(()=>{
-    const canvas=canvasRef.current;
-    if(!canvas) return;
-    canvas.dataset.renderState='loading';
-    const gl=canvas.getContext('webgl',{antialias:true,alpha:false,preserveDrawingBuffer:true});
-    if(!gl){ setSupported(false); return; }
-
-    const compile=(type:number,source:string)=>{
-      const shader=gl.createShader(type);
-      if(!shader) throw new Error('Unable to create WebGL shader.');
-      gl.shaderSource(shader,source); gl.compileShader(shader);
-      if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) ?? 'Shader compile failed.');
-      return shader;
+  const columns = useMemo(() => Array.from({ length: 18 }, (_, index) => {
+    const angle = (index / 18) * Math.PI * 2;
+    return {
+      key: index,
+      x: Math.cos(angle) * 8.1,
+      z: Math.sin(angle) * 5.1 - 1.7,
+      rotation: -angle
     };
-    const program=gl.createProgram();
-    if(!program) return;
-    gl.attachShader(program,compile(gl.VERTEX_SHADER,vertexShader));
-    gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragmentShader));
-    gl.linkProgram(program); gl.useProgram(program);
-    const positionLoc=gl.getAttribLocation(program,'aPosition');
-    const matrixLoc=gl.getUniformLocation(program,'uMatrix');
-    const colorLoc=gl.getUniformLocation(program,'uColor');
-    if(matrixLoc===null||colorLoc===null) return;
-    const buffer=gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
-    gl.bufferData(gl.ARRAY_BUFFER,cube,gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(positionLoc);
-    gl.vertexAttribPointer(positionLoc,3,gl.FLOAT,false,0,0);
-    gl.enable(gl.DEPTH_TEST);
-    gl.disable(gl.CULL_FACE);
+  }), []);
 
-    const active=STADIUM_WORLD_ZONES.find((item)=>item.id===zone) ?? STADIUM_WORLD_ZONES[0];
-    const targets:Record<StadiumWorldZone,Vec3>={
-      'concourse':[0,.45,-3.5],
-      'owners-office':[-4.15,.3,-1.4],
-      'rivalry-hall':[4.2,.45,-1.2]
-    };
-    const resize=()=>{
-      const ratio=Math.min(window.devicePixelRatio||1,2);
-      const width=Math.max(1,Math.floor(canvas.clientWidth*ratio));
-      const height=Math.max(1,Math.floor(canvas.clientHeight*ratio));
-      if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
-      gl.viewport(0,0,width,height);
-    };
-    resize();
-    const projection=perspective(Math.PI/3,canvas.width/canvas.height,.1,100);
-    const vp=multiply(projection,lookAt(active.camera,targets[active.id]));
-    gl.clearColor(.025,.035,.035,1);
-    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    const gold=hexToRgba(props.primary);
-    const ivory=hexToRgba(props.secondary);
-    const dark:[number,number,number,number]=[.035,.055,.06,1];
-    const stone:[number,number,number,number]=[.10,.12,.12,1];
+  return <group>
+    <mesh position={[0, -1.16, -1.1]} receiveShadow>
+      <cylinderGeometry args={[10.8, 10.8, 0.22, 64]} />
+      <meshStandardMaterial color="#07100c" roughness={0.7} metalness={0.25} />
+    </mesh>
 
-    drawBox(gl,matrixLoc,colorLoc,vp,[0,-1.2,0],[11,.12,11],dark);
-    drawBox(gl,matrixLoc,colorLoc,vp,[0,-.92,-3.2],[6.8,.05,3.7],[.07,.12,.09,1]);
-    for(let i=-5;i<=5;i+=2){
-      drawBox(gl,matrixLoc,colorLoc,vp,[i,-.84,-3.2],[.035,.03,3.6],[.6,.5,.19,1]);
+    <mesh position={[0, -1.02, -2.55]} receiveShadow>
+      <boxGeometry args={[12.6, 0.08, 5.7]} />
+      <meshStandardMaterial color="#0a2b1b" roughness={0.9} />
+    </mesh>
+
+    {Array.from({ length: 9 }, (_, index) => (
+      <mesh key={index} position={[-5 + index * 1.25, -0.96, -2.55]} receiveShadow>
+        <boxGeometry args={[0.025, 0.025, 5.55]} />
+        <meshStandardMaterial color={index === 4 ? secondary : '#b49a49'} emissive={index === 4 ? primary : '#000000'} emissiveIntensity={index === 4 ? 0.22 : 0} />
+      </mesh>
+    ))}
+
+    <group ref={ringRef} rotation={[Math.PI / 2, 0, 0]} position={[0, 3.25, -1.7]}>
+      <mesh castShadow>
+        <torusGeometry args={[8.15, 0.18, 12, 96]} />
+        <meshStandardMaterial color="#171b18" metalness={0.82} roughness={0.28} />
+      </mesh>
+      <mesh rotation={[0, 0, Math.PI / 36]}>
+        <torusGeometry args={[7.72, 0.055, 8, 96]} />
+        <meshStandardMaterial color={primary} emissive={primary} emissiveIntensity={0.36} metalness={0.72} roughness={0.28} />
+      </mesh>
+    </group>
+
+    {columns.map((column) => <group key={column.key} position={[column.x, 0.8, column.z]} rotation={[0, column.rotation, 0]}>
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[0.13, 0.18, 4.4, 10]} />
+        <meshStandardMaterial color="#151a17" metalness={0.72} roughness={0.38} />
+      </mesh>
+      <mesh position={[0, 2.22, 0]}>
+        <boxGeometry args={[0.5, 0.08, 0.22]} />
+        <meshStandardMaterial color={primary} emissive={primary} emissiveIntensity={0.42} />
+      </mesh>
+    </group>)}
+
+    <mesh position={[0, 2.55, -5.3]} castShadow receiveShadow>
+      <boxGeometry args={[11.7, 5.4, 0.24]} />
+      <meshStandardMaterial color="#101512" metalness={0.42} roughness={0.58} />
+    </mesh>
+    <mesh position={[0, 2.15, -5.12]}>
+      <boxGeometry args={[6.4, 2.05, 0.06]} />
+      <meshStandardMaterial color="#020403" emissive="#082117" emissiveIntensity={0.44} metalness={0.28} roughness={0.55} />
+    </mesh>
+    <mesh position={[0, 3.24, -5.05]}>
+      <boxGeometry args={[6.65, 0.07, 0.1]} />
+      <meshStandardMaterial color={primary} emissive={primary} emissiveIntensity={0.55} />
+    </mesh>
+
+    <mesh position={[0, -0.85, 2.35]} receiveShadow>
+      <boxGeometry args={[7.9, 0.18, 2.5]} />
+      <meshStandardMaterial color="#141714" metalness={0.58} roughness={0.52} />
+    </mesh>
+    <mesh position={[0, -0.73, 1.35]}>
+      <boxGeometry args={[5.5, 0.04, 0.07]} />
+      <meshStandardMaterial color={primary} emissive={primary} emissiveIntensity={0.5} />
+    </mesh>
+  </group>;
+}
+
+function ChampionsTrophy({ earned, primary, secondary, titleCount }: { earned: boolean; primary: string; secondary: string; titleCount: number }) {
+  const trophyRef = useRef<Group>(null);
+  const reducedMotion = useReducedMotion();
+  useFrame((state) => {
+    if (!reducedMotion && trophyRef.current && earned) {
+      trophyRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.45) * 0.12;
     }
-    drawBox(gl,matrixLoc,colorLoc,vp,[0,3.5,-5.2],[10.5,4.6,.18],stone);
-    drawBox(gl,matrixLoc,colorLoc,vp,[-5.4,2.2,0],[.18,3.4,5.2],stone);
-    drawBox(gl,matrixLoc,colorLoc,vp,[5.4,2.2,0],[.18,3.4,5.2],stone);
-    drawBox(gl,matrixLoc,colorLoc,vp,[0,.1,-3.9],[4.2,.15,.9],gold);
-    drawBox(gl,matrixLoc,colorLoc,vp,[0,1.1,-4.15],[2.6,.95,.18],ivory);
+  });
 
-    const trophyEarned=props.titleCount>0;
-    drawBox(gl,matrixLoc,colorLoc,vp,[-4.15,-.55,-1.4],[1.25,.12,1.1],stone);
-    drawBox(gl,matrixLoc,colorLoc,vp,[-4.15,.2,-1.4],[.5,.72,.5],trophyEarned?gold:[.18,.18,.18,1]);
-    drawBox(gl,matrixLoc,colorLoc,vp,[-4.15,1.05,-1.4],[.9,.12,.9],trophyEarned?ivory:[.25,.25,.25,1]);
-    drawBox(gl,matrixLoc,colorLoc,vp,[4.2,.15,-1.2],[.95,1.25,.45],props.rivalryCount>0?gold:[.16,.16,.16,1]);
-    for(let i=0;i<Math.min(props.unlockedFeatureCount,6);i++){
-      drawBox(gl,matrixLoc,colorLoc,vp,[-2.5+i,1.8,-5.0],[.36,.52,.12],i%2?ivory:gold);
-    }
+  const gold = earned ? primary : '#343630';
+  const ivory = earned ? secondary : '#4b4e47';
 
-    gl.finish();
-    canvas.dataset.renderState=gl.getError()===gl.NO_ERROR?'ready':'failed';
+  return <group position={[-4.15, -0.7, -1.4]}>
+    <mesh receiveShadow>
+      <cylinderGeometry args={[1.28, 1.42, 0.24, 28]} />
+      <meshStandardMaterial color="#080b09" metalness={0.86} roughness={0.24} />
+    </mesh>
+    <mesh position={[0, 0.13, 0]}>
+      <cylinderGeometry args={[1.05, 1.18, 0.08, 28]} />
+      <meshStandardMaterial color={gold} metalness={0.9} roughness={0.2} emissive={earned ? primary : '#000000'} emissiveIntensity={earned ? 0.18 : 0} />
+    </mesh>
 
-    return ()=>{ gl.deleteProgram(program); gl.deleteBuffer(buffer); };
-  },[props.primary,props.secondary,props.titleCount,props.rivalryCount,props.unlockedFeatureCount,zone]);
+    <group ref={trophyRef} position={[0, 1.05, 0]}>
+      <mesh castShadow>
+        <cylinderGeometry args={[0.32, 0.48, 1.75, 8]} />
+        <meshStandardMaterial color="#101412" metalness={0.94} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 0.52, 0]} castShadow>
+        <torusGeometry args={[0.68, 0.13, 12, 36]} />
+        <meshStandardMaterial color={gold} metalness={0.95} roughness={0.2} emissive={earned ? primary : '#000000'} emissiveIntensity={earned ? 0.22 : 0} />
+      </mesh>
+      {[0, 1, 2, 3].map((index) => (
+        <mesh key={index} position={[
+          Math.cos((index / 4) * Math.PI * 2) * 0.47,
+          1.03,
+          Math.sin((index / 4) * Math.PI * 2) * 0.47
+        ]} rotation={[0, -(index / 4) * Math.PI * 2, Math.PI / 11]} castShadow>
+          <boxGeometry args={[0.15, 0.72, 0.1]} />
+          <meshStandardMaterial color={gold} metalness={0.92} roughness={0.2} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.38, 0]} castShadow>
+        <octahedronGeometry args={[0.34, 0]} />
+        <meshStandardMaterial color={ivory} metalness={0.72} roughness={0.16} emissive={earned ? primary : '#000000'} emissiveIntensity={earned ? 0.2 : 0} />
+      </mesh>
+    </group>
 
-  const travel=(next:StadiumWorldZone)=>{
+    {earned && Array.from({ length: Math.min(titleCount, 4) }, (_, index) => (
+      <mesh key={index} position={[-0.6 + index * 0.4, 0.28, 0.94]}>
+        <boxGeometry args={[0.26, 0.12, 0.03]} />
+        <meshStandardMaterial color={secondary} emissive={primary} emissiveIntensity={0.18} />
+      </mesh>
+    ))}
+    <pointLight position={[0, 2.4, 1.3]} color={primary} intensity={earned ? 16 : 2} distance={5} decay={2} />
+  </group>;
+}
+
+function OwnersOffice({ earned, primary, secondary, titleCount }: { earned: boolean; primary: string; secondary: string; titleCount: number }) {
+  return <group>
+    <mesh position={[-4.15, 1.05, -2.15]} castShadow receiveShadow>
+      <boxGeometry args={[2.95, 3.25, 0.18]} />
+      <meshStandardMaterial color="#171b18" metalness={0.5} roughness={0.48} />
+    </mesh>
+    <mesh position={[-4.15, 2.08, -2.03]}>
+      <boxGeometry args={[2.25, 0.05, 0.04]} />
+      <meshStandardMaterial color={primary} emissive={primary} emissiveIntensity={0.65} />
+    </mesh>
+    <mesh position={[-4.15, -0.9, -0.15]} receiveShadow>
+      <boxGeometry args={[3.15, 0.18, 2.7]} />
+      <meshStandardMaterial color="#101410" metalness={0.46} roughness={0.55} />
+    </mesh>
+    <mesh position={[-4.15, 1.05, -1.4]}>
+      <boxGeometry args={[2.45, 3.15, 2.2]} />
+      <meshPhysicalMaterial color="#17211c" transparent opacity={0.08} roughness={0.05} metalness={0.08} transmission={0.18} />
+    </mesh>
+    <ChampionsTrophy earned={earned} primary={primary} secondary={secondary} titleCount={titleCount} />
+  </group>;
+}
+
+function RivalryHall({ rivalryCount, primary, secondary }: { rivalryCount: number; primary: string; secondary: string }) {
+  const lit = rivalryCount > 0;
+  const markers = Math.min(Math.max(rivalryCount, 1), 7);
+  return <group>
+    <mesh position={[4.2, 1.2, -2.0]} castShadow receiveShadow>
+      <boxGeometry args={[3.35, 3.55, 0.25]} />
+      <meshStandardMaterial color="#111612" metalness={0.6} roughness={0.42} />
+    </mesh>
+    <mesh position={[4.2, 2.7, -1.84]}>
+      <torusGeometry args={[1.25, 0.09, 12, 48, Math.PI]} />
+      <meshStandardMaterial color={primary} emissive={lit ? primary : '#000000'} emissiveIntensity={lit ? 0.5 : 0} metalness={0.88} roughness={0.22} />
+    </mesh>
+    {Array.from({ length: markers }, (_, index) => {
+      const row = Math.floor(index / 4);
+      const col = index % 4;
+      return <group key={index} position={[3.16 + col * 0.68, 1.75 - row * 0.78, -1.81]}>
+        <mesh castShadow>
+          <boxGeometry args={[0.48, 0.58, 0.08]} />
+          <meshStandardMaterial color={index < rivalryCount ? primary : '#272b27'} emissive={index < rivalryCount ? primary : '#000000'} emissiveIntensity={index < rivalryCount ? 0.34 : 0} metalness={0.82} roughness={0.28} />
+        </mesh>
+        <mesh position={[0, 0, 0.055]}>
+          <circleGeometry args={[0.12, 18]} />
+          <meshStandardMaterial color={secondary} emissive={index < rivalryCount ? secondary : '#000000'} emissiveIntensity={index < rivalryCount ? 0.2 : 0} />
+        </mesh>
+      </group>;
+    })}
+    <mesh position={[4.2, -0.9, -0.1]} receiveShadow>
+      <boxGeometry args={[3.4, 0.16, 2.5]} />
+      <meshStandardMaterial color="#111512" metalness={0.5} roughness={0.58} />
+    </mesh>
+    <pointLight position={[4.2, 2.5, 0.6]} color={primary} intensity={lit ? 14 : 2} distance={5} decay={2} />
+  </group>;
+}
+
+function LegacyWall({ count, primary, secondary }: { count: number; primary: string; secondary: string }) {
+  return <group position={[0, 0, -4.93]}>
+    <mesh position={[0, 0.65, 0]} receiveShadow>
+      <boxGeometry args={[5.9, 2.7, 0.18]} />
+      <meshStandardMaterial color="#0a0f0c" metalness={0.62} roughness={0.4} />
+    </mesh>
+    {Array.from({ length: 6 }, (_, index) => {
+      const active = index < count;
+      return <group key={index} position={[-2.1 + (index % 3) * 2.1, 1.22 - Math.floor(index / 3) * 1.12, 0.13]}>
+        <mesh castShadow>
+          <boxGeometry args={[1.35, 0.72, 0.08]} />
+          <meshStandardMaterial color={active ? '#181c18' : '#0d100e'} metalness={0.72} roughness={0.34} />
+        </mesh>
+        <mesh position={[0, 0.27, 0.06]}>
+          <boxGeometry args={[1.06, 0.035, 0.025]} />
+          <meshStandardMaterial color={active ? primary : '#2b2e2a'} emissive={active ? primary : '#000000'} emissiveIntensity={active ? 0.55 : 0} />
+        </mesh>
+        {active && <mesh position={[0, -0.08, 0.065]}>
+          <boxGeometry args={[0.72, 0.12, 0.02]} />
+          <meshStandardMaterial color={secondary} emissive={primary} emissiveIntensity={0.12} />
+        </mesh>}
+      </group>;
+    })}
+  </group>;
+}
+
+function WorldScene({
+  zone,
+  primary,
+  secondary,
+  titleCount,
+  rivalryCount,
+  unlockedFeatureCount
+}: {
+  zone: StadiumWorldZone;
+  primary: string;
+  secondary: string;
+  titleCount: number;
+  rivalryCount: number;
+  unlockedFeatureCount: number;
+}) {
+  const reducedMotion = useReducedMotion();
+  return <>
+    <color attach="background" args={['#020504']} />
+    <fog attach="fog" args={['#020504', 8, 23]} />
+    <ambientLight intensity={0.45} color="#b8c2b9" />
+    <hemisphereLight intensity={0.65} color={secondary} groundColor="#020604" />
+    <directionalLight position={[0, 8, 5]} intensity={1.8} color={secondary} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+    <pointLight position={[0, 4.5, -3.5]} color={primary} intensity={18} distance={13} decay={2} />
+
+    <StadiumShell primary={primary} secondary={secondary} reducedMotion={reducedMotion} />
+    <LegacyWall count={unlockedFeatureCount} primary={primary} secondary={secondary} />
+    <OwnersOffice earned={titleCount > 0} primary={primary} secondary={secondary} titleCount={titleCount} />
+    <RivalryHall rivalryCount={rivalryCount} primary={primary} secondary={secondary} />
+    <CameraRig zone={zone} reducedMotion={reducedMotion} />
+  </>;
+}
+
+export function StadiumWorldPrototype(props: Props) {
+  const [zone, setZone] = useState<StadiumWorldZone>('concourse');
+  const [selectedId, setSelectedId] = useState<'champions-trophy' | 'rivalry-monument' | 'legacy-wall'>('legacy-wall');
+  const objects = useMemo(() => buildStadiumWorldObjects({
+    titleCount: props.titleCount,
+    rivalryCount: props.rivalryCount,
+    unlockedFeatureCount: props.unlockedFeatureCount
+  }), [props.titleCount, props.rivalryCount, props.unlockedFeatureCount]);
+  const selected = objects.find((item) => item.id === selectedId) ?? objects[0];
+
+  const travel = (next: StadiumWorldZone) => {
     setZone(next);
-    const preferred=objects.find((item)=>item.zone===next);
-    if(preferred) setSelectedId(preferred.id);
+    const preferred = objects.find((item) => item.zone === next);
+    if (preferred) setSelectedId(preferred.id);
   };
+
+  const primary = useMemo(() => new Color(props.primary).getStyle(), [props.primary]);
+  const secondary = useMemo(() => new Color(props.secondary).getStyle(), [props.secondary]);
 
   return <section className="stadiumWorld" aria-labelledby="stadium-world-heading">
     <div className="stadiumWorldIntro">
       <div>
-        <p className="eyebrow">BIG EXEC WORLD • TECHNICAL SPIKE</p>
+        <p className="eyebrow">BIG EXEC WORLD • LIVE 3D PROTOTYPE</p>
         <h2 id="stadium-world-heading">{props.franchiseName} Stadium</h2>
-        <p>Explore the first live-rendered slice of your franchise world. The geometry is presentation-only; official accomplishments still come from Fantasy Core.</p>
+        <p>Move through your franchise legacy as a place. Official accomplishments remain controlled by Fantasy Core; the world changes only when those accomplishments exist.</p>
       </div>
       <div className="stadiumWorldMetrics" aria-label="Current franchise legacy data">
         <span><b>{props.titleCount}</b> Titles</span>
@@ -205,35 +351,54 @@ export function StadiumWorldPrototype(props:Props){
     </div>
 
     <div className="stadiumWorldViewport">
-      {supported
-        ? <canvas ref={canvasRef} className="stadiumWorldCanvas" aria-hidden="true" data-render-state="loading" />
-        : <div className="stadiumWorldFallback" role="status">3D rendering is unavailable on this device. Stadium data and navigation remain available below.</div>}
+      <div className="stadiumWorldCanvasShell">
+        <Canvas
+          shadows
+          dpr={[1, 1.5]}
+          gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
+          camera={{ position: [0, 2.2, 8.8], fov: 54, near: 0.1, far: 70 }}
+          onCreated={({ gl }) => {
+            gl.domElement.dataset.renderState = 'ready';
+            gl.domElement.classList.add('stadiumWorldCanvasElement');
+          }}
+          fallback={<div className="stadiumWorldFallback" role="status">3D rendering is unavailable on this device. Stadium data and navigation remain available below.</div>}
+        >
+          <WorldScene
+            zone={zone}
+            primary={primary}
+            secondary={secondary}
+            titleCount={props.titleCount}
+            rivalryCount={props.rivalryCount}
+            unlockedFeatureCount={props.unlockedFeatureCount}
+          />
+        </Canvas>
+      </div>
       <div className="stadiumWorldHud" aria-hidden="true">
         <span>NOW VISITING</span>
-        <strong>{STADIUM_WORLD_ZONES.find((item)=>item.id===zone)?.label}</strong>
+        <strong>{STADIUM_WORLD_ZONES.find((item) => item.id === zone)?.label}</strong>
         <small>{props.abbreviation} • LIVE LEGACY DATA</small>
       </div>
     </div>
 
     <nav className="stadiumWorldTravel" aria-label="Fast travel inside the stadium">
-      {STADIUM_WORLD_ZONES.map((item)=><button key={item.id} type="button" aria-pressed={zone===item.id} onClick={()=>travel(item.id)}>{item.label}</button>)}
+      {STADIUM_WORLD_ZONES.map((item) => <button key={item.id} type="button" aria-pressed={zone === item.id} onClick={() => travel(item.id)}>{item.label}</button>)}
     </nav>
 
     <div className="stadiumWorldObjects">
       <div>
         <p className="eyebrow">INSPECT OBJECTS</p>
         <div className="stadiumWorldObjectButtons">
-          {objects.map((item)=><button key={item.id} type="button" aria-pressed={selectedId===item.id} onClick={()=>{setSelectedId(item.id);setZone(item.zone);}}>
-            <span>{item.earned?'EARNED':'LOCKED / WAITING'}</span>
+          {objects.map((item) => <button key={item.id} type="button" aria-pressed={selectedId === item.id} onClick={() => { setSelectedId(item.id); setZone(item.zone); }}>
+            <span>{item.earned ? 'EARNED' : 'LOCKED / WAITING'}</span>
             <strong>{item.label}</strong>
           </button>)}
         </div>
       </div>
       <aside className="stadiumWorldDetail" aria-live="polite">
-        <span>{selected.earned?'Franchise legacy':'Future unlock'}</span>
+        <span>{selected.earned ? 'Franchise legacy' : 'Future unlock'}</span>
         <h3>{selected.label}</h3>
         <p>{selected.detail}</p>
-        <small>Zone: {STADIUM_WORLD_ZONES.find((item)=>item.id===selected.zone)?.label}</small>
+        <small>Zone: {STADIUM_WORLD_ZONES.find((item) => item.id === selected.zone)?.label}</small>
       </aside>
     </div>
   </section>;
