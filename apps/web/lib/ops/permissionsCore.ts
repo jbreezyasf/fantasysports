@@ -35,3 +35,10 @@ export function permissionsForRole(role: OpsRole) {
 export function roleHasPermission(role: OpsRole, permission: OpsPermission) {
   return rolePermissions[role].has(permission);
 }
+
+// Provider-data management (global athlete pool rewrites, paid provider quota) is owner-level.
+// No delegated ops role is granted it: docs/ops-portal-phase1.md defers data repair and manual
+// sync tools for staff, so only super_admin qualifies. Unknown or missing roles are denied.
+export function canManageProviderData(role: OpsRole | null | undefined) {
+  return role === 'super_admin';
+}
