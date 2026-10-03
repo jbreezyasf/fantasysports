@@ -8,26 +8,21 @@ import {
 } from '../../../../lib/assistant-gm/tools';
 import {
   getBigExecCapability,
-  type BigExecCapabilityId,
-  type CapabilityAudience
+  type BigExecCapabilityId
 } from '../../../../lib/executive/capabilities';
 import { type EntitlementSupabase } from '../../../../lib/executive/entitlements';
+import { resolveAssistantGmServerScope, type AssistantGmScopeSupabase } from '../../../../lib/assistant-gm/serverScope';
 import { resolveExecutiveFeatureFlags } from '../../../../lib/executive/featureFlags';
 import { createClient } from '../../../../lib/supabase/server';
 
 type ToolRunBody = {
   leagueId?: unknown;
-  audience?: unknown;
   capabilityId?: unknown;
   toolRequests?: unknown;
 };
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function isAudience(value: unknown): value is CapabilityAudience {
-  return value === 'league_member' || value === 'manager' || value === 'commissioner' || value === 'ops_staff';
 }
 
 function isToolName(value: unknown): value is AssistantGmToolName {
@@ -63,7 +58,6 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as ToolRunBody | null;
   if (!body) return bad('Expected a JSON body.');
   if (!isUuid(body.leagueId)) return bad('leagueId must be a UUID.');
-  if (!isAudience(body.audience)) return bad('audience is invalid.');
   if (typeof body.capabilityId !== 'string' || !getBigExecCapability(body.capabilityId as BigExecCapabilityId)) return bad('capabilityId is invalid.');
   if (!Array.isArray(body.toolRequests) || body.toolRequests.length < 1 || body.toolRequests.length > 8) return bad('toolRequests must contain 1 to 8 tools.');
 
@@ -74,23 +68,20 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using Front Office Advisor tools.' }, { status: 401 });
 
-  const { data: season } = await supabase
-    .from('league_seasons')
-    .select('id')
-    .eq('league_id', body.leagueId)
-    .eq('is_current', true)
-    .maybeSingle();
-  if (!season) return NextResponse.json({ ok: false, code: 'not_found', message: 'Current league season not found.' }, { status: 404 });
+  // Audience and league scope come from the caller's own membership row. Any `audience` in the
+  // request body is ignored, so a client cannot claim a wider role than the database grants.
+  const scope = await resolveAssistantGmServerScope(supabase as unknown as AssistantGmScopeSupabase, { userId: user.id, leagueId: body.leagueId });
+  if (!scope.ok) return NextResponse.json({ ok: false, code: scope.code, message: scope.message }, { status: scope.status });
 
   const gateway = createAssistantGmGateway({
     supabase: supabase as unknown as EntitlementSupabase & AssistantGmToolContext['supabase'],
-    flags: { ...resolveExecutiveFeatureFlags(), assistant_gm: true }
+    flags: resolveExecutiveFeatureFlags()
   });
   const result = await gateway.handle({
     userId: user.id,
     leagueId: body.leagueId,
-    leagueSeasonId: season.id,
-    audience: body.audience,
+    leagueSeasonId: scope.leagueSeasonId,
+    audience: scope.audience,
     capabilityId: body.capabilityId as BigExecCapabilityId,
     toolRequests: toolRequests as AssistantGmToolRequest[]
   });
