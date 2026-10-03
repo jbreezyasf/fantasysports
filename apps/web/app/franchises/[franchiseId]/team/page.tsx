@@ -5,6 +5,7 @@ import { requestRosterIntegrityReview } from './actions';
 import { describeLineupSlot, describeRosterAsset, lineupMoveButtonLabel, lineupMoveConfirmation } from './lineupAccessibility';
 import { LineupMoveForm } from './LineupMoveForm';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown } from '../../../matchups/[matchupId]/scoreDetails';
+import { currentLineupWeek, hasExplicitWeek, resolveLineupWeek } from '../../../../lib/fantasy/currentWeek';
 import { gameHasLocked, lineupGameByTeam, lineupLockExplanation } from './lineupLocks';
 
 const slots = [
@@ -36,7 +37,6 @@ export default async function TeamPage({
 }) {
   const { franchiseId } = await params;
   const query = await searchParams;
-  const week = Math.max(1, Math.min(18, Number(query.week ?? 1)));
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,6 +46,9 @@ export default async function TeamPage({
   if (!franchise) notFound();
   const { data: currentLeagueSeason } = await supabase.from('league_seasons').select('id,competition_season_id,trade_deadline_at,roster_integrity_mode,roster_integrity_bulk_drop_limit,roster_integrity_bulk_window_hours').eq('league_id', franchise.league_id).eq('is_current', true).maybeSingle();
   if (!currentLeagueSeason) notFound();
+  // No week in the URL means "this week": resolve it from the competition schedule rather than week 1.
+  const { data: scheduleGames } = hasExplicitWeek(query.week) ? { data: null } : await supabase.from('real_games').select('week,starts_at,state').eq('competition_season_id', currentLeagueSeason.competition_season_id);
+  const week = resolveLineupWeek(query.week, currentLineupWeek(scheduleGames ?? []));
   const { data: seasonFranchise } = await supabase.from('season_franchises').select('id,league_season_id,roster_locked_at,roster_lock_reason').eq('franchise_id', franchiseId).eq('league_season_id', currentLeagueSeason.id).maybeSingle();
   if (!seasonFranchise) notFound();
   const { data: ownership } = await supabase.from('franchise_owners').select('user_id').eq('franchise_id', franchiseId).eq('user_id', user.id).is('ends_on', null).maybeSingle();
