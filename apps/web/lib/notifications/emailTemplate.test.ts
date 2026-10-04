@@ -127,10 +127,20 @@ describe('the Chaos Week 2026 announcement draft', () => {
     for (const card of ['Captain', 'Wild Slot', 'Raid', 'Bounty', 'Tight End Takeover', 'Golden Boot', 'Iron Curtain', 'Ground Control', 'Air Show', 'Slippery Hands']) expect(en.body).toContain(`- **${card}**:`);
     for (const card of ['Capitán', 'Puesto Comodín', 'Asalto', 'Recompensa', 'Dominio del Ala Cerrada', 'Bota de Oro', 'Cortina de Hierro', 'Control Terrestre', 'Espectáculo Aéreo', 'Manos Resbalosas']) expect(es!.body).toContain(`- **${card}**:`);
     expect(en.body).toContain('Thursday, December 3, 2026 at 8:15 PM Eastern Time (7:15 PM Central)');
+    expect(en.body).toContain('Higher Week 13 Chaos Week lineup total');
+    expect(en.body).toContain('Then the higher seed.');
     expect(es!.body).toContain('jueves 3 de diciembre de 2026 a las 8:15 p. m., hora del Este de EE. UU.');
     expect(en.body).toContain('Week 10 Rivalry Week total');
     expect(en.body).toContain('before any rule card is applied');
     expect(en.body).toContain('it goes into the standings');
+    // Third-round decisions: automatic picks for all three, the penalty, void picks, Week 14 only.
+    expect(en.body).toContain('The system picks for you under Captain, Wild Slot and Raid');
+    expect(en.body).toContain("the raid takes the higher seed's best-ranked starter");
+    expect(en.body).toContain('the pick is void');
+    expect(en.body).toContain('Week 14 waiver order');
+    expect(en.body).not.toMatch(/no extra points|no raid\.|still scores/i);
+    // Words, not counting the "##" and "-" formatting marks.
+    expect(en.body.split(/\s+/).filter(token => /[A-Za-z0-9]/.test(token)).length).toBeLessThan(350);
     // The kickoff quoted in the text is the one recorded in the seed (01:15 UTC on 4 December).
     expect(new Date('2026-12-04T01:15:00Z').toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })).toBe('Thursday, December 3 at 8:15 PM');
   });
