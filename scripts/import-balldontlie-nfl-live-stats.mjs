@@ -89,6 +89,31 @@ export function fieldGoalBuckets(plays) {
   return byPlayer;
 }
 
+// Recalculates scores and matchup totals for every league season in each week.
+//
+// Each league-week is isolated: a failure is recorded and the remaining
+// leagues are still rescored. The caller reports the run as failed afterwards,
+// the same way finalizeCompleteFootballWeeks does.
+export async function rescoreLeagueWeeks({ db, weeks, leagueSeasons }) {
+  let rescored = 0; const failures = [];
+  for (const week of weeks ?? []) for (const leagueSeason of leagueSeasons ?? []) {
+    try {
+      const { error } = await db.rpc('calculate_pro_football_week_scores', { p_league_season_id: leagueSeason.id, p_week: week });
+      if (error) throw new Error(error.message);
+      const { data: matchups, error: matchupsError } = await db.from('matchups').select('id').eq('league_season_id', leagueSeason.id).eq('week', week).eq('is_final', false);
+      if (matchupsError) throw new Error(matchupsError.message);
+      for (const matchup of matchups ?? []) {
+        const { error: matchupError } = await db.rpc('recompute_matchup', { p_matchup_id: matchup.id, p_finalize: false });
+        if (matchupError) throw new Error(matchupError.message);
+      }
+      rescored += 1;
+    } catch (error) {
+      failures.push({ week, leagueSeasonId: leagueSeason.id, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { rescored, failures };
+}
+
 export async function runLiveStatsImport() {
   const apiKey = process.env.BALLDONTLIE_API_KEY || process.env.balldontlie || process.env.SPORTS_DATA_API_KEY;
   const dbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://njjiqdqhmcbxblwhfade.supabase.co';
@@ -198,8 +223,14 @@ export async function runLiveStatsImport() {
     console.error(JSON.stringify({ job: 'live-scoring', provider: 'sportradar-fallback', ...sportradarFallback }));
   }
   for (const game of activeGames) { const mappedState = providerGameState(game.status_state); if (mappedState === 'unknown') console.error(JSON.stringify({ job: 'live-scoring', warning: 'unknown-provider-game-state', providerGameId: game.id, statusState: game.status_state })); const { error } = await db.from('real_games').update({ state: mappedState, home_score: game.home_team_score, away_score: game.visitor_team_score, updated_at: ingestedAt }).eq('id', gameByProvider.get(String(game.id))); if (error) throw new Error(error.message); }
-  for (const week of weeks) for (const leagueSeason of leagueSeasons ?? []) { const { error } = await db.rpc('calculate_pro_football_week_scores', { p_league_season_id: leagueSeason.id, p_week: week }); if (error) throw new Error(error.message); const { data: matchups, error: matchupsError } = await db.from('matchups').select('id').eq('league_season_id', leagueSeason.id).eq('week', week).eq('is_final', false); if (matchupsError) throw new Error(matchupsError.message); for (const matchup of matchups ?? []) { const { error: matchupError } = await db.rpc('recompute_matchup', { p_matchup_id: matchup.id, p_finalize: false }); if (matchupError) throw new Error(matchupError.message); } }
-  const report = { season, weeks, games: activeGames.length, playerStats: playerStats.length, weeklyPlayerStats: weeklyPlayers.length, rawPlayerStats: players.length, teamStats: teamStats.length, staleGamesChecked, staleGamesRecovered, requests, sportradarFallback, ingestedAt }; console.log(JSON.stringify(report)); return report;
+  const rescoring = await rescoreLeagueWeeks({ db, weeks, leagueSeasons });
+  const report = { season, weeks, games: activeGames.length, playerStats: playerStats.length, weeklyPlayerStats: weeklyPlayers.length, rawPlayerStats: players.length, teamStats: teamStats.length, rescoredLeagueWeeks: rescoring.rescored, rescoreFailures: rescoring.failures, staleGamesChecked, staleGamesRecovered, requests, sportradarFallback, ingestedAt }; console.log(JSON.stringify(report));
+  if (rescoring.failures.length) {
+    const error = new Error(`Live rescoring failed for ${rescoring.failures.length} league-week(s): ${rescoring.failures.map(f => `week ${f.week} league season ${f.leagueSeasonId}: ${f.message}`).join(' | ')}`);
+    error.report = report; error.failures = rescoring.failures;
+    throw error;
+  }
+  return report;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) runLiveStatsImport().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
