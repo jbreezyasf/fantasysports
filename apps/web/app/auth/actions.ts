@@ -2,7 +2,6 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '../../lib/supabase/server';
-import { createAdminClient } from '../../lib/supabase/admin';
 
 function safeNext(value: FormDataEntryValue | null) {
   const next = String(value ?? '');
@@ -28,9 +27,6 @@ function friendlyAuthError(message: string, mode: 'signin' | 'signup') {
   if (lower.includes('email not confirmed')) {
     return 'Please confirm your email before signing in.';
   }
-  if (lower.includes('user already registered')) {
-    return 'A Big Exec account already exists for this email. Sign in instead.';
-  }
   return mode === 'signup' ? 'We could not create your account. Please check the information and try again.' : 'We could not sign you in. Please check your information and try again.';
 }
 
@@ -38,27 +34,17 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-async function existingAccountForEmail(email: string) {
-  if (!email) return false;
-  try {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .schema('auth')
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .limit(1);
+// Shown for every sign-up that passes input validation, whether or not the email already has
+// an account, so the response cannot be used to discover who is registered.
+const SIGNUP_NEUTRAL_MESSAGE = 'Check your email to confirm your account, then sign in to continue. If you already have a Big Exec account, sign in or reset your password instead.';
 
-    if (error) {
-      console.error('Existing account lookup failed', error.message);
-      return false;
-    }
+function isValidEmailFormat(email: string) {
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
-    return (data?.length ?? 0) > 0;
-  } catch (error) {
-    console.error('Existing account lookup unavailable', error);
-    return false;
-  }
+function isAlreadyRegisteredError(error: { message?: string; code?: string }) {
+  const lower = (error.message ?? '').toLowerCase();
+  return error.code === 'user_already_exists' || error.code === 'email_exists' || lower.includes('already registered') || lower.includes('already been registered');
 }
 
 export async function signIn(formData: FormData) {
@@ -77,10 +63,10 @@ export async function signUp(formData: FormData) {
   const password = String(formData.get('password') ?? '');
   const displayName = String(formData.get('display_name') ?? '');
   const next = safeNext(formData.get('next'));
-  if (await existingAccountForEmail(email)) {
-    redirect('/login?error=' + encodeURIComponent('A Big Exec account already exists for this email. Please sign in.') + '&next=' + encodeURIComponent(next));
+  if (!isValidEmailFormat(email)) {
+    redirect('/login?mode=signup&error=' + encodeURIComponent('Enter a valid email address.') + '&next=' + encodeURIComponent(next));
   }
-  const { data, error } = await supabase.auth.signUp({
+  const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -88,11 +74,12 @@ export async function signUp(formData: FormData) {
       emailRedirectTo: `${appUrl()}/auth/confirm?next=${encodeURIComponent(next)}`
     }
   });
-  if (!error && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-    redirect('/login?error=' + encodeURIComponent('A Big Exec account already exists for this email. Please sign in.') + '&next=' + encodeURIComponent(next));
+  // An existing account must look exactly like a new one. Only input problems (weak password,
+  // provider-side validation) surface as errors.
+  if (error && !isAlreadyRegisteredError(error)) {
+    redirect('/login?mode=signup&error=' + encodeURIComponent(friendlyAuthError(error.message, 'signup')) + '&next=' + encodeURIComponent(next));
   }
-  if (error) redirect('/login?mode=signup&error=' + encodeURIComponent(friendlyAuthError(error.message, 'signup')) + '&next=' + encodeURIComponent(next));
-  redirect('/login?message=' + encodeURIComponent('Check your email to confirm your account, then sign in to continue.') + '&next=' + encodeURIComponent(next));
+  redirect('/login?message=' + encodeURIComponent(SIGNUP_NEUTRAL_MESSAGE) + '&next=' + encodeURIComponent(next));
 }
 
 export async function signOut() {
