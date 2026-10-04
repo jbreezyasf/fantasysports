@@ -3,23 +3,23 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
 import { createAdminClient } from '../../../lib/supabase/admin';
+import { requireProviderDataOperator } from '../../../lib/ops/permissions';
 import { SportradarNflClient } from '../../../lib/sports-data/sportradar';
 
 const ACTIVE_ROSTER_STATUSES = new Set(['ACT','EXE','IR','IRD','NON','PUP','SUS']);
 const DRAFT_POSITIONS = new Set(['QB','RB','WR','TE','K']);
 const normalizeNflAlias = (alias?: string) => alias?.trim().toUpperCase() === 'JAC' ? 'JAX' : alias?.trim().toUpperCase();
 
-async function commissionerUser() {
+// Platform-operator gate, re-checked on every server action call. League commissioners are
+// not operators: anyone can create a league and become one.
+async function providerDataOperator() {
+  const { user } = await requireProviderDataOperator();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-  const { count } = await supabase.from('league_members').select('id',{count:'exact',head:true}).eq('user_id',user.id).eq('role','commissioner');
-  if (!count) throw new Error('Commissioner access required.');
   return { user, supabase };
 }
 
 export async function syncSportradarDraftPool() {
-  await commissionerUser();
+  await providerDataOperator();
   const admin = createAdminClient();
   const radar = new SportradarNflClient();
   const snapshot = await radar.getDraftSnapshot(2026);
@@ -110,7 +110,7 @@ export async function syncSportradarDraftPool() {
 }
 
 export async function createSportradarDraftLab() {
-  const { user, supabase } = await commissionerUser();
+  const { user, supabase } = await providerDataOperator();
   const admin = createAdminClient();
   const { data: competition } = await admin.from('competitions').select('id').eq('code','pro_football').single();
   const { data: season } = await admin.from('competition_seasons').select('id').eq('competition_id',competition!.id).eq('season_year',2026).maybeSingle();
