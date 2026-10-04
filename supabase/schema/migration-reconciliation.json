@@ -1,0 +1,667 @@
+{
+  "rows": [
+    {
+      "version": "20260820043923",
+      "name": "core_foundation",
+      "chars": 10063,
+      "repo": null
+    },
+    {
+      "version": "20260820043931",
+      "name": "team_fantasy_assets",
+      "chars": 1659,
+      "repo": null
+    },
+    {
+      "version": "20260820043949",
+      "name": "supabase_app_foundation",
+      "chars": 8965,
+      "repo": null
+    },
+    {
+      "version": "20260820044102",
+      "name": "security_hardening_helpers",
+      "chars": 191,
+      "repo": null
+    },
+    {
+      "version": "20260820044246",
+      "name": "season_one_gameplay",
+      "chars": 8896,
+      "repo": null
+    },
+    {
+      "version": "20260820045510",
+      "name": "league_creation_rpc",
+      "chars": 2867,
+      "repo": null
+    },
+    {
+      "version": "20260820045518",
+      "name": "user_profile_trigger",
+      "chars": 573,
+      "repo": null
+    },
+    {
+      "version": "20260820053250",
+      "name": "secure_auth_helpers_and_invites",
+      "chars": 1646,
+      "repo": null
+    },
+    {
+      "version": "20260820054624",
+      "name": "league_invite_workflow",
+      "chars": 4701,
+      "repo": null
+    },
+    {
+      "version": "20260820054638",
+      "name": "fix_invite_season_resolution",
+      "chars": 2894,
+      "repo": null
+    },
+    {
+      "version": "20260820055012",
+      "name": "snake_draft_engine",
+      "chars": 7672,
+      "repo": null
+    },
+    {
+      "version": "20260820055507",
+      "name": "circuit_schedule_and_lineup_engine",
+      "chars": 6376,
+      "repo": null
+    },
+    {
+      "version": "20260820055546",
+      "name": "indexed_lineup_slots",
+      "chars": 4612,
+      "repo": null
+    },
+    {
+      "version": "20260820060312",
+      "name": "matchup_scoring_and_standings",
+      "chars": 5542,
+      "repo": null
+    },
+    {
+      "version": "20260820060533",
+      "name": "second_half_event_engine",
+      "chars": 9975,
+      "repo": null
+    },
+    {
+      "version": "20260820060848",
+      "name": "internal_athlete_json_importer",
+      "chars": 1510,
+      "repo": null
+    },
+    {
+      "version": "20260820061201",
+      "name": "enable_internal_http_for_bootstrap",
+      "chars": 61,
+      "repo": null
+    },
+    {
+      "version": "20260820061247",
+      "name": "restore_service_role_backend_privileges",
+      "chars": 399,
+      "repo": null
+    },
+    {
+      "version": "20260820072817",
+      "name": "pro_football_player_scoring_worker",
+      "chars": 4407,
+      "repo": null
+    },
+    {
+      "version": "20260820074758",
+      "name": "pro_football_dst_scoring_worker",
+      "chars": 4397,
+      "repo": null
+    },
+    {
+      "version": "20260820075905",
+      "name": "historical_half_ppr_validation",
+      "chars": 5380,
+      "repo": null
+    },
+    {
+      "version": "20260820080321",
+      "name": "gate1_kicker_dst_validation",
+      "chars": 4006,
+      "repo": null
+    },
+    {
+      "version": "20260820082610",
+      "name": "fix_create_pro_football_league_scoring_lookup",
+      "chars": 2932,
+      "repo": null
+    },
+    {
+      "version": "20260820121435",
+      "name": "fix_league_read_policy",
+      "chars": 346,
+      "repo": null
+    },
+    {
+      "version": "20260820134534",
+      "name": "fix_recursive_league_member_rls",
+      "chars": 421,
+      "repo": null
+    },
+    {
+      "version": "20260820134616",
+      "name": "grant_authenticated_core_read_access",
+      "chars": 597,
+      "repo": null
+    },
+    {
+      "version": "20260820141529",
+      "name": "configurable_draft_min_franchises",
+      "chars": 3056,
+      "repo": null
+    },
+    {
+      "version": "20260820145027",
+      "name": "public_invite_lookup",
+      "chars": 712,
+      "repo": null
+    },
+    {
+      "version": "20260820145942",
+      "name": "invite_account_match_check",
+      "chars": 617,
+      "repo": null
+    },
+    {
+      "version": "20260820155624",
+      "name": "grant_authenticated_draft_pool_reads",
+      "chars": 113,
+      "repo": null
+    },
+    {
+      "version": "20260820160006",
+      "name": "grant_authenticated_competition_season_reads",
+      "chars": 66,
+      "repo": null
+    },
+    {
+      "version": "20260820162027",
+      "name": "allow_completed_draft_status",
+      "chars": 245,
+      "repo": null
+    },
+    {
+      "version": "20260820210542",
+      "name": "grant_gate2_authenticated_reads",
+      "chars": 768,
+      "repo": null
+    },
+    {
+      "version": "20260820210732",
+      "name": "enforce_commissioner_matchup_finalization",
+      "chars": 5016,
+      "repo": null
+    },
+    {
+      "version": "20260820210848",
+      "name": "separate_league_capacity_from_draft_minimum",
+      "chars": 4909,
+      "repo": null
+    },
+    {
+      "version": "20260820212949",
+      "name": "gate3_postseason_engine",
+      "chars": 15855,
+      "repo": null
+    },
+    {
+      "version": "20260820213025",
+      "name": "gate3_chaos_achievement_on_finalize",
+      "chars": 6017,
+      "repo": null
+    },
+    {
+      "version": "20260820213332",
+      "name": "gate3_deterministic_matchup_achievements",
+      "chars": 6577,
+      "repo": null
+    },
+    {
+      "version": "20260820213502",
+      "name": "gate3_idempotent_season_close",
+      "chars": 4313,
+      "repo": null
+    },
+    {
+      "version": "20260820213900",
+      "name": "gate4_social_trade_engine",
+      "chars": 21357,
+      "repo": null
+    },
+    {
+      "version": "20260820214513",
+      "name": "gate4_generated_talk_flow",
+      "chars": 4076,
+      "repo": null
+    },
+    {
+      "version": "20260821022656",
+      "name": "gate5_stadium_and_recap_foundation",
+      "chars": 9991,
+      "repo": null
+    },
+    {
+      "version": "20260821022738",
+      "name": "fix_gate5_recap_dst_label",
+      "chars": 4347,
+      "repo": null
+    },
+    {
+      "version": "20260821042602",
+      "name": "grant_authenticated_stadium_read_access",
+      "chars": 323,
+      "repo": null
+    },
+    {
+      "version": "20260821121218",
+      "name": "recap_renderer_provider_queue",
+      "chars": 3162,
+      "repo": null
+    },
+    {
+      "version": "20260823033722",
+      "name": "provision_stadiums_and_secure_autopick",
+      "chars": 3938,
+      "repo": null
+    },
+    {
+      "version": "20260823041404",
+      "name": "add_secure_free_agent_claim",
+      "chars": 3953,
+      "repo": null
+    },
+    {
+      "version": "20260823164234",
+      "name": "core_integrity_trade_deadline_20260823",
+      "chars": 19418,
+      "repo": {
+        "file": "20260823170000_core_integrity_trade_deadline.sql",
+        "version": "20260823170000",
+        "name": "core_integrity_trade_deadline"
+      }
+    },
+    {
+      "version": "20260823164650",
+      "name": "six_point_passing_touchdowns_20260823",
+      "chars": 4226,
+      "repo": {
+        "file": "20260823174500_six_point_passing_touchdowns.sql",
+        "version": "20260823174500",
+        "name": "six_point_passing_touchdowns"
+      }
+    },
+    {
+      "version": "20260823165548",
+      "name": "inverse_standings_waivers_20260823",
+      "chars": 18028,
+      "repo": {
+        "file": "20260823183000_inverse_standings_waivers.sql",
+        "version": "20260823183000",
+        "name": "inverse_standings_waivers"
+      }
+    },
+    {
+      "version": "20260823165606",
+      "name": "waiver_cutoff_and_drop_lock_20260823",
+      "chars": 3529,
+      "repo": {
+        "file": "20260823183500_waiver_cutoff_and_drop_lock.sql",
+        "version": "20260823183500",
+        "name": "waiver_cutoff_and_drop_lock"
+      }
+    },
+    {
+      "version": "20260823214933",
+      "name": "multi_season_foundation",
+      "chars": 7600,
+      "repo": null
+    },
+    {
+      "version": "20260823215333",
+      "name": "five_season_history_lab",
+      "chars": 14655,
+      "repo": null
+    },
+    {
+      "version": "20260823215408",
+      "name": "fix_stadium_history_sync",
+      "chars": 1161,
+      "repo": null
+    },
+    {
+      "version": "20260823215847",
+      "name": "unique_provider_game_ids",
+      "chars": 147,
+      "repo": null
+    },
+    {
+      "version": "20260823220133",
+      "name": "normalize_locker_room_messages",
+      "chars": 1095,
+      "repo": null
+    },
+    {
+      "version": "20260823220243",
+      "name": "cascade_achievement_stadium_links",
+      "chars": 340,
+      "repo": null
+    },
+    {
+      "version": "20260830225835",
+      "name": "roster_integrity_mode",
+      "chars": 32879,
+      "repo": {
+        "file": "20260830225835_roster_integrity_mode.sql",
+        "version": "20260830225835",
+        "name": "roster_integrity_mode"
+      }
+    },
+    {
+      "version": "20260830230104",
+      "name": "roster_integrity_rpc_privileges",
+      "chars": 841,
+      "repo": {
+        "file": "20260830230104_roster_integrity_rpc_privileges.sql",
+        "version": "20260830230104",
+        "name": "roster_integrity_rpc_privileges"
+      }
+    },
+    {
+      "version": "20260830230309",
+      "name": "commissioner_review_mode_behavior",
+      "chars": 3956,
+      "repo": {
+        "file": "20260830230309_commissioner_review_mode_behavior.sql",
+        "version": "20260830230309",
+        "name": "commissioner_review_mode_behavior"
+      }
+    },
+    {
+      "version": "20260905043133",
+      "name": "autopick_member_expiry_ranked_fallback",
+      "chars": 7155,
+      "repo": {
+        "file": "20260905043133_autopick_member_expiry_ranked_fallback.sql",
+        "version": "20260905043133",
+        "name": "autopick_member_expiry_ranked_fallback"
+      }
+    },
+    {
+      "version": "20260905044021",
+      "name": "autopick_historical_average_rankings",
+      "chars": 4214,
+      "repo": {
+        "file": "20260905044021_autopick_historical_average_rankings.sql",
+        "version": "20260905044021",
+        "name": "autopick_historical_average_rankings"
+      }
+    },
+    {
+      "version": "20260905050336",
+      "name": "draft_historical_values",
+      "chars": 6592,
+      "repo": {
+        "file": "20260905045611_draft_historical_values.sql",
+        "version": "20260905045611",
+        "name": "draft_historical_values"
+      }
+    },
+    {
+      "version": "20260905050746",
+      "name": "draft_value_over_replacement",
+      "chars": 4804,
+      "repo": {
+        "file": "20260905050608_draft_value_over_replacement.sql",
+        "version": "20260905050608",
+        "name": "draft_value_over_replacement"
+      }
+    },
+    {
+      "version": "20260905080656",
+      "name": "draft_value_provider_priority",
+      "chars": 5399,
+      "repo": {
+        "file": "20260905080407_draft_value_provider_priority.sql",
+        "version": "20260905080407",
+        "name": "draft_value_provider_priority"
+      }
+    },
+    {
+      "version": "20260909064515",
+      "name": "beta_feedback_intelligence",
+      "chars": 3632,
+      "repo": {
+        "file": "20260909062000_beta_feedback_intelligence.sql",
+        "version": "20260909062000",
+        "name": "beta_feedback_intelligence"
+      }
+    },
+    {
+      "version": "20260909064528",
+      "name": "beta_feedback_support_triage",
+      "chars": 801,
+      "repo": {
+        "file": "20260909063500_beta_feedback_support_triage.sql",
+        "version": "20260909063500",
+        "name": "beta_feedback_support_triage"
+      }
+    },
+    {
+      "version": "20260913102004",
+      "name": "fantasy_player_market_values",
+      "chars": 2378,
+      "repo": {
+        "file": "20260913085852_fantasy_player_market_values.sql",
+        "version": "20260913085852",
+        "name": "fantasy_player_market_values"
+      }
+    },
+    {
+      "version": "20260913102014",
+      "name": "draft_completion_letter",
+      "chars": 1678,
+      "repo": {
+        "file": "20260913100734_draft_completion_letter.sql",
+        "version": "20260913100734",
+        "name": "draft_completion_letter"
+      }
+    },
+    {
+      "version": "20260913180642",
+      "name": "auto_schedule_after_draft",
+      "chars": 2428,
+      "repo": {
+        "file": "20260913175906_auto_schedule_after_draft.sql",
+        "version": "20260913175906",
+        "name": "auto_schedule_after_draft"
+      }
+    },
+    {
+      "version": "20260913183249",
+      "name": "grant_live_scoring_recompute",
+      "chars": 82,
+      "repo": {
+        "file": "20260913183226_grant_live_scoring_recompute.sql",
+        "version": "20260913183226",
+        "name": "grant_live_scoring_recompute"
+      }
+    },
+    {
+      "version": "20260916004339",
+      "name": "add_social_oauth_threads_connection_store",
+      "chars": 1685,
+      "repo": null
+    },
+    {
+      "version": "20260916092635",
+      "name": "threads_controlled_scheduler",
+      "chars": 8671,
+      "repo": null
+    },
+    {
+      "version": "20260916122349",
+      "name": "threads_scheduler_store_approved_copy",
+      "chars": 1471,
+      "repo": null
+    },
+    {
+      "version": "20260917234017",
+      "name": "automatic_weekly_recap_news_v2",
+      "chars": 8861,
+      "repo": {
+        "file": "20260917233606_automatic_weekly_recap_news_v2.sql",
+        "version": "20260917233606",
+        "name": "automatic_weekly_recap_news_v2"
+      }
+    },
+    {
+      "version": "20260917234307",
+      "name": "revoke_manual_matchup_recap",
+      "chars": 162,
+      "repo": {
+        "file": "20260917234248_revoke_manual_matchup_recap.sql",
+        "version": "20260917234248",
+        "name": "revoke_manual_matchup_recap"
+      }
+    },
+    {
+      "version": "20260918005741",
+      "name": "bidirectional_lineup_lock_and_audit",
+      "chars": 9606,
+      "repo": {
+        "file": "20260918005608_bidirectional_lineup_lock_and_audit.sql",
+        "version": "20260918005608",
+        "name": "bidirectional_lineup_lock_and_audit"
+      }
+    },
+    {
+      "version": "20260918010225",
+      "name": "lineup_move_audit_indexes",
+      "chars": 642,
+      "repo": {
+        "file": "20260918010158_lineup_move_audit_indexes.sql",
+        "version": "20260918010158",
+        "name": "lineup_move_audit_indexes"
+      }
+    },
+    {
+      "version": "20260918014556",
+      "name": "enforce_full_player_game_lock",
+      "chars": 17946,
+      "repo": {
+        "file": "20260918013839_enforce_full_player_game_lock.sql",
+        "version": "20260918013839",
+        "name": "enforce_full_player_game_lock"
+      }
+    },
+    {
+      "version": "20260918042128",
+      "name": "grant_authenticated_real_games_read",
+      "chars": 57,
+      "repo": {
+        "file": "20260918042101_grant_authenticated_real_games_read.sql",
+        "version": "20260918042101",
+        "name": "grant_authenticated_real_games_read"
+      }
+    }
+  ],
+  "repoOnly": [
+    {
+      "file": "20260826043010_draft_queue.sql",
+      "version": "20260826043010",
+      "name": "draft_queue"
+    },
+    {
+      "file": "20260826043918_draft_timer_autopick.sql",
+      "version": "20260826043918",
+      "name": "draft_timer_autopick"
+    },
+    {
+      "file": "20260826044414_draft_realtime_publication.sql",
+      "version": "20260826044414",
+      "name": "draft_realtime_publication"
+    },
+    {
+      "file": "20260826044536_draft_pause_resume.sql",
+      "version": "20260826044536",
+      "name": "draft_pause_resume"
+    },
+    {
+      "file": "20260826044713_draft_correction_undo.sql",
+      "version": "20260826044713",
+      "name": "draft_correction_undo"
+    },
+    {
+      "file": "20260901090000_ops_portal_phase1.sql",
+      "version": "20260901090000",
+      "name": "ops_portal_phase1"
+    },
+    {
+      "file": "20260902065522_executive_entitlement_foundation.sql",
+      "version": "20260902065522",
+      "name": "executive_entitlement_foundation"
+    },
+    {
+      "file": "20260902070954_assistant_gm_conversation_retention.sql",
+      "version": "20260902070954",
+      "name": "assistant_gm_conversation_retention"
+    },
+    {
+      "file": "20260904100000_autopick_roster_requirements.sql",
+      "version": "20260904100000",
+      "name": "autopick_roster_requirements"
+    },
+    {
+      "file": "20260909040752_league_share_invites.sql",
+      "version": "20260909040752",
+      "name": "league_share_invites"
+    },
+    {
+      "file": "20260909041522_reusable_share_invites_and_commissioner_remove.sql",
+      "version": "20260909041522",
+      "name": "reusable_share_invites_and_commissioner_remove"
+    },
+    {
+      "file": "20260909043603_franchise_avatar_options.sql",
+      "version": "20260909043603",
+      "name": "franchise_avatar_options"
+    },
+    {
+      "file": "20260909044749_harden_share_invite_execute_grants.sql",
+      "version": "20260909044749",
+      "name": "harden_share_invite_execute_grants"
+    },
+    {
+      "file": "20260909065000_ops_it_staff_role.sql",
+      "version": "20260909065000",
+      "name": "ops_it_staff_role"
+    },
+    {
+      "file": "20260909070139_immutable_beta_feedback_submissions.sql",
+      "version": "20260909070139",
+      "name": "immutable_beta_feedback_submissions"
+    },
+    {
+      "file": "20260913081229_default_draft_clock_sixty_seconds.sql",
+      "version": "20260913081229",
+      "name": "default_draft_clock_sixty_seconds"
+    },
+    {
+      "file": "20261003030000_lineup_week_integrity.sql",
+      "version": "20261003030000",
+      "name": "lineup_week_integrity"
+    }
+  ]
+}
