@@ -30,7 +30,11 @@ export const rateLimitRules = {
   authResetByEmail: { limit: 5, windowSeconds: 900 },
   betaFeedbackByUser: { limit: 10, windowSeconds: 600 },
   // Shared by /api/assistant-gm/* and the /api/leagues/{leagueId}/* machine read routes.
-  machineApiByUser: { limit: 120, windowSeconds: 60 }
+  machineApiByUser: { limit: 120, windowSeconds: 60 },
+  // /api/push/subscribe and /api/push/unsubscribe: a browser subscribes once per device.
+  pushSubscriptionByUser: { limit: 20, windowSeconds: 600 },
+  // /api/notifications/unsubscribe is reachable without a login (signed token).
+  emailUnsubscribeByIp: { limit: 30, windowSeconds: 600 }
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitScope = keyof typeof rateLimitRules;
