@@ -2,7 +2,7 @@
 
 import React, { useActionState, useEffect, useId, useRef } from 'react';
 import { setChaosCardSelection, type ChaosCardActionState } from '../../../team/chaosCardActions';
-import { ChaosCardFace, ChaosDeadlineTime } from '../../../components/ChaosCardFace';
+import { ChaosAutoCaptainNote, ChaosCardFace, ChaosDeadlineTime } from '../../../components/ChaosCardFace';
 import { useLocale } from '../../../components/LocaleProvider';
 import { announceToScreenReader } from '../../../components/ScreenReaderAnnouncer';
 import { CHAOS_CARD_STRINGS, CHAOS_SELECTION_TEXT, selectionKind, type ChaosAsset, type ChaosCardText, type ChaosSelectionView } from '../../../../lib/matchups/chaosCards';
@@ -14,7 +14,7 @@ type Props = {
   matchupId: string;
   seasonFranchiseId: string;
   franchiseId: string;
-  /** Null for cards that take no selection (Upset Bounty and the scoring twists). */
+  /** Null for cards that take no selection (Bounty and the scoring twists). */
   view: ChaosSelectionView | null;
   /** Players on this roster that the opponent raided (RAID, higher seed). */
   raided: ChaosAsset[];
@@ -66,6 +66,7 @@ export function ChaosCardControls({ card, matchupId, seasonFranchiseId, franchis
             )}
             {view.status !== 'not_eligible' && !view.current && <p className="chaosSelectionNote">{text.none}</p>}
             {view.message && <p className="chaosSelectionNote">{view.message}</p>}
+            {view.autoCaptain && <ChaosAutoCaptainNote auto={view.autoCaptain} own id={`${id}-auto`} />}
 
             {view.status === 'open' && (
               <form action={action} className="chaosSelectionForm">
@@ -77,7 +78,7 @@ export function ChaosCardControls({ card, matchupId, seasonFranchiseId, franchis
                 {view.candidates.map((asset) => (
                   <input type="hidden" key={asset.key} name={`label:${assetValue(asset)}`} value={asset.label} />
                 ))}
-                <fieldset aria-describedby={`${id}-deadline`}>
+                <fieldset aria-describedby={view.autoCaptain ? `${id}-auto ${id}-deadline` : `${id}-deadline`}>
                   <legend>{text.legend}</legend>
                   <p className="chaosSelectionNote" id={`${id}-deadline`}>
                     <span className="chaosDeadlineLabel">{CHAOS_CARD_STRINGS.deadline}</span> <span>{text.deadline}</span>

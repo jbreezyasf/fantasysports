@@ -26,6 +26,8 @@
 .chaosSelectionCurrent strong{color:#fff;overflow-wrap:anywhere}
 .chaosSelectionNote{margin:0;font-size:.9rem;line-height:1.5;color:#d8d2c7}
 .chaosSelectionNote time{color:#fff;font-weight:700}
+.chaosAutoCaptain{margin:4px 0 8px;padding:10px 12px;border-left:3px solid #f1d98a;border-radius:0 8px 8px 0;background:#15130d;display:grid;gap:4px}
+.chaosAutoCaptain strong{color:#fff;overflow-wrap:anywhere}
 .chaosBuildGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .chaosBuildTable{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #3a3a3f;border-radius:12px;background:#0d0f12;font-variant-numeric:tabular-nums}
 .chaosBuildTable caption{padding:10px 14px 4px;text-align:left;font-weight:800;color:#fff;overflow-wrap:anywhere}

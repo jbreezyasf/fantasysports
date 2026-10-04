@@ -12,6 +12,30 @@
     "axeInCard": []
   },
   {
+    "name": "matchup-captain-auto-pending",
+    "width": 1440,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": []
+  },
+  {
+    "name": "matchup-bounty-final",
+    "width": 1440,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": []
+  },
+  {
     "name": "matchup-raid",
     "width": 1440,
     "reducedMotion": "no-preference",
@@ -37,6 +61,22 @@
   },
   {
     "name": "lineup-captain",
+    "width": 1440,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": [],
+    "focusOnRadio": true,
+    "keyboardSelected": true,
+    "focusRing": "solid 3px",
+    "focusOnSubmit": true
+  },
+  {
+    "name": "lineup-captain-auto",
     "width": 1440,
     "reducedMotion": "no-preference",
     "cardPanels": 1,
@@ -144,6 +184,30 @@
     "axeInCard": []
   },
   {
+    "name": "matchup-captain-auto-pending",
+    "width": 390,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": []
+  },
+  {
+    "name": "matchup-bounty-final",
+    "width": 390,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": []
+  },
+  {
     "name": "matchup-raid",
     "width": 390,
     "reducedMotion": "no-preference",
@@ -169,6 +233,38 @@
   },
   {
     "name": "lineup-captain",
+    "width": 390,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": true,
+    "overflowOffenders": [
+      {
+        "tag": "NAV",
+        "class": "franchiseNav",
+        "inCard": false
+      },
+      {
+        "tag": "SECTION",
+        "class": "leagueHero franchiseStadiumHero",
+        "inCard": false
+      },
+      {
+        "tag": "DIV",
+        "class": "stadiumColorWash",
+        "inCard": false
+      }
+    ],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": [],
+    "focusOnRadio": true,
+    "keyboardSelected": true,
+    "focusRing": "solid 3px",
+    "focusOnSubmit": true
+  },
+  {
+    "name": "lineup-captain-auto",
     "width": 390,
     "reducedMotion": "no-preference",
     "cardPanels": 1,
@@ -369,6 +465,24 @@
     "motion": 0
   },
   {
+    "name": "matchup-captain-auto-pending",
+    "width": 390,
+    "reducedMotion": "reduce",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "motion": 0
+  },
+  {
+    "name": "matchup-bounty-final",
+    "width": 390,
+    "reducedMotion": "reduce",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "motion": 0
+  },
+  {
     "name": "matchup-raid",
     "width": 390,
     "reducedMotion": "reduce",
@@ -388,6 +502,31 @@
   },
   {
     "name": "lineup-captain",
+    "width": 390,
+    "reducedMotion": "reduce",
+    "cardPanels": 1,
+    "overflow": true,
+    "overflowOffenders": [
+      {
+        "tag": "NAV",
+        "class": "franchiseNav",
+        "inCard": false
+      },
+      {
+        "tag": "SECTION",
+        "class": "leagueHero franchiseStadiumHero",
+        "inCard": false
+      },
+      {
+        "tag": "DIV",
+        "class": "stadiumColorWash",
+        "inCard": false
+      }
+    ],
+    "motion": 0
+  },
+  {
+    "name": "lineup-captain-auto",
     "width": 390,
     "reducedMotion": "reduce",
     "cardPanels": 1,

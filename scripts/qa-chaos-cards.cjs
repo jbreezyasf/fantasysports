@@ -68,11 +68,20 @@ const line = (effect, id) => ({ effect, athlete_id: id, real_team_id: null, poin
 const upcoming = [{ home_team_id: 't1', away_team_id: 't2', starts_at: hours(30), state: 'scheduled' }, { home_team_id: 't3', away_team_id: 't4', starts_at: hours(96), state: 'scheduled' }];
 const thursdayPlayed = [{ home_team_id: 't1', away_team_id: 't2', starts_at: hours(-20), state: 'final' }, { home_team_id: 't3', away_team_id: 't4', starts_at: hours(40), state: 'scheduled' }];
 const allFinal = upcoming.map((g, i) => ({ ...g, starts_at: hours(-90 + i * 40), state: 'final' }));
+// What the chaos_auto_captain database function would return (the page only presents it).
+const autoReply = (id, expected, games) => ({ athlete_id: id, real_team_id: null, basis: 'recent_average_v1', expected, games, season_total: expected * games, compared: [] });
 const scenarios = {
-  'matchup-captain': { page: 'matchup', flag: 'true', user: 'f0', card: 'CAPTAIN', games: thursdayPlayed, selections: [{ season_franchise_id: HOME, athlete_id: 'hq' }], build: { home: side(HOME, [line('captain', 'hq')]), away: side(AWAY, []) } },
+  // Seed 1 named a captain (locked). Seed 10 named nobody: the automatic captain played on Thursday and is applied.
+  'matchup-captain': { page: 'matchup', flag: 'true', user: 'f0', card: 'CAPTAIN', games: thursdayPlayed, selections: [{ season_franchise_id: HOME, athlete_id: 'hq' }], auto: { [AWAY]: autoReply('aq', 14.2, 3) }, build: { home: side(HOME, [line('captain', 'hq')]), away: side(AWAY, [{ ...line('captain', 'aq'), automatic: true, basis: 'recent_average_v1', expected: 14.2, games: 3 }]) } },
+  // Nobody has named a captain and nothing has kicked off: both automatic captains are shown as "if none is named".
+  'matchup-captain-auto-pending': { page: 'matchup', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [], auto: { [HOME]: autoReply('hq', 20, 3), [AWAY]: autoReply('aq', 14.2, 3) } },
+  // The higher seed won a Bounty game: it moves up three places.
+  'matchup-bounty-final': { page: 'matchup', flag: 'true', user: 'f0', card: 'BOUNTY', games: allFinal, final: true, selections: [], build: { home: side(HOME, []), away: side(AWAY, []), bounty: { season_franchise_id: HOME, grant: 'up_three', effective_until: hours(170) } } },
   'matchup-raid': { page: 'matchup', flag: 'true', user: 'f9', card: 'RAID', games: upcoming, selections: [{ season_franchise_id: AWAY, athlete_id: 'hb1' }], build: { home: side(HOME, []), away: side(AWAY, [line('raid', 'hb1')]) } },
   'matchup-twist-final': { page: 'matchup', flag: 'true', user: 'f0', card: 'TWIST_K_TRIPLE', games: allFinal, final: true, selections: [], build: { home: side(HOME, [{ ...line('twist', 'hk'), points: 18 }]), away: side(AWAY, [{ ...line('twist', 'ak'), points: 12 }]) } },
-  'lineup-captain': { page: 'team', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [{ season_franchise_id: HOME, athlete_id: 'hw1' }] },
+  'lineup-captain': { page: 'team', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [{ season_franchise_id: HOME, athlete_id: 'hw1' }], auto: { [HOME]: autoReply('hq', 20, 3) } },
+  // No captain named yet: "If you do not choose, your captain will be ...".
+  'lineup-captain-auto': { page: 'team', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [], auto: { [HOME]: autoReply('hq', 20, 3) } },
   'lineup-wild-slot': { page: 'team', flag: 'true', user: 'f0', card: 'WILD_SLOT', games: upcoming, selections: [] },
   'lineup-raid-lower-seed': { page: 'team', flag: 'true', user: 'f9', card: 'RAID', games: upcoming, selections: [] },
   'lineup-raid-higher-seed': { page: 'team', flag: 'true', user: 'f0', card: 'RAID', games: upcoming, selections: [{ season_franchise_id: AWAY, athlete_id: 'hb1' }] },
@@ -102,6 +111,7 @@ function tables() {
 // A stub query builder that honours eq / in / is filters on columns the rows have.
 const db = {
   auth: { getUser: async () => ({ data: { user: { id: 'qa', user_metadata: {} } } }) },
+  rpc: async (name, args) => ({ data: name === 'chaos_auto_captain' ? (scenario.auto?.[args.p_season_franchise_id] ?? null) : null, error: null }),
   from(table) {
     const filters = []; let single = false;
     const run = () => {

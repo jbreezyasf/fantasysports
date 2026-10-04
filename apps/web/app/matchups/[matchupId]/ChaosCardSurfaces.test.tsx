@@ -22,8 +22,11 @@ const BEFORE = Date.parse('2026-12-03T12:00:00Z');
 const asset = (id: string, label: string, teamId: string, isStarter: boolean): ChaosAsset => ({ key: `athlete:${id}`, athleteId: id, realTeamId: null, teamId, label, isStarter });
 const homeAssets = [asset('hq', 'Avery Stone • QB • AAA', 't1', true), asset('hte', 'Miles Okafor • TE • CCC', 't3', true), asset('hb1', 'Dre Halloran • WR • CCC', 't3', false)];
 const awayAssets = [asset('aq', 'Sam Whitlock • QB • BBB', 't2', true), asset('ab1', 'Rio Castellan • WR • DDD', 't4', false)];
-const view = (kind: 'captain' | 'wild_slot' | 'raid', side: 'home' | 'away', selected: string | null, now = BEFORE) =>
+// What chaos_auto_captain returns for each side (the database ranks; the page only shows it).
+const autoReply = { home: { athlete_id: 'hq', real_team_id: null, expected: 20, games: 3 }, away: { athlete_id: 'aq', real_team_id: null, expected: null, games: 0 } };
+const view = (kind: 'captain' | 'wild_slot' | 'raid', side: 'home' | 'away', selected: string | null, now = BEFORE, auto = false) =>
   chaosSelectionView({
+    autoCaptain: auto ? autoReply[side] : null,
     kind,
     isLowerSeed: side === 'away',
     ownAssets: side === 'home' ? homeAssets : awayAssets,
@@ -56,7 +59,8 @@ describe('Chaos Week card on the matchup page', () => {
     expect(html).toContain('<h2 id="chaos-card-heading">Captain</h2>');
     expect(html).toContain(CHAOS_CARD_CATALOG.CAPTAIN.rules.replaceAll("'", '&#x27;'));
     expect(html).toContain('Avery Stone • QB • AAA');
-    expect(html).toContain('No captain named. No bonus.');
+    expect(html).toContain('No captain named yet.');
+    expect(html).not.toContain('No bonus');
     expect(html).toContain('<time dateTime="2026-12-04T01:15:00Z"');
     expect(html).toContain('Lineup total');
     expect(html).toContain('56.50');
@@ -87,15 +91,50 @@ describe('Chaos Week card on the matchup page', () => {
     await expectNoAxeViolations(twist);
   });
 
-  it('shows an earned Upset Bounty with the franchise and the end of its window', async () => {
-    const build = presentChaosScoreBuild({ card_code: 'UPSET_BOUNTY', home: { base: 60, adjustments: [], total: 60 }, away: { base: 150, adjustments: [], total: 150 }, bounty: { season_franchise_id: 'away', effective_until: '2026-12-15T01:15:00Z' } });
-    const html = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.UPSET_BOUNTY} {...sides(null)} build={build} assetNames={names} isFinal lineupHref={null} />);
-    expect(html).toContain('Upset Bounty earned: first in the waiver order until');
-    expect(html).toContain('Night Shift');
+  it('shows an earned Bounty for either winner, with the franchise and the end of its window', async () => {
+    const build = presentChaosScoreBuild({ card_code: 'BOUNTY', home: { base: 60, adjustments: [], total: 60 }, away: { base: 150, adjustments: [], total: 150 }, bounty: { season_franchise_id: 'away', grant: 'first', effective_until: '2026-12-15T01:15:00Z' } });
+    const html = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.BOUNTY} {...sides(null)} build={build} assetNames={names} isFinal lineupHref={null} />);
+    expect(html).toContain('<h2 id="chaos-card-heading">Bounty</h2>');
+    expect(html).toContain('Bounty earned: first in the waiver order until');
+    expect(html).toContain('<strong data-no-translate="true">Night Shift</strong>');
     expect(html).toContain('2026-12-15T01:15:00Z');
+    expect(html).not.toContain('Upset');
     await expectNoAxeViolations(html);
-    const none = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.UPSET_BOUNTY} {...sides(null)} build={{ ...build!, bounty: null }} assetNames={names} isFinal lineupHref={null} />);
-    expect(none).toContain('The lower seed did not win. No bounty was earned.');
+    const favourite = presentChaosScoreBuild({ card_code: 'BOUNTY', home: { base: 150, adjustments: [], total: 150 }, away: { base: 60, adjustments: [], total: 60 }, bounty: { season_franchise_id: 'home', grant: 'up_three', effective_until: '2026-12-15T01:15:00Z' } });
+    const up = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.BOUNTY} {...sides(null)} build={favourite} assetNames={names} isFinal lineupHref={null} />);
+    expect(up).toContain('Bounty earned: up three places in the waiver order until');
+    expect(up).toContain('<strong data-no-translate="true">High Volts</strong>');
+    expect(up).not.toContain('first in the waiver order');
+    await expectNoAxeViolations(up);
+    const tied = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.BOUNTY} {...sides(null)} build={{ ...build!, bounty: null }} assetNames={names} isFinal lineupHref={null} />);
+    expect(tied).toContain('The game was tied. No bounty was earned.');
+    const open = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.BOUNTY} {...sides(null)} build={{ ...build!, bounty: null }} assetNames={names} isFinal={false} lineupHref={null} />);
+    expect(open).toContain('Earned by whichever team wins.');
+    await expectNoAxeViolations(open);
+  });
+
+  it('shows who the automatic captain would be for both sides, then "Automatic captain" on the score build-up', async () => {
+    const pending = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.CAPTAIN} home={{ ...sides('captain').home, selection: view('captain', 'home', null, BEFORE, true) }} away={{ ...sides('captain').away, selection: view('captain', 'away', null, BEFORE, true) }} build={null} assetNames={names} isFinal={false} lineupHref={null} />);
+    expect(pending).toMatch(/<div class="chaosAutoCaptain" data-auto-captain="pending"><p class="chaosSelectionNote"><span>If no captain is named, the captain will be<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong><\/p>/);
+    expect(pending).toContain('<span>Average points per game</span> <strong data-no-translate="true">20.00</strong>');
+    expect(pending).toContain('<span>Games counted</span> <strong data-no-translate="true">3</strong>');
+    expect(pending).toContain('Sam Whitlock • QB • BBB');
+    expect(pending).toContain('no starter has a score before Week 13');
+    await expectNoAxeViolations(pending);
+
+    const build = presentChaosScoreBuild({
+      card_code: 'CAPTAIN',
+      home: { base: 56.5, total: 76.5, adjustments: [{ effect: 'captain', athlete_id: 'hq', real_team_id: null, points: 20, automatic: true, expected: 20, games: 3 }] },
+      away: { base: 42, total: 58, adjustments: [{ effect: 'captain', athlete_id: 'aq', real_team_id: null, points: 16 }] },
+    });
+    const AFTER = Date.parse('2026-12-04T02:00:00Z');
+    const live = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.CAPTAIN} home={{ ...sides('captain').home, selection: view('captain', 'home', null, AFTER, true) }} away={{ ...sides('captain').away, selection: view('captain', 'away', 'aq', AFTER, true) }} build={build} assetNames={names} isFinal={false} lineupHref={null} />);
+    expect(live).toMatch(/data-auto-captain="applied"><p class="chaosSelectionNote"><span>Automatic captain<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong>/);
+    expect(live).not.toContain('the captain will be');
+    expect(live.match(/chaosAutoCaptain"/g)).toHaveLength(1);
+    expect(live).toMatch(/<th scope="row"><span>Automatic captain<\/span><small data-no-translate="true">Avery Stone • QB • AAA<\/small><\/th><td data-no-translate="true">\+20\.00<\/td>/);
+    expect(live).toMatch(/<th scope="row"><span>Captain bonus<\/span><small data-no-translate="true">Sam Whitlock • QB • BBB<\/small><\/th><td data-no-translate="true">\+16\.00<\/td>/);
+    await expectNoAxeViolations(live);
   });
 });
 
@@ -114,6 +153,29 @@ describe('Chaos Week selection controls on the lineup page', () => {
     expect(html).toContain('name="card_code" value="CAPTAIN"');
     expect(html).not.toMatch(/draggable|ondrag/i);
     await expectNoAxeViolations(html);
+  });
+
+  it('tells a manager who has not chosen who the automatic captain will be, with the reason, tied to the radio group', async () => {
+    const html = controls('CAPTAIN', view('captain', 'home', null, BEFORE, true));
+    expect(html).toMatch(/<div class="chaosAutoCaptain" id="([^"]+)-auto" data-auto-captain="pending"><p class="chaosSelectionNote"><span>If you do not choose, your captain will be<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong><\/p>/);
+    expect(html).toContain('<span>Chosen automatically: the starter with the highest average fantasy points per game over their last three scored weeks before Week 13.</span>');
+    expect(html).toContain('<span>Average points per game</span> <strong data-no-translate="true">20.00</strong>');
+    const autoId = /id="([^"]+-auto)"/.exec(html)?.[1];
+    expect(html).toContain(`<fieldset aria-describedby="${autoId} ${autoId?.replace(/-auto$/, '-deadline')}">`);
+    // The existing controls are unchanged: the same labelled radio group, submit button and legend.
+    expect(html).toContain('<legend>Choose your captain</legend>');
+    expect(html).toMatch(/<label class="chaosChoice"><input type="radio"[^>]*value="athlete:hq"[^>]*\/><span data-no-translate="true">Avery Stone • QB • AAA<\/span><\/label>/);
+    expect(html).toMatch(/<button class="primary" type="submit"[^>]*>Name captain<\/button>/);
+    await expectNoAxeViolations(html);
+
+    const named = controls('CAPTAIN', view('captain', 'home', 'hte', BEFORE, true));
+    expect(named).not.toContain('chaosAutoCaptain');
+    expect(named).toMatch(/<fieldset aria-describedby="[^" ]+-deadline">/);
+
+    const applied = controls('CAPTAIN', view('captain', 'home', null, Date.parse('2026-12-04T02:00:00Z'), true));
+    expect(applied).toMatch(/data-auto-captain="applied"><p class="chaosSelectionNote"><span>Automatic captain<\/span>/);
+    expect(applied).not.toContain('If you do not choose');
+    await expectNoAxeViolations(applied);
   });
 
   it('renders the wild slot and the raid picker for the lower seed', async () => {

@@ -17,6 +17,7 @@ import {
   chaosLowerSeedSide,
   chaosSelectionView,
   firstKickoff,
+  presentAutoCaptain,
   presentChaosScoreBuild,
   selectionKind,
   signedPoints,
@@ -58,7 +59,7 @@ describe('CHAOS_CARDS_ENABLED flag', () => {
 describe('card catalog', () => {
   it('has the ten cards of the deck: four named cards and six scoring twists', () => {
     const cards = Object.values(CHAOS_CARD_CATALOG);
-    expect(cards.map((card) => card.code).sort()).toEqual(['CAPTAIN', 'RAID', 'TWIST_DST_DOUBLE', 'TWIST_FUMBLE_TRIPLE', 'TWIST_K_TRIPLE', 'TWIST_PASS_DOUBLE', 'TWIST_RUSH_DOUBLE', 'TWIST_TE_DOUBLE', 'UPSET_BOUNTY', 'WILD_SLOT']);
+    expect(cards.map((card) => card.code).sort()).toEqual(['BOUNTY', 'CAPTAIN', 'RAID', 'TWIST_DST_DOUBLE', 'TWIST_FUMBLE_TRIPLE', 'TWIST_K_TRIPLE', 'TWIST_PASS_DOUBLE', 'TWIST_RUSH_DOUBLE', 'TWIST_TE_DOUBLE', 'WILD_SLOT']);
     expect(cards.filter((card) => card.kind === 'twist')).toHaveLength(6);
     for (const [code, card] of Object.entries(CHAOS_CARD_CATALOG)) expect(card.code).toBe(code);
   });
@@ -90,6 +91,18 @@ describe('card catalog', () => {
     }
   });
 
+  it('names the Bounty card for both outcomes and no longer says a captain can be missed', () => {
+    expect(CHAOS_CARD_CATALOG.BOUNTY).toMatchObject({ code: 'BOUNTY', kind: 'bounty', name: 'Bounty' });
+    expect(translateMessage('Bounty')).toBe('Recompensa');
+    expect(CHAOS_CARD_CATALOG.BOUNTY.rules).toMatch(/lower seed wins, it goes to the front.*higher seed wins, it moves up three places.*tie changes nothing/i);
+    expect(translateMessage(CHAOS_CARD_CATALOG.BOUNTY.rules)).toMatch(/peor clasificación, pasa al frente.*mejor clasificado, sube tres puestos.*empate no cambia nada/i);
+    expect('UPSET_BOUNTY' in CHAOS_CARD_CATALOG).toBe(false);
+    expect(migration).not.toMatch(/UPSET_BOUNTY|Upset Bounty|Recompensa por Sorpresa/);
+    expect(CHAOS_CARD_CATALOG.CAPTAIN.rules).toContain('becomes captain automatically');
+    expect(translateMessage(CHAOS_CARD_CATALOG.CAPTAIN.rules)).toContain('pasa a ser capitán automáticamente');
+    expect(chaosCardAllStrings().some((text) => /no bonus/i.test(text))).toBe(false);
+  });
+
   it('knows which cards take a selection', () => {
     expect(Object.values(CHAOS_CARD_CATALOG).filter((card) => selectionKind(card.kind)).map((card) => card.code)).toEqual(['CAPTAIN', 'WILD_SLOT', 'RAID']);
     expect(selectionKind(null)).toBeNull();
@@ -112,7 +125,7 @@ describe('score build-up from matchups.context', () => {
   it('reads base, each line and total for both sides', () => {
     const build = presentChaosScoreBuild(context);
     expect(build?.cardCode).toBe('CAPTAIN');
-    expect(build?.home).toEqual({ base: 56.5, total: 76.5, lines: [{ effect: 'captain', label: 'Captain bonus', athleteId: 'a1', realTeamId: null, points: 20 }] });
+    expect(build?.home).toEqual({ base: 56.5, total: 76.5, lines: [{ effect: 'captain', label: 'Captain bonus', athleteId: 'a1', realTeamId: null, points: 20, automatic: false, expected: null, games: null }] });
     expect(build?.away).toEqual({ base: 42, total: 42, lines: [] });
     expect(build?.bounty).toBeNull();
     expect(presentChaosScoreBuild(context.chaos_cards)?.home.total).toBe(76.5);
@@ -120,9 +133,12 @@ describe('score build-up from matchups.context', () => {
 
   it('reads a recorded bounty and negative twist lines', () => {
     const build = presentChaosScoreBuild({
-      chaos_cards: { card_code: 'UPSET_BOUNTY', home: { base: 60, adjustments: [], total: 60 }, away: { base: 150, adjustments: [], total: 150 }, bounty: { season_franchise_id: 'sf6', effective_until: '2026-12-15T01:15:00Z' } },
+      chaos_cards: { card_code: 'BOUNTY', home: { base: 60, adjustments: [], total: 60 }, away: { base: 150, adjustments: [], total: 150 }, bounty: { season_franchise_id: 'sf6', grant: 'first', effective_until: '2026-12-15T01:15:00Z' } },
     });
-    expect(build?.bounty).toEqual({ seasonFranchiseId: 'sf6', effectiveUntil: '2026-12-15T01:15:00Z' });
+    expect(build?.bounty).toEqual({ seasonFranchiseId: 'sf6', grant: 'first', effectiveUntil: '2026-12-15T01:15:00Z' });
+    const favourite = presentChaosScoreBuild({ card_code: 'BOUNTY', home: { base: 150, adjustments: [], total: 150 }, away: { base: 60, adjustments: [], total: 60 }, bounty: { season_franchise_id: 'sf1', grant: 'up_three', effective_until: null } });
+    expect(favourite?.bounty).toEqual({ seasonFranchiseId: 'sf1', grant: 'up_three', effectiveUntil: null });
+    expect(presentChaosScoreBuild({ card_code: 'UPSET_BOUNTY', home: { base: 1, adjustments: [], total: 1 }, away: { base: 1, adjustments: [], total: 1 } })).toBeNull();
     const twist = presentChaosScoreBuild({ card_code: 'TWIST_DST_DOUBLE', home: { base: 10, adjustments: [], total: 10 }, away: { base: 42, adjustments: [{ effect: 'twist', athlete_id: null, real_team_id: 't2', points: -1 }], total: 41 } });
     expect(twist?.away.lines[0]).toMatchObject({ label: 'Card twist', realTeamId: 't2', points: -1 });
   });
@@ -140,9 +156,22 @@ describe('score build-up from matchups.context', () => {
     expect(presentChaosScoreBuild({ chaos_cards: { ...context.chaos_cards, home: { base: 56.5, adjustments: [{ effect: 'captain', athlete_id: 'a1', points: 20 }], total: 80 } } })).toBeNull();
   });
 
+  it('reads an automatic captain line: marked, labelled, with the average it was chosen on', () => {
+    const build = presentChaosScoreBuild({
+      card_code: 'CAPTAIN',
+      home: { base: 56.5, total: 76.5, adjustments: [{ effect: 'captain', athlete_id: 'a1', real_team_id: null, points: 20, automatic: true, basis: 'recent_average_v1', expected: 20, games: 3, season_total: 100, compared: [{ athlete_id: 'a1', real_team_id: null, expected: 20, games: 3, season_total: 100 }] }] },
+      away: { base: 42, total: 41, adjustments: [{ effect: 'captain', athlete_id: null, real_team_id: 't2', points: -1, automatic: true, basis: 'recent_average_v1', expected: null, games: 0, season_total: 0, compared: [] }] },
+    });
+    expect(build?.home.lines[0]).toEqual({ effect: 'captain', label: 'Automatic captain', athleteId: 'a1', realTeamId: null, points: 20, automatic: true, expected: 20, games: 3 });
+    expect(build?.away.lines[0]).toMatchObject({ label: 'Automatic captain', realTeamId: 't2', points: -1, automatic: true, expected: null, games: 0 });
+    // Only a captain line can be automatic.
+    expect(presentChaosScoreBuild({ card_code: 'WILD_SLOT', home: { base: 1, total: 2, adjustments: [{ effect: 'wild_slot', athlete_id: 'x', points: 1, automatic: true }] }, away: { base: 1, total: 1, adjustments: [] } })?.home.lines[0]).toMatchObject({ label: 'Wild Slot player', automatic: false });
+    expect([adjustmentLabel('captain', true), adjustmentLabel('captain'), adjustmentLabel('twist', true)]).toEqual(['Automatic captain', 'Captain bonus', 'Card twist']);
+  });
+
   it('formats signed points and labels each effect', () => {
     expect([signedPoints(20), signedPoints(-4), signedPoints(0)]).toEqual(['+20.00', '−4.00', '0.00']);
-    expect(['captain', 'wild_slot', 'raid', 'twist'].map(adjustmentLabel)).toEqual(['Captain bonus', 'Wild Slot player', 'Raided player', 'Card twist']);
+    expect(['captain', 'wild_slot', 'raid', 'twist'].map((effect) => adjustmentLabel(effect))).toEqual(['Captain bonus', 'Wild Slot player', 'Raided player', 'Card twist']);
   });
 
   it('finds the lower seed from the seeds the generator recorded', () => {
@@ -213,6 +242,47 @@ describe('CAPTAIN selection view', () => {
     const over = games.map((game) => ({ ...game, state: 'final' }));
     expect(chaosSelectionView({ ...base, kind: 'captain', games: over, now: AFTER_FIRST + 1e9 })).toMatchObject({ status: 'closed', statusLabel: 'Final', message: CHAOS_WEEK_CLOSED });
     expect(chaosSelectionView({ ...base, kind: 'captain', matchupFinal: true, selection: pick('qb', 'CAPTAIN') })).toMatchObject({ status: 'closed', message: null, currentCounts: true });
+  });
+});
+
+describe('automatic captain', () => {
+  // The reply of the chaos_auto_captain database function; this module only presents it.
+  const reply = { athlete_id: 'qb', real_team_id: null, basis: 'recent_average_v1', expected: 20, games: 3, weeks: [10, 11, 12], season_total: 100, compared: [] };
+
+  it('reads the database reply and matches it to a starter; anything else is ignored', () => {
+    expect(presentAutoCaptain(reply, own)).toEqual({ asset: own[0], expected: 20, games: 3 });
+    expect(presentAutoCaptain({ ...reply, expected: '18.50' }, own)?.expected).toBe(18.5);
+    expect(presentAutoCaptain({ ...reply, expected: null, games: 0 }, own)).toEqual({ asset: own[0], expected: null, games: 0 });
+    expect(presentAutoCaptain({ athlete_id: null, real_team_id: 't9', expected: 7, games: 3 }, [{ key: 'team:t9', athleteId: null, realTeamId: 't9', teamId: 't9', label: 'ZZZ D/ST', isStarter: true }])?.asset.label).toBe('ZZZ D/ST');
+    expect(presentAutoCaptain(null, own)).toBeNull();
+    expect(presentAutoCaptain({}, own)).toBeNull();
+    expect(presentAutoCaptain({ ...reply, athlete_id: 'wr-bench' }, own)).toBeNull();
+    expect(presentAutoCaptain({ ...reply, athlete_id: 'unknown' }, own)).toBeNull();
+  });
+
+  it('is shown before a manager chooses, and as applied once that player has kicked off or the week is over', () => {
+    const before = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply });
+    expect(before.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, started: false });
+    expect(before).toMatchObject({ status: 'open', current: null });
+    expect(before.candidates.map((item) => item.athleteId)).toEqual(['qb', 'te']);
+    const after = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, now: AFTER_FIRST });
+    expect(after.autoCaptain?.started).toBe(true);
+    expect(after.status).toBe('open');
+    const over = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, matchupFinal: true });
+    expect(over).toMatchObject({ status: 'closed', autoCaptain: { started: true } });
+  });
+
+  it('gives way to a named captain who counts, and returns when the named captain was moved to the bench', () => {
+    expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, selection: pick('te', 'CAPTAIN') }).autoCaptain).toBeNull();
+    expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, selection: pick('te', 'CAPTAIN'), now: AFTER_FIRST + 3 * 864e5 }).autoCaptain).toBeNull();
+    expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, selection: pick('rb-bench', 'CAPTAIN') }).autoCaptain?.asset.athleteId).toBe('qb');
+  });
+
+  it('follows whatever the database says after a lineup change, and exists only under CAPTAIN', () => {
+    expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: { ...reply, athlete_id: 'te', expected: 8, games: 1 } }).autoCaptain).toMatchObject({ asset: { athleteId: 'te' }, expected: 8, games: 1 });
+    expect(chaosSelectionView({ ...base, kind: 'captain' }).autoCaptain).toBeNull();
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', autoCaptain: reply }).autoCaptain).toBeNull();
+    expect(chaosSelectionView({ ...base, kind: 'raid', isLowerSeed: true, autoCaptain: reply }).autoCaptain).toBeNull();
   });
 });
 

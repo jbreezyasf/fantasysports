@@ -1,5 +1,5 @@
 import React from 'react';
-import { CHAOS_CARD_STRINGS, type ChaosCardKind, type ChaosCardText } from '../../lib/matchups/chaosCards';
+import { CHAOS_CARD_STRINGS, type ChaosAutoCaptain, type ChaosCardKind, type ChaosCardText } from '../../lib/matchups/chaosCards';
 
 // Original Big Exec glyphs, drawn inline. Decorative: the card's name and rules carry the meaning.
 function Emblem({ kind }: { kind: ChaosCardKind }) {
@@ -59,6 +59,33 @@ export function ChaosCardFace({ card, headingId, headingLevel = 2, children }: {
         <p className="chaosCardDealt">{CHAOS_CARD_STRINGS.dealtNote}</p>
         {children}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Who the captain is when none is named, and why. `own` is the signed-in
+ * manager's own franchise (the lineup page); the matchup page shows both sides.
+ * Before that player's kickoff it reads as a notice; afterwards as a fact.
+ * The name and the numbers stay outside the translatable sentences.
+ */
+export function ChaosAutoCaptainNote({ auto, own, id }: { auto: ChaosAutoCaptain; own: boolean; id?: string }) {
+  return (
+    <div className="chaosAutoCaptain" id={id} data-auto-captain={auto.started ? 'applied' : 'pending'}>
+      <p className="chaosSelectionNote">
+        <span>{auto.started ? CHAOS_CARD_STRINGS.autoCaptain : own ? CHAOS_CARD_STRINGS.autoCaptainIfNone : CHAOS_CARD_STRINGS.autoCaptainIfNoneOther}</span> <strong data-no-translate>{auto.asset.label}</strong>
+      </p>
+      <p className="chaosSelectionNote">
+        <span>{auto.expected === null ? CHAOS_CARD_STRINGS.autoCaptainNoHistory : CHAOS_CARD_STRINGS.autoCaptainReason}</span>
+        {auto.expected !== null && (
+          <>
+            {' '}
+            <span>{CHAOS_CARD_STRINGS.autoCaptainAverage}</span> <strong data-no-translate>{auto.expected.toFixed(2)}</strong>
+            {' · '}
+            <span>{CHAOS_CARD_STRINGS.autoCaptainGames}</span> <strong data-no-translate>{auto.games}</strong>
+          </>
+        )}
+      </p>
     </div>
   );
 }

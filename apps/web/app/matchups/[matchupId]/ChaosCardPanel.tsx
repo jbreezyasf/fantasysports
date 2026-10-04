@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChaosCardFace, ChaosDeadlineTime } from '../../components/ChaosCardFace';
+import { ChaosAutoCaptainNote, ChaosCardFace, ChaosDeadlineTime } from '../../components/ChaosCardFace';
 import { CHAOS_CARD_STRINGS, CHAOS_SELECTION_TEXT, selectionKind, signedPoints, type ChaosCardText, type ChaosScoreBuild, type ChaosSelectionView, type ChaosSideBuild } from '../../../lib/matchups/chaosCards';
 
 export type ChaosPanelSide = {
@@ -44,6 +44,7 @@ function SelectionSummary({ side, kind }: { side: ChaosPanelSide; kind: 'captain
           </p>
           {!view.current && <p className="chaosSelectionNote">{text.none}</p>}
           {view.message && <p className="chaosSelectionNote">{view.message}</p>}
+          {view.autoCaptain && <ChaosAutoCaptainNote auto={view.autoCaptain} own={false} />}
           {view.status === 'open' && (
             <p className="chaosSelectionNote">
               <span className="chaosDeadlineLabel">{CHAOS_CARD_STRINGS.deadline}</span> <span>{text.deadline}</span>
@@ -123,7 +124,7 @@ export function ChaosCardPanel({ card, home, away, build, assetNames, isFinal, l
           <p className="chaosSelectionNote" role="note">
             {bountyHolder && build?.bounty ? (
               <>
-                <strong data-no-translate>{bountyHolder.name}</strong> <span>{CHAOS_CARD_STRINGS.bountyEarned}</span>{' '}
+                <strong data-no-translate>{bountyHolder.name}</strong> <span>{build.bounty.grant === 'up_three' ? CHAOS_CARD_STRINGS.bountyEarnedUp : CHAOS_CARD_STRINGS.bountyEarnedFirst}</span>{' '}
                 {build.bounty.effectiveUntil && <ChaosDeadlineTime iso={build.bounty.effectiveUntil} />}
               </>
             ) : isFinal ? (

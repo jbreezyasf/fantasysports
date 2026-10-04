@@ -14,7 +14,7 @@ export type ChaosCardCode =
   | 'CAPTAIN'
   | 'WILD_SLOT'
   | 'RAID'
-  | 'UPSET_BOUNTY'
+  | 'BOUNTY'
   | 'TWIST_TE_DOUBLE'
   | 'TWIST_K_TRIPLE'
   | 'TWIST_DST_DOUBLE'
@@ -36,7 +36,7 @@ export const CHAOS_CARD_CATALOG: Record<ChaosCardCode, ChaosCardText> = {
     code: 'CAPTAIN',
     kind: 'captain',
     name: 'Captain',
-    rules: "Each manager names one Week 13 starter as captain before that player's game kicks off. The captain's fantasy points count double in this matchup. No captain named means no bonus.",
+    rules: "Each manager names one Week 13 starter as captain before that player's game kicks off. The captain's fantasy points count double in this matchup. If no captain is named, the starter with the highest recent scoring average becomes captain automatically.",
   },
   WILD_SLOT: {
     code: 'WILD_SLOT',
@@ -50,11 +50,11 @@ export const CHAOS_CARD_CATALOG: Record<ChaosCardCode, ChaosCardText> = {
     name: 'Raid',
     rules: "The lower seed picks one player from the higher seed's bench before the first Week 13 kickoff. That player's Week 13 points are added to the lower seed's total. The player stays on the higher seed's roster but cannot start for them in Week 13.",
   },
-  UPSET_BOUNTY: {
-    code: 'UPSET_BOUNTY',
+  BOUNTY: {
+    code: 'BOUNTY',
     kind: 'bounty',
-    name: 'Upset Bounty',
-    rules: 'If the lower seed wins this matchup, it moves to the front of the waiver order for the following fantasy week.',
+    name: 'Bounty',
+    rules: 'Whoever wins this matchup moves up the waiver order for the following fantasy week. If the lower seed wins, it goes to the front. If the higher seed wins, it moves up three places. A tie changes nothing.',
   },
   TWIST_TE_DOUBLE: { code: 'TWIST_TE_DOUBLE', kind: 'twist', name: 'Tight End Takeover', rules: 'Every starting tight end scores double for both teams.' },
   TWIST_K_TRIPLE: { code: 'TWIST_K_TRIPLE', kind: 'twist', name: 'Golden Boot', rules: 'Every starting kicker scores triple for both teams.' },
@@ -89,9 +89,17 @@ export const CHAOS_CARD_STRINGS = {
   notMade: 'Not made',
   lowerSeed: 'Lower seed',
   higherSeed: 'Higher seed',
-  bountyEarned: 'Upset Bounty earned: first in the waiver order until',
-  bountyPending: 'Earned only if the lower seed wins.',
-  bountyNotEarned: 'The lower seed did not win. No bounty was earned.',
+  bountyEarnedFirst: 'Bounty earned: first in the waiver order until',
+  bountyEarnedUp: 'Bounty earned: up three places in the waiver order until',
+  bountyPending: 'Earned by whichever team wins. The lower seed goes to the front of the waiver order. The higher seed moves up three places.',
+  bountyNotEarned: 'The game was tied. No bounty was earned.',
+  autoCaptainIfNone: 'If you do not choose, your captain will be',
+  autoCaptainIfNoneOther: 'If no captain is named, the captain will be',
+  autoCaptain: 'Automatic captain',
+  autoCaptainReason: 'Chosen automatically: the starter with the highest average fantasy points per game over their last three scored weeks before Week 13.',
+  autoCaptainNoHistory: 'Chosen automatically: no starter has a score before Week 13, so the first starter in a fixed order is used.',
+  autoCaptainAverage: 'Average points per game',
+  autoCaptainGames: 'Games counted',
   noSelectionNeeded: 'This card needs no selection. It applies to both lineups automatically.',
   controlsHeading: 'Your Chaos Week card',
   goToLineup: 'Make your selection',
@@ -111,7 +119,7 @@ export const CHAOS_SELECTION_TEXT: Record<'captain' | 'wild_slot' | 'raid', Sele
     legend: 'Choose your captain',
     submit: 'Name captain',
     current: 'Captain',
-    none: 'No captain named. No bonus.',
+    none: 'No captain named yet.',
     deadline: "Before your captain's game kicks off",
     lockedReason: "Your captain's game has started. The captain can no longer be changed.",
     saved: 'Captain saved.',
@@ -187,11 +195,15 @@ const finite = (value: unknown): number | null => {
   return null;
 };
 
-export type ChaosAdjustmentLine = { effect: 'captain' | 'wild_slot' | 'raid' | 'twist'; label: string; athleteId: string | null; realTeamId: string | null; points: number };
+/** `automatic` is true for a captain nobody named (chosen by the database, see chaos_auto_captain). */
+export type ChaosAdjustmentLine = { effect: 'captain' | 'wild_slot' | 'raid' | 'twist'; label: string; athleteId: string | null; realTeamId: string | null; points: number; automatic: boolean; expected: number | null; games: number | null };
 export type ChaosSideBuild = { base: number; lines: ChaosAdjustmentLine[]; total: number };
-export type ChaosScoreBuild = { cardCode: ChaosCardCode; home: ChaosSideBuild; away: ChaosSideBuild; bounty: { seasonFranchiseId: string; effectiveUntil: string | null } | null };
+/** grant: 'first' when the lower seed won (front of the waiver order), 'up_three' when the higher seed won. */
+export type ChaosBountyGrant = { seasonFranchiseId: string; grant: 'first' | 'up_three'; effectiveUntil: string | null };
+export type ChaosScoreBuild = { cardCode: ChaosCardCode; home: ChaosSideBuild; away: ChaosSideBuild; bounty: ChaosBountyGrant | null };
 
-export function adjustmentLabel(effect: string): string {
+export function adjustmentLabel(effect: string, automatic = false): string {
+  if (effect === 'captain' && automatic) return CHAOS_CARD_STRINGS.autoCaptain;
   if (effect === 'captain' || effect === 'wild_slot' || effect === 'raid') return CHAOS_SELECTION_TEXT[effect].adjustment;
   return CHAOS_TWIST_ADJUSTMENT;
 }
@@ -208,7 +220,8 @@ function side(value: unknown): ChaosSideBuild | null {
     const points = finite(line?.points);
     const effect = line?.effect;
     if (!line || points === null || (effect !== 'captain' && effect !== 'wild_slot' && effect !== 'raid' && effect !== 'twist')) return null;
-    lines.push({ effect, label: adjustmentLabel(effect), athleteId: typeof line.athlete_id === 'string' ? line.athlete_id : null, realTeamId: typeof line.real_team_id === 'string' ? line.real_team_id : null, points });
+    const automatic = effect === 'captain' && line.automatic === true;
+    lines.push({ effect, label: adjustmentLabel(effect, automatic), athleteId: typeof line.athlete_id === 'string' ? line.athlete_id : null, realTeamId: typeof line.real_team_id === 'string' ? line.real_team_id : null, points, automatic, expected: automatic ? finite(line.expected) : null, games: automatic ? finite(line.games) : null });
   }
   // Never show a build-up that does not add up to the stored total.
   if (Math.abs(base + lines.reduce((sum, line) => sum + line.points, 0) - total) > 0.005) return null;
@@ -230,7 +243,7 @@ export function presentChaosScoreBuild(source: unknown): ChaosScoreBuild | null 
     cardCode: text.code,
     home,
     away,
-    bounty: bounty && typeof bounty.season_franchise_id === 'string' ? { seasonFranchiseId: bounty.season_franchise_id, effectiveUntil: typeof bounty.effective_until === 'string' ? bounty.effective_until : null } : null,
+    bounty: bounty && typeof bounty.season_franchise_id === 'string' ? { seasonFranchiseId: bounty.season_franchise_id, grant: bounty.grant === 'up_three' ? 'up_three' : 'first', effectiveUntil: typeof bounty.effective_until === 'string' ? bounty.effective_until : null } : null,
   };
 }
 
@@ -264,6 +277,32 @@ export function weekGamesOver(games: ChaosGame[]) {
 export type ChaosAsset = { key: string; athleteId: string | null; realTeamId: string | null; teamId: string | null; label: string; isStarter: boolean };
 export type ChaosSelectionRow = { season_franchise_id: string; card_code: string; athlete_id: string | null; real_team_id: string | null; locked_at?: string | null };
 
+/**
+ * The captain the database will use when none is named: the reply of the
+ * chaos_auto_captain RPC, matched to an asset. This module never ranks
+ * starters itself, so the page cannot disagree with the score.
+ */
+export type ChaosAutoCaptain = {
+  asset: ChaosAsset;
+  /** Average fantasy points per game the choice is based on; null when the player has no earlier score. */
+  expected: number | null;
+  games: number;
+  /** True once this player's game has kicked off, or the week is over: shown as a fact, no longer as "if you do not choose". */
+  started: boolean;
+};
+
+/** Reads the chaos_auto_captain reply. Null when there is none, it is malformed, or it names an asset that is not one of the starters given. */
+export function presentAutoCaptain(source: unknown, starters: ChaosAsset[]): Omit<ChaosAutoCaptain, 'started'> | null {
+  const row = record(source);
+  if (!row) return null;
+  const athleteId = typeof row.athlete_id === 'string' ? row.athlete_id : null;
+  const realTeamId = typeof row.real_team_id === 'string' ? row.real_team_id : null;
+  if (!athleteId && !realTeamId) return null;
+  const asset = starters.find((item) => item.isStarter && (athleteId ? item.athleteId === athleteId : item.realTeamId === realTeamId));
+  if (!asset) return null;
+  return { asset, expected: finite(row.expected), games: finite(row.games) ?? 0 };
+}
+
 export type ChaosSelectionView = {
   kind: 'captain' | 'wild_slot' | 'raid';
   /** open: a choice can be made or changed. locked: a choice exists and is fixed. closed: no choice can be made any more. not_eligible: this side never chooses (the higher seed under RAID). */
@@ -277,6 +316,8 @@ export type ChaosSelectionView = {
   canClear: boolean;
   deadlineText: string;
   deadlineAt: string | null;
+  /** CAPTAIN only, and only while no named captain counts: the captain the database uses instead. */
+  autoCaptain: ChaosAutoCaptain | null;
 };
 
 /**
@@ -293,6 +334,8 @@ export function chaosSelectionView(input: {
   games: ChaosGame[];
   matchupFinal: boolean;
   now: number;
+  /** The chaos_auto_captain reply for this franchise (CAPTAIN only). */
+  autoCaptain?: unknown;
 }): ChaosSelectionView {
   const text = CHAOS_SELECTION_TEXT[input.kind];
   const pool = input.kind === 'raid' ? input.opponentAssets : input.ownAssets;
@@ -301,6 +344,7 @@ export function chaosSelectionView(input: {
   const started = (asset: ChaosAsset) => teamGameStarted(asset.teamId, input.games, input.now);
   const weekOver = input.matchupFinal || weekGamesOver(input.games);
   const first = firstKickoff(input.games);
+  const auto = input.kind === 'captain' ? presentAutoCaptain(input.autoCaptain, input.ownAssets) : null;
   const base = { kind: input.kind, current, deadlineText: text.deadline, deadlineAt: input.kind === 'raid' ? first : current ? teamKickoff(current.teamId, input.games) : null };
   const view = (status: ChaosSelectionView['status'], message: string | null, candidates: ChaosAsset[], canClear: boolean, currentCounts: boolean): ChaosSelectionView => ({
     ...base,
@@ -310,6 +354,7 @@ export function chaosSelectionView(input: {
     candidates,
     canClear,
     currentCounts,
+    autoCaptain: auto && !currentCounts ? { ...auto, started: weekOver || started(auto.asset) } : null,
   });
 
   if (input.kind === 'raid') {

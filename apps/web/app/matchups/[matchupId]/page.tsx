@@ -157,10 +157,14 @@ export default async function MatchupPage({
     const card = chaosCardSurface({ eventType: matchup.event_type, draw: draw as ChaosDrawRow | null });
     if (card) {
       const sides = [matchup.home_season_franchise_id, matchup.away_season_franchise_id];
-      const [{ data: selections }, { data: rosters }, { data: cardGames }] = await Promise.all([
+      const captainCard = card.kind === 'captain';
+      // The automatic captain comes from the same database function the score uses (chaos_auto_captain).
+      const [{ data: selections }, { data: rosters }, { data: cardGames }, { data: homeAuto }, { data: awayAuto }] = await Promise.all([
         supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at').eq('matchup_id', matchupId),
         supabase.from('roster_entries').select('season_franchise_id,athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').in('season_franchise_id', sides).is('dropped_at', null).order('added_at'),
         member?.competition_season_id ? supabase.from('real_games').select('home_team_id,away_team_id,starts_at,state').eq('competition_season_id', member.competition_season_id).eq('week', matchup.week) : Promise.resolve({ data: [] }),
+        captainCard ? supabase.rpc('chaos_auto_captain', { p_matchup_id: matchupId, p_season_franchise_id: matchup.home_season_franchise_id }) : Promise.resolve({ data: null }),
+        captainCard ? supabase.rpc('chaos_auto_captain', { p_matchup_id: matchupId, p_season_franchise_id: matchup.away_season_franchise_id }) : Promise.resolve({ data: null }),
       ]);
       const lowerSide = chaosLowerSeedSide(matchup.context);
       const kind = selectionKind(card.kind);
@@ -183,6 +187,7 @@ export default async function MatchupPage({
                 games: (cardGames ?? []) as ChaosGame[],
                 matchupFinal: matchup.is_final,
                 now,
+                autoCaptain: which === 'home' ? homeAuto : awayAuto,
               })
             : null,
         };

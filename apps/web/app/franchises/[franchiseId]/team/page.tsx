@@ -122,13 +122,15 @@ export default async function TeamPage({
       const lowerSide = chaosLowerSeedSide(chaosMatchup.context);
       const isLowerSeed = lowerSide === (isHome ? 'home' : 'away');
       const kind = selectionKind(card.kind);
-      const [{ data: selections }, { data: opponentRoster }, { data: opponentLineup }] = kind
+      const [{ data: selections }, { data: opponentRoster }, { data: opponentLineup }, { data: autoCaptain }] = kind
         ? await Promise.all([
             supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at').eq('matchup_id', chaosMatchup.id),
             kind === 'raid' ? supabase.from('roster_entries').select('athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('season_franchise_id', opponentId).is('dropped_at', null).order('added_at') : Promise.resolve({ data: [] }),
             kind === 'raid' ? supabase.from('lineups').select('slot,athlete_id,real_team_id').eq('season_franchise_id', opponentId).eq('week', week) : Promise.resolve({ data: [] }),
+            // The automatic captain comes from the same database function the score uses, so it follows every lineup change.
+            kind === 'captain' ? supabase.rpc('chaos_auto_captain', { p_matchup_id: chaosMatchup.id, p_season_franchise_id: seasonFranchise.id }) : Promise.resolve({ data: null }),
           ])
-        : [{ data: [] }, { data: [] }, { data: [] }];
+        : [{ data: [] }, { data: [] }, { data: [] }, { data: null }];
       const ownAssets = buildChaosAssets((roster ?? []) as unknown as ChaosRosterRow[], (lineup ?? []) as ChaosLineupRow[]);
       const selectionRows = (selections ?? []) as ChaosSelectionRow[];
       for (const id of chaosLineupBlockedIds({ kind: card.kind, seasonFranchiseId: seasonFranchise.id, selections: selectionRows, raiderSeasonFranchiseId: lowerSide ? (lowerSide === 'home' ? chaosMatchup.home_season_franchise_id : chaosMatchup.away_season_franchise_id) : null })) chaosBlocked.add(id);
@@ -149,6 +151,7 @@ export default async function TeamPage({
                   games: (weekGames ?? []) as ChaosGame[],
                   matchupFinal: chaosMatchup.is_final,
                   now: Date.now(),
+                  autoCaptain,
                 })
               : null
           }
