@@ -8,8 +8,10 @@ The real `matchups/[matchupId]/page.tsx` and `franchises/[franchiseId]/team/page
 
 Re-run on 2026-10-04 after the automatic captain and Bounty changes, with three states added: the lineup page before a captain is named ("If you do not choose, your captain will be ..."), the matchup page with both automatic captains pending, and a final Bounty game won by the higher seed. The automatic captain shown is a fixed stand-in for the `chaos_auto_captain` database reply; the ranking itself is tested in `supabase/tests/chaos_week_rule_cards.sql`, not here.
 
-- 10 card states at 1440 px and 390 px (20 renders): exactly one card panel each; axe `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa`: **0 violations** on the whole page in all 20. This is not a blanket accessibility certification.
-- Target size: every link, button and choice label inside the card is at least 44 by 44 CSS px in all 20.
+A second re-run on 2026-10-04 followed the "captain locks at kickoff" change and added the lineup page with a locked automatic captain (no choose control).
+
+- 11 card states at 1440 px and 390 px (22 renders): exactly one card panel each; axe `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa`: **0 violations** on the whole page in all 22. This is not a blanket accessibility certification.
+- Target size: every link, button and choice label inside the card is at least 44 by 44 CSS px in all 22.
 - No element of the card extends past the viewport in any render.
 - Keyboard (8 renders with a choice list): Tab reaches the first choice, Arrow Down selects the next one, Tab reaches the submit button; the focused choice has a 3 px solid outline.
 - Reduced motion (390 px, `prefers-reduced-motion: reduce`): 0 animated or transitioning elements inside the card.
@@ -31,7 +33,7 @@ Synthetic data and stubbed mutations. No database was involved in these renders;
 
 Matchup page card:
 
-- [Captain, one named captain locked, the other side's automatic captain applied, desktop](matchup-captain-1440.webp) · [phone](matchup-captain-390.webp)
+- [Captain, one named captain locked, the other side's automatic captain locked at kickoff, desktop](matchup-captain-1440.webp) · [phone](matchup-captain-390.webp)
 - [Captain, nobody named yet, both automatic captains pending, desktop](matchup-captain-auto-pending-1440.webp) · [phone](matchup-captain-auto-pending-390.webp)
 - [Bounty, final, won by the higher seed, desktop](matchup-bounty-final-1440.webp) · [phone](matchup-bounty-final-390.webp)
 - [Raid made, desktop](matchup-raid-1440.webp) · [phone](matchup-raid-390.webp)
@@ -40,6 +42,7 @@ Matchup page card:
 Lineup page selection controls:
 
 - [Captain not named yet, with the automatic captain notice, desktop](lineup-captain-auto-1440.webp) · [phone](lineup-captain-auto-390.webp) · keyboard focus: [desktop](lineup-captain-auto-1440-keyboard-focus.webp), [phone](lineup-captain-auto-390-keyboard-focus.webp)
+- [Automatic captain locked at kickoff, no choose control, desktop](lineup-captain-auto-locked-1440.webp) · [phone](lineup-captain-auto-locked-390.webp)
 - [Captain named, desktop](lineup-captain-1440.webp) · [phone](lineup-captain-390.webp) · keyboard focus: [desktop](lineup-captain-1440-keyboard-focus.webp), [phone](lineup-captain-390-keyboard-focus.webp)
 - [Wild Slot, desktop](lineup-wild-slot-1440.webp) · [phone](lineup-wild-slot-390.webp) · keyboard focus: [desktop](lineup-wild-slot-1440-keyboard-focus.webp), [phone](lineup-wild-slot-390-keyboard-focus.webp)
 - [Raid picker, lower seed, desktop](lineup-raid-lower-seed-1440.webp) · [phone](lineup-raid-lower-seed-390.webp) · keyboard focus: [desktop](lineup-raid-lower-seed-1440-keyboard-focus.webp), [phone](lineup-raid-lower-seed-390-keyboard-focus.webp)

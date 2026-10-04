@@ -24,14 +24,16 @@ const homeAssets = [asset('hq', 'Avery Stone • QB • AAA', 't1', true), asset
 const awayAssets = [asset('aq', 'Sam Whitlock • QB • BBB', 't2', true), asset('ab1', 'Rio Castellan • WR • DDD', 't4', false)];
 // What chaos_auto_captain returns for each side (the database ranks; the page only shows it).
 const autoReply = { home: { athlete_id: 'hq', real_team_id: null, expected: 20, games: 3 }, away: { athlete_id: 'aq', real_team_id: null, expected: null, games: 0 } };
-const view = (kind: 'captain' | 'wild_slot' | 'raid', side: 'home' | 'away', selected: string | null, now = BEFORE, auto = false) =>
+const LOCK = '2026-12-04T01:15:00+00:00';
+// auto: false = no reply; true = preview; 'due' = the database reports the lock; 'recorded' = the automatic captain row exists.
+const view = (kind: 'captain' | 'wild_slot' | 'raid', side: 'home' | 'away', selected: string | null, now = BEFORE, auto: boolean | 'due' | 'recorded' = false) =>
   chaosSelectionView({
-    autoCaptain: auto ? autoReply[side] : null,
+    autoCaptain: auto === 'due' ? { ...autoReply[side], locked_at: LOCK } : auto ? autoReply[side] : null,
     kind,
     isLowerSeed: side === 'away',
     ownAssets: side === 'home' ? homeAssets : awayAssets,
     opponentAssets: side === 'home' ? awayAssets : homeAssets,
-    selection: selected ? { season_franchise_id: side, card_code: kind.toUpperCase(), athlete_id: selected, real_team_id: null } : null,
+    selection: selected ? { season_franchise_id: side, card_code: kind.toUpperCase(), athlete_id: selected, real_team_id: null, ...(auto === 'recorded' ? { source: 'automatic', locked_at: LOCK, details: { expected: 20, games: 3 } } : {}) } : null,
     games,
     matchupFinal: false,
     now,
@@ -128,8 +130,9 @@ describe('Chaos Week card on the matchup page', () => {
       away: { base: 42, total: 58, adjustments: [{ effect: 'captain', athlete_id: 'aq', real_team_id: null, points: 16 }] },
     });
     const AFTER = Date.parse('2026-12-04T02:00:00Z');
-    const live = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.CAPTAIN} home={{ ...sides('captain').home, selection: view('captain', 'home', null, AFTER, true) }} away={{ ...sides('captain').away, selection: view('captain', 'away', 'aq', AFTER, true) }} build={build} assetNames={names} isFinal={false} lineupHref={null} />);
-    expect(live).toMatch(/data-auto-captain="applied"><p class="chaosSelectionNote"><span>Automatic captain<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong>/);
+    const live = renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG.CAPTAIN} home={{ ...sides('captain').home, selection: view('captain', 'home', 'hq', AFTER, 'recorded') }} away={{ ...sides('captain').away, selection: view('captain', 'away', 'aq', AFTER, true) }} build={build} assetNames={names} isFinal={false} lineupHref={null} />);
+    expect(live).toMatch(/data-auto-captain="locked"><p class="chaosSelectionNote"><span>Automatic captain:<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong> <span>\(locked at kickoff\)<\/span><\/p>/);
+    expect(live).toContain('so the automatic captain is fixed for the week.');
     expect(live).not.toContain('the captain will be');
     expect(live.match(/chaosAutoCaptain"/g)).toHaveLength(1);
     expect(live).toMatch(/<th scope="row"><span>Automatic captain<\/span><small data-no-translate="true">Avery Stone • QB • AAA<\/small><\/th><td data-no-translate="true">\+20\.00<\/td>/);
@@ -172,10 +175,15 @@ describe('Chaos Week selection controls on the lineup page', () => {
     expect(named).not.toContain('chaosAutoCaptain');
     expect(named).toMatch(/<fieldset aria-describedby="[^" ]+-deadline">/);
 
-    const applied = controls('CAPTAIN', view('captain', 'home', null, Date.parse('2026-12-04T02:00:00Z'), true));
-    expect(applied).toMatch(/data-auto-captain="applied"><p class="chaosSelectionNote"><span>Automatic captain<\/span>/);
-    expect(applied).not.toContain('If you do not choose');
-    await expectNoAxeViolations(applied);
+    // Locked at kickoff: the choose control is gone, whether or not scoring has recorded the row yet.
+    for (const state of ['due', 'recorded'] as const) {
+      const locked = controls('CAPTAIN', view('captain', 'home', state === 'recorded' ? 'hq' : null, Date.parse('2026-12-04T02:00:00Z'), state));
+      expect(locked, state).toMatch(/data-auto-captain="locked"><p class="chaosSelectionNote"><span>Automatic captain:<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong> <span>\(locked at kickoff\)<\/span><\/p>/);
+      expect(locked, state).toContain('<span class="statusBadge is-locked">Locked</span>');
+      expect(locked, state).toContain('No captain was named before this player&#x27;s game kicked off, so the automatic captain is fixed for the week.');
+      expect(locked, state).not.toMatch(/<form|<fieldset|type="radio"|Name captain|Clear selection|If you do not choose/);
+      await expectNoAxeViolations(locked);
+    }
   });
 
   it('renders the wild slot and the raid picker for the lower seed', async () => {

@@ -98,8 +98,8 @@ describe('card catalog', () => {
     expect(translateMessage(CHAOS_CARD_CATALOG.BOUNTY.rules)).toMatch(/peor clasificación, pasa al frente.*mejor clasificado, sube tres puestos.*empate no cambia nada/i);
     expect('UPSET_BOUNTY' in CHAOS_CARD_CATALOG).toBe(false);
     expect(migration).not.toMatch(/UPSET_BOUNTY|Upset Bounty|Recompensa por Sorpresa/);
-    expect(CHAOS_CARD_CATALOG.CAPTAIN.rules).toContain('becomes captain automatically');
-    expect(translateMessage(CHAOS_CARD_CATALOG.CAPTAIN.rules)).toContain('pasa a ser capitán automáticamente');
+    expect(CHAOS_CARD_CATALOG.CAPTAIN.rules).toContain("becomes captain automatically and is locked in at that player's kickoff");
+    expect(translateMessage(CHAOS_CARD_CATALOG.CAPTAIN.rules)).toContain('pasa a ser capitán automáticamente y queda fijado');
     expect(chaosCardAllStrings().some((text) => /no bonus/i.test(text))).toBe(false);
   });
 
@@ -250,9 +250,10 @@ describe('automatic captain', () => {
   const reply = { athlete_id: 'qb', real_team_id: null, basis: 'recent_average_v1', expected: 20, games: 3, weeks: [10, 11, 12], season_total: 100, compared: [] };
 
   it('reads the database reply and matches it to a starter; anything else is ignored', () => {
-    expect(presentAutoCaptain(reply, own)).toEqual({ asset: own[0], expected: 20, games: 3 });
+    expect(presentAutoCaptain(reply, own)).toEqual({ asset: own[0], expected: 20, games: 3, locked: false });
+    expect(presentAutoCaptain({ ...reply, locked_at: '2026-12-04T01:15:00+00:00' }, own)?.locked).toBe(true);
     expect(presentAutoCaptain({ ...reply, expected: '18.50' }, own)?.expected).toBe(18.5);
-    expect(presentAutoCaptain({ ...reply, expected: null, games: 0 }, own)).toEqual({ asset: own[0], expected: null, games: 0 });
+    expect(presentAutoCaptain({ ...reply, expected: null, games: 0 }, own)).toEqual({ asset: own[0], expected: null, games: 0, locked: false });
     expect(presentAutoCaptain({ athlete_id: null, real_team_id: 't9', expected: 7, games: 3 }, [{ key: 'team:t9', athleteId: null, realTeamId: 't9', teamId: 't9', label: 'ZZZ D/ST', isStarter: true }])?.asset.label).toBe('ZZZ D/ST');
     expect(presentAutoCaptain(null, own)).toBeNull();
     expect(presentAutoCaptain({}, own)).toBeNull();
@@ -260,22 +261,35 @@ describe('automatic captain', () => {
     expect(presentAutoCaptain({ ...reply, athlete_id: 'unknown' }, own)).toBeNull();
   });
 
-  it('is shown before a manager chooses, and as applied once that player has kicked off or the week is over', () => {
+  it('before its kickoff it is a preview and the manager can still choose', () => {
     const before = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply });
-    expect(before.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, started: false });
+    expect(before.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, locked: false });
     expect(before).toMatchObject({ status: 'open', current: null });
     expect(before.candidates.map((item) => item.athleteId)).toEqual(['qb', 'te']);
-    const after = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, now: AFTER_FIRST });
-    expect(after.autoCaptain?.started).toBe(true);
-    expect(after.status).toBe('open');
-    const over = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, matchupFinal: true });
-    expect(over).toMatchObject({ status: 'closed', autoCaptain: { started: true } });
+    // A later game has kicked off for someone else, but the database still reports a preview: the choice stays open.
+    const sundayCandidate = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: { ...reply, athlete_id: 'te' }, now: AFTER_FIRST });
+    expect(sundayCandidate).toMatchObject({ status: 'open', autoCaptain: { asset: { athleteId: 'te' }, locked: false } });
+    expect(sundayCandidate.candidates.map((item) => item.athleteId)).toEqual(['te']);
+  });
+
+  it('LOCKS at kickoff: once the database reports the lock, there is nothing to choose, recorded or not', () => {
+    const due = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: { ...reply, locked_at: '2026-12-04T01:15:00+00:00' }, now: AFTER_FIRST });
+    expect(due).toMatchObject({ status: 'locked', statusLabel: 'Locked', canClear: false, candidates: [], message: CHAOS_CARD_STRINGS.autoCaptainLockedReason, autoCaptain: { asset: { athleteId: 'qb' }, locked: true } });
+    const recorded = chaosSelectionView({ ...base, kind: 'captain', now: AFTER_FIRST, selection: { ...pick('qb', 'CAPTAIN'), source: 'automatic', locked_at: '2026-12-04T01:15:00+00:00', details: { expected: 20, games: 3, basis: 'recent_average_v1' } } });
+    expect(recorded).toMatchObject({ status: 'locked', canClear: false, candidates: [], currentCounts: true, message: CHAOS_CARD_STRINGS.autoCaptainLockedReason });
+    expect(recorded.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, locked: true });
+    expect(recorded.current?.athleteId).toBe('qb');
+    const over = chaosSelectionView({ ...base, kind: 'captain', matchupFinal: true, selection: { ...pick('qb', 'CAPTAIN'), source: 'automatic', details: { expected: 20, games: 3 } } });
+    expect(over).toMatchObject({ status: 'closed', statusLabel: 'Final', autoCaptain: { locked: true } });
   });
 
   it('gives way to a named captain who counts, and returns when the named captain was moved to the bench', () => {
     expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, selection: pick('te', 'CAPTAIN') }).autoCaptain).toBeNull();
-    expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, selection: pick('te', 'CAPTAIN'), now: AFTER_FIRST + 3 * 864e5 }).autoCaptain).toBeNull();
+    const namedLocked = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, selection: { ...pick('qb', 'CAPTAIN'), source: 'named' }, now: AFTER_FIRST });
+    expect(namedLocked).toMatchObject({ status: 'locked', autoCaptain: null, message: CHAOS_SELECTION_TEXT.captain.lockedReason });
     expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply, selection: pick('rb-bench', 'CAPTAIN') }).autoCaptain?.asset.athleteId).toBe('qb');
+    // A benched named captain does not keep the choice open once the automatic captain has locked.
+    expect(chaosSelectionView({ ...base, kind: 'captain', autoCaptain: { ...reply, locked_at: '2026-12-04T01:15:00+00:00' }, selection: pick('rb-bench', 'CAPTAIN'), now: AFTER_FIRST })).toMatchObject({ status: 'locked', candidates: [], autoCaptain: { locked: true } });
   });
 
   it('follows whatever the database says after a lineup change, and exists only under CAPTAIN', () => {

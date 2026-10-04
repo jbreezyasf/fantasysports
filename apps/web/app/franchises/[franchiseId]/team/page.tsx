@@ -124,7 +124,7 @@ export default async function TeamPage({
       const kind = selectionKind(card.kind);
       const [{ data: selections }, { data: opponentRoster }, { data: opponentLineup }, { data: autoCaptain }] = kind
         ? await Promise.all([
-            supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at').eq('matchup_id', chaosMatchup.id),
+            supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at,source,details').eq('matchup_id', chaosMatchup.id),
             kind === 'raid' ? supabase.from('roster_entries').select('athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('season_franchise_id', opponentId).is('dropped_at', null).order('added_at') : Promise.resolve({ data: [] }),
             kind === 'raid' ? supabase.from('lineups').select('slot,athlete_id,real_team_id').eq('season_franchise_id', opponentId).eq('week', week) : Promise.resolve({ data: [] }),
             // The automatic captain comes from the same database function the score uses, so it follows every lineup change.

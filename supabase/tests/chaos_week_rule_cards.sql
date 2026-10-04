@@ -366,10 +366,11 @@ select pg_temp.expect(not has_function_privilege('authenticated', 'public.deal_c
 select pg_temp.expect(has_function_privilege('authenticated', 'public.chaos_auto_captain(uuid, uuid)', 'execute') and has_function_privilege('authenticated', 'public.chaos_captain_expected_points(uuid, integer, uuid, uuid)', 'execute')
   and not has_function_privilege('anon', 'public.chaos_auto_captain(uuid, uuid)', 'execute') and not has_function_privilege('anon', 'public.chaos_captain_expected_points(uuid, integer, uuid, uuid)', 'execute')
   and not (select prosecdef from pg_proc where oid = 'public.chaos_auto_captain(uuid, uuid)'::regprocedure) and not (select prosecdef from pg_proc where oid = 'public.chaos_captain_expected_points(uuid, integer, uuid, uuid)'::regprocedure)
-  and not has_function_privilege('authenticated', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute') and not has_function_privilege('anon', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute'),
-  'privileges: signed-in managers may ask who the automatic captain would be (the two functions run with the caller''s rights, not the definer''s); anon may not; the bounty order is for the service role');
-select pg_temp.expect((select count(*) = 16 and bool_and(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.proname in ('chaos_asset_game_started','chaos_week_first_kickoff','chaos_lower_seed','chaos_card_deal_order','chaos_card_side_score','chaos_captain_expected_points','chaos_auto_captain','chaos_bounty_waiver_order','deal_chaos_week_cards','audit_chaos_week_deal','set_chaos_card_selection','clear_chaos_card_selection','chaos_clause_decision','recompute_matchup','set_lineup_slot','process_due_waivers')),
+  and not has_function_privilege('authenticated', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute') and not has_function_privilege('anon', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute')
+  and not has_function_privilege('authenticated', 'public.chaos_lock_auto_captain(uuid, uuid)', 'execute') and not has_function_privilege('anon', 'public.chaos_lock_auto_captain(uuid, uuid)', 'execute'),
+  'privileges: signed-in managers may ask who the automatic captain would be (the two functions run with the caller''s rights, not the definer''s); anon may not; the bounty order and recording an automatic captain are for the service role');
+select pg_temp.expect((select count(*) = 17 and bool_and(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname in ('chaos_asset_game_started','chaos_week_first_kickoff','chaos_lower_seed','chaos_card_deal_order','chaos_card_side_score','chaos_captain_expected_points','chaos_auto_captain','chaos_lock_auto_captain','chaos_bounty_waiver_order','deal_chaos_week_cards','audit_chaos_week_deal','set_chaos_card_selection','clear_chaos_card_selection','chaos_clause_decision','recompute_matchup','set_lineup_slot','process_due_waivers')),
   'every function this migration creates or replaces has a fixed search_path');
 select pg_temp.expect((select bool_and(c.relrowsecurity) and count(*) = 5 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname in ('chaos_cards','chaos_card_deals','chaos_card_draws','chaos_card_selections','chaos_bounty_grants')), 'RLS is enabled on all five new tables');
 rollback;
@@ -460,13 +461,22 @@ select public.recompute_matchup(:'g', false);
 select pg_temp.expect(pg_temp.points(:'g') = array[70.00, 41.00] and (pg_temp.cards(:'g')->'home'->>'base')::numeric = 50.00 and jsonb_array_length(pg_temp.cards(:'g')->'home'->'adjustments') = 1
   and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('effect', 'captain', 'automatic', true, 'athlete_id', :'hq', 'points', 20.00),
   'captain moved to the bench (changed 2026-10-04): the named choice stops counting, the base follows the new lineup (56.50 - 12.50 + 6.00 = 50.00), and the AUTOMATIC captain takes over (hq, +20.00)');
-select pg_temp.kickoff(:'t1');
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '', 'captain moved to the bench: that choice no longer counts, so a new captain who has not kicked off can still be named');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '', 'captain moved to the bench: that choice no longer counts, so before any kickoff another starter can be named');
 select public.recompute_matchup(:'g', false);
 select pg_temp.expect(pg_temp.points(:'g') = array[58.00, 41.00] and pg_temp.cards(:'g')->'home'->'adjustments' = jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hte', 'real_team_id', null, 'points', 8.00)),
   'new captain: 50.00 + 8.00; a NAMED captain replaces the automatic one even though the automatic one would have added more');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'captain: a captain who has not kicked off can be cleared');
 select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections), 'captain: clearing removes the selection row');
+-- A named captain is benched and never replaced; then the automatic captain's game kicks off.
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = ''
+  and pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'TE')) = '', 'benched captain: seed 1 names hte, then takes hte out of the lineup');
+select pg_temp.kickoff(:'t1');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hk'))
+  = 'Captain locked: no captain was named before your automatic captain''s game kicked off, so the automatic captain is fixed for the week',
+  'benched captain: a named captain who left the lineup does not count, so the automatic captain locked at its kickoff and no other starter can be named');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect((select count(*) = 1 and bool_and(athlete_id = :'hq' and source = 'automatic' and selected_by is null and locked_at is not null) from public.chaos_card_selections where season_franchise_id = :'h')
+  and pg_temp.points(:'g') = array[62.00, 41.00], 'benched captain: scoring replaces the row that no longer counts with the recorded automatic captain (base 50.00 - 8.00 = 42.00, + 20.00)');
 rollback;
 
 -- A postponed game never locks a selection and adds nothing. A withdrawn deal leaves no trace on an open game.
@@ -489,8 +499,26 @@ select pg_temp.expect(pg_temp.points(:'g') = array[48.50, 42.00] and pg_temp.car
 rollback;
 
 -- ---------------------------------------------------------------------------
--- 3b. AUTOMATIC CAPTAIN (owner decision of 2026-10-04).
+-- 3b. AUTOMATIC CAPTAIN (owner decisions of 2026-10-04): chosen by average,
+--     locked at kickoff, recorded once.
 -- ---------------------------------------------------------------------------
+-- The automatic captain row of a franchise, without clock values.
+create function pg_temp.auto_row(p_matchup uuid, p_sf uuid) returns jsonb language sql as $$
+  select jsonb_build_object('asset', coalesce(s.athlete_id, s.real_team_id), 'source', s.source, 'selected_by', s.selected_by, 'locked_at', s.locked_at, 'expected', s.details->'expected', 'basis', s.details->'basis',
+    'compared', (select jsonb_agg(coalesce(x->>'athlete_id', x->>'real_team_id') order by ord) from jsonb_array_elements(s.details->'compared') with ordinality t(x, ord)))
+  from public.chaos_card_selections s where s.matchup_id = p_matchup and s.season_franchise_id = p_sf
+$$;
+create function pg_temp.auto_pick(p_matchup uuid, p_sf uuid) returns text language sql as
+$$ select coalesce(a->>'athlete_id', a->>'real_team_id') || case when a->>'locked_at' is null then ' preview' else ' locked' end from public.chaos_auto_captain(p_matchup, p_sf) a $$;
+-- A bench receiver with the best average of the roster (30.00), for "a better starter is added".
+create function pg_temp.give_hb1_history() returns void language sql as $$
+  insert into public.fantasy_player_scores(league_season_id, athlete_id, game_id, week, points, breakdown)
+  select (select ls from ids), (select id from cast_list where role = 'hb1'), gen_random_uuid(), w, 30.00, '{}'::jsonb from generate_series(10, 12) w
+$$;
+-- T1-T2 kicked off three hours ago, T3-T4 one hour ago (or only the first).
+create function pg_temp.kickoff_at(p_home_team uuid, p_hours_ago integer) returns timestamptz language sql as
+$$ update public.real_games set starts_at = date_trunc('second', now()) - make_interval(hours => p_hours_ago), state = 'in_progress' where week = 13 and home_team_id = p_home_team returning starts_at $$;
+
 begin;
 select pg_temp.deal();
 select pg_temp.force_card(:'g', 'CAPTAIN');
@@ -504,24 +532,24 @@ select pg_temp.expect(public.chaos_captain_expected_points(:'ls', 13, :'hk', nul
 select pg_temp.expect(public.chaos_captain_expected_points(:'ls', 13, null, :'t1') = '{"basis":"recent_average_v1","expected":7.00,"games":3,"weeks":[10,11,12],"season_total":21.00}'::jsonb,
   'expected points: a D/ST is averaged from fantasy_team_scores in the same way');
 select public.chaos_auto_captain(:'g', :'h') as auto_h \gset
-select pg_temp.expect(:'auto_h'::jsonb - 'compared' = jsonb_build_object('athlete_id', :'hq', 'real_team_id', null, 'basis', 'recent_average_v1', 'expected', 20.00, 'games', 3, 'weeks', '[10,11,12]'::jsonb, 'season_total', 100.00),
-  'AUTOMATIC CAPTAIN: the starter with the highest average; hq and hrb tie on 20.00 and the higher SEASON TOTAL (100.00 over 40.00) decides');
-select pg_temp.expect(:'auto_h'::jsonb->'compared' = jsonb_build_array(
+select pg_temp.expect(:'auto_h'::jsonb @> jsonb_build_object('athlete_id', :'hq', 'real_team_id', null, 'basis', 'recent_average_v1', 'expected', 20.00, 'games', 3, 'season_total', 100.00, 'locked_at', null)
+  and (:'auto_h'::jsonb->>'kickoff')::timestamptz = (select starts_at from public.real_games where week = 13 and home_team_id = :'t1'),
+  'AUTOMATIC CAPTAIN preview: the starter with the highest average; hq and hrb tie on 20.00 and the higher SEASON TOTAL (100.00 over 40.00) decides; not locked before its kickoff');
+select pg_temp.expect((select jsonb_agg(x - 'kickoff' order by ord) from jsonb_array_elements(:'auto_h'::jsonb->'compared') with ordinality t(x, ord)) = jsonb_build_array(
     jsonb_build_object('athlete_id', :'hq', 'real_team_id', null, 'expected', 20.00, 'games', 3, 'season_total', 100.00),
     jsonb_build_object('athlete_id', :'hrb', 'real_team_id', null, 'expected', 20.00, 'games', 2, 'season_total', 40.00),
     jsonb_build_object('athlete_id', :'hte', 'real_team_id', null, 'expected', 8.00, 'games', 1, 'season_total', 8.00),
     jsonb_build_object('athlete_id', null, 'real_team_id', :'t1', 'expected', 7.00, 'games', 3, 'season_total', 21.00),
     jsonb_build_object('athlete_id', :'hk', 'real_team_id', null, 'expected', null, 'games', 0, 'season_total', 0)),
-  'AUTOMATIC CAPTAIN: every starter is ranked and recorded; the kicker and the D/ST are eligible; the starter with no earlier score ranks LAST');
+  'AUTOMATIC CAPTAIN: every eligible starter is ranked and recorded; the kicker and the D/ST are eligible; the starter with no earlier score ranks LAST');
 select pg_temp.expect(public.chaos_auto_captain(:'g', :'a') @> jsonb_build_object('athlete_id', null, 'real_team_id', :'t2', 'expected', 16.00, 'games', 3), 'AUTOMATIC CAPTAIN: a D/ST with the highest average is chosen like any starter');
 select pg_temp.expect(public.chaos_auto_captain(:'g', :'h3') is null and public.chaos_auto_captain(:'g3', :'h') is null, 'automatic captain: nothing is returned for a franchise that is not in the matchup');
 
 select public.recompute_matchup(:'g', false);
 select pg_temp.expect(pg_temp.points(:'g') = array[76.50, 41.00], 'AUTOMATIC CAPTAIN score: neither manager named a captain; 56.50 + 20.00 = 76.50 and 42.00 - 1.00 = 41.00 (a negative automatic captain is doubled too)');
-select pg_temp.expect(pg_temp.cards(:'g')->'home' = jsonb_build_object('base', 56.50, 'total', 76.50, 'adjustments', jsonb_build_array(
-    jsonb_build_object('effect', 'captain', 'athlete_id', :'hq', 'real_team_id', null, 'points', 20.00, 'automatic', true) || (:'auto_h'::jsonb - 'athlete_id' - 'real_team_id' - 'weeks'))),
-  'AUTOMATIC CAPTAIN: the adjustment line in matchups.context.chaos_cards says automatic: true and records the basis and every average compared');
-select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections), 'automatic captain: no selection row is written; it is computed inside chaos_card_side_score every time');
+select pg_temp.expect(pg_temp.cards(:'g')->'home'->'adjustments' = jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hq', 'real_team_id', null, 'points', 20.00, 'automatic', true) || (:'auto_h'::jsonb - 'athlete_id' - 'real_team_id' - 'weeks')),
+  'AUTOMATIC CAPTAIN: the adjustment line in matchups.context.chaos_cards says automatic: true and records the basis, the kickoff, and every average compared');
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections), 'BEFORE KICKOFF nothing is recorded: the automatic captain is only a preview');
 
 -- No hindsight: Week 13 results do not move the choice.
 savepoint hindsight;
@@ -532,33 +560,37 @@ select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') = :'auto_h'::jsonb a
   'NO HINDSIGHT: with the automatic captain scoring 0 and the kicker 99 in Week 13, the automatic captain is unchanged and adds 0.00 (36.50 + 99.00 - 9.00 = 126.50)');
 rollback to savepoint hindsight;
 
--- It follows the lineup.
+-- Before the kickoff the preview follows the lineup.
 savepoint lineup_change;
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'QB')) = '', 'automatic captain: the manager empties the QB slot');
-select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') @> jsonb_build_object('athlete_id', :'hrb', 'expected', 20.00, 'games', 2), 'AUTOMATIC CAPTAIN follows the lineup: with hq out, hrb is next');
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hrb' || ' preview', 'PREVIEW FOLLOWS THE LINEUP: with hq out, hrb is next');
 rollback to savepoint lineup_change;
 
 -- A named captain always wins; clearing brings the automatic one back.
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hk')) = '', 'named captain: seed 1 names the kicker, the lowest-ranked starter');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hk')) = '', 'named captain: before any kickoff seed 1 names the kicker, the lowest-ranked starter');
 select public.recompute_matchup(:'g', false);
 select pg_temp.expect(pg_temp.points(:'g') = array[65.50, 41.00] and pg_temp.cards(:'g')->'home'->'adjustments' = jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hk', 'real_team_id', null, 'points', 9.00)),
   'A NAMED CAPTAIN ALWAYS WINS: 56.50 + 9.00 = 65.50, one line, not marked automatic, although the automatic captain would have added 20.00');
+select pg_temp.expect((select source = 'named' and selected_by = :'uh' and details is null from public.chaos_card_selections where season_franchise_id = :'h'), 'named captain: the row says named and who named it');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'named captain: cleared before kickoff');
 select public.recompute_matchup(:'g', false);
 select pg_temp.expect(pg_temp.points(:'g') = array[76.50, 41.00], 'automatic captain: back in force once the named captain is cleared');
 
--- The automatic captain's game is postponed: still the captain, adds nothing.
+-- POSTPONED: a starter whose game will not be played is skipped by the automatic rule.
 savepoint auto_postponed;
-update public.real_games set state = 'postponed', starts_at = now() - interval '1 hour' where week = 13 and home_team_id = :'t1';
+update public.real_games set state = 'postponed' where week = 13 and home_team_id = :'t1';
 delete from public.fantasy_player_scores where week = 13 and athlete_id = :'hq';
 delete from public.fantasy_team_scores where week = 13 and real_team_id = :'t2';
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hte' || ' preview' and pg_temp.auto_pick(:'g', :'a') = :'ate' || ' preview'
+  and (select array_agg(coalesce(x->>'athlete_id', x->>'real_team_id') order by ord) from jsonb_array_elements(public.chaos_auto_captain(:'g', :'h')->'compared') with ordinality t(x, ord)) = array[:'hte', :'hk'],
+  'POSTPONED SKIPPED: with the T1-T2 game postponed, hq, hrb and the T1 D/ST are not eligible; the automatic captain is the best starter whose game will be played (hte; for seed 10, ate)');
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[36.50, 43.00] and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('athlete_id', :'hq', 'automatic', true, 'points', 0.00)
-  and pg_temp.cards(:'g')->'away'->'adjustments'->0 @> jsonb_build_object('real_team_id', :'t2', 'automatic', true, 'points', 0.00),
-  'POSTPONED automatic captain: it uses no Week 13 information, so it stays the captain and adds 0.00 (a manager can still name another starter)');
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '', 'postponed automatic captain: the manager names a starter who will play');
+select pg_temp.expect(pg_temp.points(:'g') = array[44.50, 54.00], 'postponed skipped: 36.50 + 8.00 and 43.00 + 11.00');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) = '', 'postponed: a manager may still NAME a starter whose game is postponed');
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[44.50, 43.00], 'postponed automatic captain: the named captain counts instead (36.50 + 8.00)');
+select pg_temp.expect(pg_temp.points(:'g') = array[36.50, 54.00] and pg_temp.cards(:'g')->'home'->'adjustments' = jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hq', 'real_team_id', null, 'points', 0.00)), 'postponed: the NAMED captain is honoured as before and adds 0.00; the automatic rule does not replace it');
+update public.real_games set state = 'canceled' where week = 13 and home_team_id = :'t3';
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'a') is null, 'canceled and postponed: with no starter whose game will be played there is no automatic captain');
 rollback to savepoint auto_postponed;
 
 -- Level on average and season total: the stable id order decides.
@@ -587,7 +619,7 @@ create policy member_read_lineups on public.lineups for select to authenticated 
 create policy member_read_player_scores on public.fantasy_player_scores for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = fantasy_player_scores.league_season_id and is_league_member(ls.league_id)));
 create policy member_read_team_scores on public.fantasy_team_scores for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = fantasy_team_scores.league_season_id and is_league_member(ls.league_id)));
 create policy member_read_matchups on public.matchups for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = matchups.league_season_id and is_league_member(ls.league_id)));
-grant select on public.lineups, public.fantasy_player_scores, public.fantasy_team_scores, public.season_franchises to authenticated;
+grant select on public.lineups, public.fantasy_player_scores, public.fantasy_team_scores, public.season_franchises, public.athletes, public.real_games to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', :'ua', true);
 select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') = :'auto_h'::jsonb, 'RLS: a league member (here the opponent) gets the same automatic captain the scoring function uses');
@@ -597,12 +629,66 @@ reset role;
 select set_config('request.jwt.claim.sub', '', true);
 rollback to savepoint rls;
 
+-- A better starter is added before any kickoff: the preview and the eventual lock follow the new lineup.
+savepoint better_starter;
+select pg_temp.give_hb1_history();
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hq' || ' preview', 'better starter: on the bench it does not count');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '', 'better starter: the manager starts hb1 (average 30.00, plays in the later T3-T4 game)');
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hb1' || ' preview', 'CANDIDATE CHANGES: a higher-average starter added before any kickoff becomes the automatic captain');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hb1' || ' preview' and pg_temp.auto_row(:'g', :'h') is null, 'first kickoff: hq has kicked off but is outranked by hb1, who has not; nothing locks for seed 1');
+select pg_temp.expect(pg_temp.auto_row(:'g', :'a') @> jsonb_build_object('asset', :'t2', 'source', 'automatic', 'selected_by', null) and (pg_temp.auto_row(:'g', :'a')->>'locked_at')::timestamptz = :'k1'::timestamptz, 'first kickoff: seed 10''s automatic captain (its D/ST, in that game) locks, with the kickoff as its lock time');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = ''
+  and pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'before its automatic captain kicks off, seed 1 may still name (and clear) any starter who has not kicked off');
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') @> jsonb_build_object('asset', :'hb1', 'source', 'automatic', 'expected', 30.00) and (pg_temp.auto_row(:'g', :'h')->>'locked_at')::timestamptz = :'k3'::timestamptz
+  and pg_temp.points(:'g') = array[86.50, 41.00], 'THE LOCK FOLLOWS THE NEW LINEUP: hb1 locks at its own kickoff (56.50 + 15.00 base, + 15.00 captain = 86.50)');
+rollback to savepoint better_starter;
+
+-- The lock.
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hq' || ' locked' and (select count(*) = 0 from public.chaos_card_selections), 'kickoff: the automatic captain is due to lock; scoring has not run, so nothing is recorded yet');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte'))
+  = 'Captain locked: no captain was named before your automatic captain''s game kicked off, so the automatic captain is fixed for the week',
+  'LOCK AT KICKOFF: after the automatic captain''s kickoff the manager CANNOT name a different starter, even one whose game has not started, and even before scoring has recorded the lock');
+
+-- The job is late and the manager changes the lineup first: the lock is recorded from the lineup BEFORE the change.
+savepoint lineup_first;
+select pg_temp.give_hb1_history();
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '', 'late job: after the kickoff the manager starts hb1 (average 30.00, not kicked off)');
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') @> jsonb_build_object('asset', :'hq', 'source', 'automatic') and (pg_temp.auto_row(:'g', :'h')->>'locked_at')::timestamptz = :'k1'::timestamptz
+  and not (pg_temp.auto_row(:'g', :'h')->'compared' ? :'hb1'), 'LINEUP CHANGE AFTER THE KICKOFF, BEFORE SCORING: set_lineup_slot records the automatic captain (hq) from the lineup as it was before the change');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h')->>'asset' = :'hq' and pg_temp.points(:'g') = array[91.50, 41.00], 'late job: scoring keeps hq (56.50 + 15.00 base, + 20.00 captain); the better starter added afterwards does not take over');
+rollback to savepoint lineup_first;
+
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') = jsonb_build_object('asset', :'hq', 'source', 'automatic', 'selected_by', null, 'locked_at', :'k1'::timestamptz, 'expected', 20.00, 'basis', 'recent_average_v1', 'compared', jsonb_build_array(:'hq', :'hrb', :'hte', :'t1', :'hk')),
+  'RECORDED: the first scoring run after the kickoff writes one selection row with source automatic, no user, the kickoff as lock time and the averages compared');
+select pg_temp.expect(pg_temp.points(:'g') = array[76.50, 41.00] and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('effect', 'captain', 'athlete_id', :'hq', 'points', 20.00, 'automatic', true, 'locked_at', :'k1'::timestamptz, 'expected', 20.00),
+  'recorded: the score line is read from the row and carries automatic: true and locked_at');
+create temp table lock_snap on commit drop as select pg_temp.snapshot(:'g') as s, (select jsonb_agg(to_jsonb(x) order by x.season_franchise_id) from public.chaos_card_selections x) as rows;
+select public.recompute_matchup(:'g', false), public.recompute_matchup(:'g', false);
+select pg_temp.expect((select count(*) = 2 from public.chaos_card_selections) and (select pg_temp.snapshot(:'g') = s and (select jsonb_agg(to_jsonb(x) order by x.season_franchise_id) from public.chaos_card_selections x) = rows from lock_snap),
+  'IDEMPOTENT: scoring run twice more after the lock leaves one row per franchise, unchanged, and the same result');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte'))
+  = 'Captain locked: no captain was named before your automatic captain''s game kicked off, so the automatic captain is fixed for the week'
+  and pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = 'Selection locked: that player''s game has already started',
+  'LOCKED: with the automatic captain recorded, naming another starter and clearing are both refused');
+
+-- Lineup changed after the lock: the captain does not move.
+savepoint after_lock;
+select pg_temp.give_hb1_history();
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '' and pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'TE')) = '', 'after the lock: the manager adds a better starter and empties another slot');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect((select (select to_jsonb(x) from public.chaos_card_selections x where x.season_franchise_id = :'h') = (select e from jsonb_array_elements(rows) e where e->>'season_franchise_id' = :'h') from lock_snap) and pg_temp.auto_row(:'g', :'h')->>'asset' = :'hq'
+  and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('athlete_id', :'hq', 'points', 20.00, 'automatic', true) and jsonb_array_length(pg_temp.cards(:'g')->'home'->'adjustments') = 1 and pg_temp.points(:'g') = array[83.50, 41.00],
+  'LINEUP CHANGED AFTER THE LOCK: the captain is still hq (+20.00); only the base follows the lineup (56.50 + 15.00 - 8.00 = 63.50)');
+rollback to savepoint after_lock;
+
 -- Final: the automatic captain is part of the result.
-select pg_temp.kickoff(:'t1');
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) = 'That player''s game has already started'
-  and pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '',
-  'automatic captain is not a lock: after its kickoff a manager can still NAME a starter who has not kicked off (see "Decisions needed")');
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'automatic captain: that named captain is cleared again');
 select pg_temp.finish_week13();
 select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'AUTOMATIC CAPTAIN: Week 13 closes');
 select pg_temp.expect((select is_final and winner_season_franchise_id = :'h' and home_points = 76.50 and away_points = 41.00 from public.matchups where id = :'g')
@@ -614,6 +700,31 @@ select pg_temp.expect(public.chaos_clause_decision(:'ls', :'h', :'a')->'steps'->
 create temp table auto_snap on commit drop as select pg_temp.snapshot(:'g') as s;
 select public.recompute_matchup(:'g', true), public.recompute_matchup(:'g', false);
 select pg_temp.expect((select pg_temp.snapshot(:'g') = s from auto_snap), 'STABLE: recomputing the finalized game changes nothing about the automatic captain');
+rollback;
+
+-- THE JOB WAS LATE: every starter has kicked off and no captain is recorded.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'CAPTAIN');
+savepoint late_first_game;
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections) and pg_temp.auto_pick(:'g', :'h') = :'hq' || ' locked', 'late job: both games have kicked off and nothing is recorded');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') @> jsonb_build_object('asset', :'hq', 'source', 'automatic') and (pg_temp.auto_row(:'g', :'h')->>'locked_at')::timestamptz = :'k1'::timestamptz
+  and pg_temp.auto_row(:'g', :'a') @> jsonb_build_object('asset', :'t2') and (pg_temp.auto_row(:'g', :'a')->>'locked_at')::timestamptz = :'k1'::timestamptz,
+  'LATE JOB, kickoff order: at the first kickoff the best-ranked starter (hq; for seed 10 its D/ST) was in that game, so it is the captain, locked at the FIRST kickoff');
+select pg_temp.expect(pg_temp.points(:'g') = array[76.50, 41.00], 'late job: the same score as a job that ran on time');
+rollback to savepoint late_first_game;
+savepoint late_second_game;
+select pg_temp.give_hb1_history();
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '', 'late job: hb1 (average 30.00, later game) was started before any kickoff');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') @> jsonb_build_object('asset', :'hb1', 'source', 'automatic') and (pg_temp.auto_row(:'g', :'h')->>'locked_at')::timestamptz = :'k3'::timestamptz,
+  'LATE JOB, kickoff order: at the first kickoff the best-ranked starter (hb1) had not kicked off, so nothing locked then; hb1 locked at the SECOND kickoff');
+rollback to savepoint late_second_game;
 rollback;
 
 -- ---------------------------------------------------------------------------

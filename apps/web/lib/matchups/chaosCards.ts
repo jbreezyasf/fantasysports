@@ -36,7 +36,7 @@ export const CHAOS_CARD_CATALOG: Record<ChaosCardCode, ChaosCardText> = {
     code: 'CAPTAIN',
     kind: 'captain',
     name: 'Captain',
-    rules: "Each manager names one Week 13 starter as captain before that player's game kicks off. The captain's fantasy points count double in this matchup. If no captain is named, the starter with the highest recent scoring average becomes captain automatically.",
+    rules: "Each manager names one Week 13 starter as captain before that player's game kicks off. The captain's fantasy points count double in this matchup. If no captain is named, the starter with the highest recent scoring average becomes captain automatically and is locked in at that player's kickoff.",
   },
   WILD_SLOT: {
     code: 'WILD_SLOT',
@@ -96,6 +96,9 @@ export const CHAOS_CARD_STRINGS = {
   autoCaptainIfNone: 'If you do not choose, your captain will be',
   autoCaptainIfNoneOther: 'If no captain is named, the captain will be',
   autoCaptain: 'Automatic captain',
+  autoCaptainLocked: 'Automatic captain:',
+  autoCaptainLockedSuffix: '(locked at kickoff)',
+  autoCaptainLockedReason: "No captain was named before this player's game kicked off, so the automatic captain is fixed for the week.",
   autoCaptainReason: 'Chosen automatically: the starter with the highest average fantasy points per game over their last three scored weeks before Week 13.',
   autoCaptainNoHistory: 'Chosen automatically: no starter has a score before Week 13, so the first starter in a fixed order is used.',
   autoCaptainAverage: 'Average points per game',
@@ -275,7 +278,8 @@ export function weekGamesOver(games: ChaosGame[]) {
 }
 
 export type ChaosAsset = { key: string; athleteId: string | null; realTeamId: string | null; teamId: string | null; label: string; isStarter: boolean };
-export type ChaosSelectionRow = { season_franchise_id: string; card_code: string; athlete_id: string | null; real_team_id: string | null; locked_at?: string | null };
+/** source 'automatic': the automatic captain, recorded by the database once that player's game had kicked off; details holds the averages compared. */
+export type ChaosSelectionRow = { season_franchise_id: string; card_code: string; athlete_id: string | null; real_team_id: string | null; locked_at?: string | null; source?: string | null; details?: unknown };
 
 /**
  * The captain the database will use when none is named: the reply of the
@@ -287,12 +291,12 @@ export type ChaosAutoCaptain = {
   /** Average fantasy points per game the choice is based on; null when the player has no earlier score. */
   expected: number | null;
   games: number;
-  /** True once this player's game has kicked off, or the week is over: shown as a fact, no longer as "if you do not choose". */
-  started: boolean;
+  /** True once this player's game has kicked off: the captain is fixed for the week and nobody can be named. False while it is only a preview. */
+  locked: boolean;
 };
 
 /** Reads the chaos_auto_captain reply. Null when there is none, it is malformed, or it names an asset that is not one of the starters given. */
-export function presentAutoCaptain(source: unknown, starters: ChaosAsset[]): Omit<ChaosAutoCaptain, 'started'> | null {
+export function presentAutoCaptain(source: unknown, starters: ChaosAsset[]): ChaosAutoCaptain | null {
   const row = record(source);
   if (!row) return null;
   const athleteId = typeof row.athlete_id === 'string' ? row.athlete_id : null;
@@ -300,7 +304,7 @@ export function presentAutoCaptain(source: unknown, starters: ChaosAsset[]): Omi
   if (!athleteId && !realTeamId) return null;
   const asset = starters.find((item) => item.isStarter && (athleteId ? item.athleteId === athleteId : item.realTeamId === realTeamId));
   if (!asset) return null;
-  return { asset, expected: finite(row.expected), games: finite(row.games) ?? 0 };
+  return { asset, expected: finite(row.expected), games: finite(row.games) ?? 0, locked: typeof row.locked_at === 'string' && row.locked_at !== '' };
 }
 
 export type ChaosSelectionView = {
@@ -316,7 +320,7 @@ export type ChaosSelectionView = {
   canClear: boolean;
   deadlineText: string;
   deadlineAt: string | null;
-  /** CAPTAIN only, and only while no named captain counts: the captain the database uses instead. */
+  /** CAPTAIN only, and only while no named captain counts: the automatic captain, as a preview (locked: false) or fixed for the week (locked: true). */
   autoCaptain: ChaosAutoCaptain | null;
 };
 
@@ -344,7 +348,11 @@ export function chaosSelectionView(input: {
   const started = (asset: ChaosAsset) => teamGameStarted(asset.teamId, input.games, input.now);
   const weekOver = input.matchupFinal || weekGamesOver(input.games);
   const first = firstKickoff(input.games);
-  const auto = input.kind === 'captain' ? presentAutoCaptain(input.autoCaptain, input.ownAssets) : null;
+  // The automatic captain: read from the recorded row when there is one, otherwise from the chaos_auto_captain reply (a preview, or a lock that scoring has not recorded yet).
+  const details = record(input.selection?.details);
+  const recordedAuto = input.kind === 'captain' && !!current && current.isStarter && input.selection?.source === 'automatic';
+  const auto: ChaosAutoCaptain | null =
+    input.kind !== 'captain' ? null : recordedAuto && current ? { asset: current, expected: finite(details?.expected), games: finite(details?.games) ?? 0, locked: true } : current?.isStarter ? null : presentAutoCaptain(input.autoCaptain, input.ownAssets);
   const base = { kind: input.kind, current, deadlineText: text.deadline, deadlineAt: input.kind === 'raid' ? first : current ? teamKickoff(current.teamId, input.games) : null };
   const view = (status: ChaosSelectionView['status'], message: string | null, candidates: ChaosAsset[], canClear: boolean, currentCounts: boolean): ChaosSelectionView => ({
     ...base,
@@ -354,7 +362,7 @@ export function chaosSelectionView(input: {
     candidates,
     canClear,
     currentCounts,
-    autoCaptain: auto && !currentCounts ? { ...auto, started: weekOver || started(auto.asset) } : null,
+    autoCaptain: auto,
   });
 
   if (input.kind === 'raid') {
@@ -368,6 +376,8 @@ export function chaosSelectionView(input: {
   const currentCounts = !!current && (input.kind === 'captain' ? current.isStarter : !current.isStarter);
   // A captain who was moved to the bench no longer counts and may be replaced.
   const currentFixed = !!current && started(current) && (input.kind === 'wild_slot' || current.isStarter);
+  // The captain locks at kickoff, named or automatic: once the automatic captain has kicked off there is nothing left to choose.
+  if (auto?.locked) return view(weekOver ? 'closed' : 'locked', CHAOS_CARD_STRINGS.autoCaptainLockedReason, [], false, recordedAuto);
   if (weekOver) return view('closed', current ? null : CHAOS_WEEK_CLOSED, [], false, currentCounts);
   if (currentFixed) return view('locked', text.lockedReason, [], false, currentCounts);
   const candidates = pool.filter((asset) => (input.kind === 'captain' ? asset.isStarter : !asset.isStarter) && !started(asset) && !(current && matches(asset) && currentCounts));

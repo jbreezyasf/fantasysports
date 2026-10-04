@@ -70,9 +70,11 @@ const thursdayPlayed = [{ home_team_id: 't1', away_team_id: 't2', starts_at: hou
 const allFinal = upcoming.map((g, i) => ({ ...g, starts_at: hours(-90 + i * 40), state: 'final' }));
 // What the chaos_auto_captain database function would return (the page only presents it).
 const autoReply = (id, expected, games) => ({ athlete_id: id, real_team_id: null, basis: 'recent_average_v1', expected, games, season_total: expected * games, compared: [] });
+// The row the database records once the automatic captain's game has kicked off.
+const autoRow = (sf, id, expected, games) => ({ season_franchise_id: sf, athlete_id: id, source: 'automatic', locked_at: hours(-20), details: { basis: 'recent_average_v1', expected, games } });
 const scenarios = {
-  // Seed 1 named a captain (locked). Seed 10 named nobody: the automatic captain played on Thursday and is applied.
-  'matchup-captain': { page: 'matchup', flag: 'true', user: 'f0', card: 'CAPTAIN', games: thursdayPlayed, selections: [{ season_franchise_id: HOME, athlete_id: 'hq' }], auto: { [AWAY]: autoReply('aq', 14.2, 3) }, build: { home: side(HOME, [line('captain', 'hq')]), away: side(AWAY, [{ ...line('captain', 'aq'), automatic: true, basis: 'recent_average_v1', expected: 14.2, games: 3 }]) } },
+  // Seed 1 named a captain (locked). Seed 10 named nobody: its automatic captain kicked off on Thursday and is recorded and locked.
+  'matchup-captain': { page: 'matchup', flag: 'true', user: 'f0', card: 'CAPTAIN', games: thursdayPlayed, selections: [{ season_franchise_id: HOME, athlete_id: 'hq', source: 'named' }, autoRow(AWAY, 'aq', 14.2, 3)], build: { home: side(HOME, [line('captain', 'hq')]), away: side(AWAY, [{ ...line('captain', 'aq'), automatic: true, basis: 'recent_average_v1', expected: 14.2, games: 3 }]) } },
   // Nobody has named a captain and nothing has kicked off: both automatic captains are shown as "if none is named".
   'matchup-captain-auto-pending': { page: 'matchup', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [], auto: { [HOME]: autoReply('hq', 20, 3), [AWAY]: autoReply('aq', 14.2, 3) } },
   // The higher seed won a Bounty game: it moves up three places.
@@ -80,6 +82,8 @@ const scenarios = {
   'matchup-raid': { page: 'matchup', flag: 'true', user: 'f9', card: 'RAID', games: upcoming, selections: [{ season_franchise_id: AWAY, athlete_id: 'hb1' }], build: { home: side(HOME, []), away: side(AWAY, [line('raid', 'hb1')]) } },
   'matchup-twist-final': { page: 'matchup', flag: 'true', user: 'f0', card: 'TWIST_K_TRIPLE', games: allFinal, final: true, selections: [], build: { home: side(HOME, [{ ...line('twist', 'hk'), points: 18 }]), away: side(AWAY, [{ ...line('twist', 'ak'), points: 12 }]) } },
   'lineup-captain': { page: 'team', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [{ season_franchise_id: HOME, athlete_id: 'hw1' }], auto: { [HOME]: autoReply('hq', 20, 3) } },
+  // No captain was named before the automatic captain's kickoff: "Automatic captain: ... (locked at kickoff)", no choose control.
+  'lineup-captain-auto-locked': { page: 'team', flag: 'true', user: 'f9', card: 'CAPTAIN', games: thursdayPlayed, selections: [autoRow(AWAY, 'aq', 14.2, 3)] },
   // No captain named yet: "If you do not choose, your captain will be ...".
   'lineup-captain-auto': { page: 'team', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [], auto: { [HOME]: autoReply('hq', 20, 3) } },
   'lineup-wild-slot': { page: 'team', flag: 'true', user: 'f0', card: 'WILD_SLOT', games: upcoming, selections: [] },

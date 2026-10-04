@@ -66,14 +66,20 @@ export function ChaosCardFace({ card, headingId, headingLevel = 2, children }: {
 /**
  * Who the captain is when none is named, and why. `own` is the signed-in
  * manager's own franchise (the lineup page); the matchup page shows both sides.
- * Before that player's kickoff it reads as a notice; afterwards as a fact.
+ * Before that player's kickoff it is a preview; from the kickoff it is locked for the week.
  * The name and the numbers stay outside the translatable sentences.
  */
 export function ChaosAutoCaptainNote({ auto, own, id }: { auto: ChaosAutoCaptain; own: boolean; id?: string }) {
   return (
-    <div className="chaosAutoCaptain" id={id} data-auto-captain={auto.started ? 'applied' : 'pending'}>
+    <div className="chaosAutoCaptain" id={id} data-auto-captain={auto.locked ? 'locked' : 'pending'}>
       <p className="chaosSelectionNote">
-        <span>{auto.started ? CHAOS_CARD_STRINGS.autoCaptain : own ? CHAOS_CARD_STRINGS.autoCaptainIfNone : CHAOS_CARD_STRINGS.autoCaptainIfNoneOther}</span> <strong data-no-translate>{auto.asset.label}</strong>
+        <span>{auto.locked ? CHAOS_CARD_STRINGS.autoCaptainLocked : own ? CHAOS_CARD_STRINGS.autoCaptainIfNone : CHAOS_CARD_STRINGS.autoCaptainIfNoneOther}</span> <strong data-no-translate>{auto.asset.label}</strong>
+        {auto.locked && (
+          <>
+            {' '}
+            <span>{CHAOS_CARD_STRINGS.autoCaptainLockedSuffix}</span>
+          </>
+        )}
       </p>
       <p className="chaosSelectionNote">
         <span>{auto.expected === null ? CHAOS_CARD_STRINGS.autoCaptainNoHistory : CHAOS_CARD_STRINGS.autoCaptainReason}</span>

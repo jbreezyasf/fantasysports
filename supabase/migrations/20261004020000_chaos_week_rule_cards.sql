@@ -31,7 +31,8 @@
 --    "away":{...}, "bounty":{...}}            -- "bounty" only when granted
 -- An AUTOMATIC captain line (no captain named) carries, besides the keys above,
 --   "automatic":true,"basis":"recent_average_v1","expected":18.33,"games":3,
---   "season_total":201.40,"compared":[one entry per starter, in rank order]
+--   "season_total":201.40,"kickoff":"...","locked_at":"..." (null until locked),
+--   "compared":[one entry per eligible starter, in rank order]
 --
 -- THE CHAOS CLAUSE (postseason tiebreak, 20261004010000) compares each
 -- franchise's "Chaos Week score". From this migration on it uses the BASE
@@ -110,13 +111,20 @@ create table if not exists public.chaos_card_selections (
   -- The franchise whose roster the asset was on when it was chosen: the
   -- chooser itself for CAPTAIN and WILD SLOT, the opponent for RAID.
   source_season_franchise_id uuid not null references public.season_franchises(id),
-  selected_by uuid not null,
+  -- 'named': a manager chose it (selected_by is that user). 'automatic': the
+  -- AUTOMATIC CAPTAIN, recorded by chaos_lock_auto_captain once that player's
+  -- game had kicked off; selected_by is null, locked_at is the kickoff, and
+  -- details holds the averages that were compared.
+  source text not null default 'named' check (source in ('named', 'automatic')),
+  details jsonb,
+  selected_by uuid,
   selected_at timestamptz not null default now(),
   -- Set when the choice can no longer be changed: at once for RAID, and by
   -- recompute_matchup once the chosen player's game has kicked off. The RPCs
   -- decide locks from the schedule, not from this column; it is a record.
   locked_at timestamptz,
   check ((athlete_id is not null)::int + (real_team_id is not null)::int = 1),
+  check ((source = 'named' and selected_by is not null) or (source = 'automatic' and selected_by is null and locked_at is not null)),
   unique (matchup_id, season_franchise_id)
 );
 
@@ -184,8 +192,8 @@ create policy chaos_bounty_grants_member_read on public.chaos_bounty_grants for 
 -- ---------------------------------------------------------------------------
 insert into public.chaos_cards (code, kind, name_en, name_es, rules_en, rules_es, params) values
   ('CAPTAIN', 'captain', 'Captain', 'Capitán',
-   'Each manager names one Week 13 starter as captain before that player''s game kicks off. The captain''s fantasy points count double in this matchup. If no captain is named, the starter with the highest recent scoring average becomes captain automatically.',
-   'Cada mánager nombra capitán a uno de sus titulares de la Semana 13 antes de que empiece el partido de ese jugador. Los puntos fantasy del capitán cuentan doble en este enfrentamiento. Si no se nombra capitán, el titular con el mejor promedio reciente de puntos pasa a ser capitán automáticamente.',
+   'Each manager names one Week 13 starter as captain before that player''s game kicks off. The captain''s fantasy points count double in this matchup. If no captain is named, the starter with the highest recent scoring average becomes captain automatically and is locked in at that player''s kickoff.',
+   'Cada mánager nombra capitán a uno de sus titulares de la Semana 13 antes de que empiece el partido de ese jugador. Los puntos fantasy del capitán cuentan doble en este enfrentamiento. Si no se nombra capitán, el titular con el mejor promedio reciente de puntos pasa a ser capitán automáticamente y queda fijado cuando empieza el partido de ese jugador.',
    '{"multiplier":2}'),
   ('WILD_SLOT', 'wild_slot', 'Wild Slot', 'Puesto Comodín',
    'Each manager may name one extra player from their active roster, at any position, who is not already starting. That player''s Week 13 points are added to the team total. Choose before that player''s game kicks off.',
@@ -322,30 +330,65 @@ as $function$
 $function$;
 
 -- AUTOMATIC CAPTAIN, step 2: the starter who is captain when none is named.
--- Every starter of the franchise's lineup for the matchup's week is ranked by
--- expected (highest first, none last), then season_total (highest first), then
--- the asset id as text (ascending). Kickers and D/ST are eligible, as for a
--- named captain. Returns null when the franchise has no starters, and for a
--- caller who cannot read the league (it runs with the caller's rights).
+-- Pure rule: it reads the lineup, the schedule and earlier scores, never the
+-- selections table and never a Week 13 score.
+--
+-- ELIGIBLE: a starter of the franchise's lineup for the matchup's week whose
+-- team has a game that week that is not postponed or canceled. Its KICKOFF is
+-- the earliest such game. A starter with no playable game is skipped.
+-- RANK: expected (highest first, none last), then season_total (highest
+-- first), then the asset id as text (ascending). Kickers and D/ST are eligible.
+--
+-- LOCKED (locked_at is the kickoff): the captain locks at kickoff. Kickoffs
+-- are taken in time order; at each one, the best-ranked eligible starter among
+-- those who had not kicked off before it is the candidate, and if the
+-- candidate is in that kickoff the captain is that starter, for the week. In
+-- one sentence: the earliest-kicking-off eligible starter who has kicked off
+-- and whom no eligible starter kicking off at the same time or later outranks.
+-- This is evaluated on the lineup as it stands when the function runs; a
+-- starter who has kicked off cannot leave the lineup, so every started starter
+-- is still there.
+-- PREVIEW (locked_at is null): when no lock is due yet, the best-ranked
+-- eligible starter who has not kicked off. It follows every lineup change.
+-- Returns null when there is nobody to choose, and for a caller who cannot
+-- read the league (it runs with the caller's rights).
 create or replace function public.chaos_auto_captain(p_matchup_id uuid, p_season_franchise_id uuid)
 returns jsonb
 language sql stable set search_path = public
 as $function$
   with m as (
-    select mm.league_season_id, mm.week from public.matchups mm
+    select mm.league_season_id, mm.week, ls.competition_season_id
+    from public.matchups mm join public.league_seasons ls on ls.id = mm.league_season_id
     where mm.id = p_matchup_id and p_season_franchise_id in (mm.home_season_franchise_id, mm.away_season_franchise_id)
   ), starters as (
-    select l.athlete_id, l.real_team_id, public.chaos_captain_expected_points(m.league_season_id, m.week, l.athlete_id, l.real_team_id) as e
+    select l.athlete_id, l.real_team_id,
+      (select min(rg.starts_at) from public.real_games rg
+        where rg.competition_season_id = m.competition_season_id and rg.week = m.week
+          and coalesce(rg.state::text, 'unknown') not in ('canceled', 'postponed')
+          and coalesce(l.real_team_id, a.real_team_id) in (rg.home_team_id, rg.away_team_id)) as kickoff,
+      m.league_season_id, m.week
     from m join public.lineups l on l.season_franchise_id = p_season_franchise_id and l.week = m.week and l.slot <> 'BENCH'
+    left join public.athletes a on a.id = l.athlete_id
     where l.athlete_id is not null or l.real_team_id is not null
+  ), eligible as (
+    select s.athlete_id, s.real_team_id, s.kickoff, public.chaos_captain_expected_points(s.league_season_id, s.week, s.athlete_id, s.real_team_id) as e
+    from starters s where s.kickoff is not null
   ), ranked as (
-    select s.athlete_id, s.real_team_id, s.e,
-      row_number() over (order by (s.e->>'expected')::numeric desc nulls last, (s.e->>'season_total')::numeric desc, coalesce(s.athlete_id, s.real_team_id)::text asc) as rank
-    from starters s
+    select x.*, row_number() over (order by (x.e->>'expected')::numeric desc nulls last, (x.e->>'season_total')::numeric desc, coalesce(x.athlete_id, x.real_team_id)::text asc) as rank
+    from eligible x
+  ), due as (
+    select r.* from ranked r
+    where r.kickoff <= now() and not exists (select 1 from ranked o where o.kickoff >= r.kickoff and o.rank < r.rank)
+    order by r.kickoff, r.rank limit 1
+  ), preview as (
+    select r.* from ranked r where r.kickoff > now() and not exists (select 1 from due) order by r.rank limit 1
+  ), pick as (
+    select d.*, true as is_due from due d union all select p.*, false from preview p
   )
-  select jsonb_build_object('athlete_id', r.athlete_id, 'real_team_id', r.real_team_id) || r.e
-    || jsonb_build_object('compared', (select jsonb_agg(jsonb_build_object('athlete_id', x.athlete_id, 'real_team_id', x.real_team_id, 'expected', x.e->'expected', 'games', x.e->'games', 'season_total', x.e->'season_total') order by x.rank) from ranked x))
-  from ranked r where r.rank = 1;
+  select jsonb_build_object('athlete_id', k.athlete_id, 'real_team_id', k.real_team_id) || k.e
+    || jsonb_build_object('kickoff', k.kickoff, 'locked_at', case when k.is_due then k.kickoff end,
+      'compared', (select jsonb_agg(jsonb_build_object('athlete_id', x.athlete_id, 'real_team_id', x.real_team_id, 'expected', x.e->'expected', 'games', x.e->'games', 'season_total', x.e->'season_total', 'kickoff', x.kickoff) order by x.rank) from ranked x))
+  from pick k;
 $function$;
 
 -- One side of a matchup: base lineup total, adjustment lines, adjusted total.
@@ -403,14 +446,17 @@ begin
       -- (set_lineup_slot refuses that; this keeps a point from counting twice).
       if v_kind = 'captain' and v_is_starter then
         v_points := round(v_points * (coalesce((v_params->>'multiplier')::numeric, 2) - 1), 2);
-        v_lines := v_lines || jsonb_build_object('effect', 'captain', 'athlete_id', v_sel.athlete_id, 'real_team_id', v_sel.real_team_id, 'points', v_points);
+        -- A recorded AUTOMATIC captain is read back from its row, never recomputed, so a later lineup change cannot move it.
+        v_lines := v_lines || (jsonb_build_object('effect', 'captain', 'athlete_id', v_sel.athlete_id, 'real_team_id', v_sel.real_team_id, 'points', v_points)
+          || case when v_sel.source = 'automatic' then jsonb_build_object('automatic', true, 'locked_at', v_sel.locked_at) || coalesce(v_sel.details, '{}'::jsonb) else '{}'::jsonb end);
       elsif v_kind in ('wild_slot', 'raid') and not v_is_starter then
         v_lines := v_lines || jsonb_build_object('effect', v_kind, 'athlete_id', v_sel.athlete_id, 'real_team_id', v_sel.real_team_id, 'points', round(v_points, 2));
       end if;
     end if;
-    -- AUTOMATIC CAPTAIN: no captain named, or the named one is no longer a
-    -- starter (that choice has stopped counting). A named captain who is in
-    -- the lineup always wins, whatever they score.
+    -- AUTOMATIC CAPTAIN, not recorded yet: no captain row, or the recorded one
+    -- is no longer a starter (that choice has stopped counting). This is the
+    -- preview, or a lock that is due and that recompute_matchup records before
+    -- it calls this function. A captain who is in the lineup always wins.
     if v_kind = 'captain' and not (v_sel.id is not null and coalesce(v_is_starter, false)) then
       v_auto := chaos_auto_captain(p_matchup_id, p_season_franchise_id);
       if v_auto is not null then
@@ -583,6 +629,7 @@ declare
   v_sel chaos_card_selections%rowtype;
   v_source uuid;
   v_kickoff timestamptz;
+  v_counts boolean;
 begin
   if v_user is null then raise exception 'Authentication required'; end if;
   if (p_athlete_id is not null)::int + (p_real_team_id is not null)::int <> 1 then raise exception 'Choose exactly one player or defense'; end if;
@@ -611,10 +658,17 @@ begin
   if v_kind = 'captain' then
     -- A named captain is fixed once their game has started. A captain who was
     -- moved out of the lineup before kickoff no longer counts and can be replaced.
-    if v_sel.id is not null and chaos_asset_game_started(v_m.league_season_id, v_m.week, v_sel.athlete_id, v_sel.real_team_id)
-       and exists (select 1 from lineups l where l.season_franchise_id = p_season_franchise_id and l.week = v_m.week and l.slot <> 'BENCH'
-         and ((v_sel.athlete_id is not null and l.athlete_id = v_sel.athlete_id) or (v_sel.real_team_id is not null and l.real_team_id = v_sel.real_team_id))) then
+    v_counts := v_sel.id is not null and exists (select 1 from lineups l where l.season_franchise_id = p_season_franchise_id and l.week = v_m.week and l.slot <> 'BENCH'
+         and ((v_sel.athlete_id is not null and l.athlete_id = v_sel.athlete_id) or (v_sel.real_team_id is not null and l.real_team_id = v_sel.real_team_id)));
+    if v_counts and chaos_asset_game_started(v_m.league_season_id, v_m.week, v_sel.athlete_id, v_sel.real_team_id) then
+      if v_sel.source = 'automatic' then raise exception 'Captain locked: no captain was named before your automatic captain''s game kicked off, so the automatic captain is fixed for the week'; end if;
       raise exception 'Captain locked: your captain''s game has already started';
+    end if;
+    -- The captain locks at kickoff, named or automatic: with no captain that
+    -- counts, a lock that is due (whether or not scoring has recorded it yet)
+    -- closes the choice.
+    if not v_counts and chaos_auto_captain(p_matchup_id, p_season_franchise_id)->>'locked_at' is not null then
+      raise exception 'Captain locked: no captain was named before your automatic captain''s game kicked off, so the automatic captain is fixed for the week';
     end if;
     if not exists (select 1 from lineups l where l.season_franchise_id = p_season_franchise_id and l.week = v_m.week and l.slot <> 'BENCH'
       and ((p_athlete_id is not null and l.athlete_id = p_athlete_id) or (p_real_team_id is not null and l.real_team_id = p_real_team_id))) then
@@ -657,7 +711,7 @@ begin
   insert into chaos_card_selections(matchup_id, season_franchise_id, card_code, athlete_id, real_team_id, source_season_franchise_id, selected_by, locked_at)
   values (p_matchup_id, p_season_franchise_id, v_code, p_athlete_id, p_real_team_id, v_source, v_user, case when v_kind = 'raid' then now() end)
   on conflict (matchup_id, season_franchise_id) do update
-    set card_code = excluded.card_code, athlete_id = excluded.athlete_id, real_team_id = excluded.real_team_id,
+    set card_code = excluded.card_code, athlete_id = excluded.athlete_id, real_team_id = excluded.real_team_id, source = 'named', details = null,
         source_season_franchise_id = excluded.source_season_franchise_id, selected_by = excluded.selected_by, selected_at = now(), locked_at = excluded.locked_at;
 
   if v_kind = 'raid' then
@@ -708,6 +762,47 @@ revoke execute on function public.set_chaos_card_selection(uuid, uuid, text, uui
 revoke execute on function public.clear_chaos_card_selection(uuid, uuid) from public, anon;
 grant execute on function public.set_chaos_card_selection(uuid, uuid, text, uuid, uuid) to authenticated;
 grant execute on function public.clear_chaos_card_selection(uuid, uuid) to authenticated;
+
+-- Records the AUTOMATIC CAPTAIN once it has locked. Called by recompute_matchup
+-- before every rescore of an open CAPTAIN game, and by set_lineup_slot before a
+-- lineup change, so the row is written from the lineup as it stood before
+-- anything could move after the kickoff. Idempotent: with a captain row that
+-- still counts (named or automatic) it does nothing. A row that no longer
+-- counts (its player left the starting lineup) is replaced.
+create or replace function public.chaos_lock_auto_captain(p_matchup_id uuid, p_season_franchise_id uuid)
+returns jsonb
+language plpgsql set search_path = public
+as $function$
+declare
+  v_m matchups%rowtype;
+  v_code text;
+  v_auto jsonb;
+begin
+  select * into v_m from matchups where id = p_matchup_id;
+  if v_m.id is null or v_m.event_type <> 'chaos' or p_season_franchise_id not in (v_m.home_season_franchise_id, v_m.away_season_franchise_id) then return null; end if;
+  select d.card_code into v_code from chaos_card_draws d join chaos_cards c on c.code = d.card_code
+  where d.matchup_id = p_matchup_id and c.kind = 'captain' and d.revealed_at is not null and d.revealed_at <= now();
+  if v_code is null then return null; end if;
+  perform pg_advisory_xact_lock(hashtextextended('chaos-selection:' || p_matchup_id::text, 0));
+  if exists (
+    select 1 from chaos_card_selections s join lineups l on l.season_franchise_id = s.season_franchise_id and l.week = v_m.week and l.slot <> 'BENCH'
+      and ((s.athlete_id is not null and l.athlete_id = s.athlete_id) or (s.real_team_id is not null and l.real_team_id = s.real_team_id))
+    where s.matchup_id = p_matchup_id and s.season_franchise_id = p_season_franchise_id
+  ) then return null; end if;
+  v_auto := chaos_auto_captain(p_matchup_id, p_season_franchise_id);
+  if v_auto is null or v_auto->>'locked_at' is null then return null; end if;
+  insert into chaos_card_selections(matchup_id, season_franchise_id, card_code, athlete_id, real_team_id, source_season_franchise_id, source, details, selected_by, locked_at)
+  values (p_matchup_id, p_season_franchise_id, v_code, (v_auto->>'athlete_id')::uuid, (v_auto->>'real_team_id')::uuid, p_season_franchise_id, 'automatic',
+    v_auto - 'athlete_id' - 'real_team_id' - 'weeks' - 'locked_at', null, (v_auto->>'locked_at')::timestamptz)
+  on conflict (matchup_id, season_franchise_id) do update
+    set card_code = excluded.card_code, athlete_id = excluded.athlete_id, real_team_id = excluded.real_team_id, source_season_franchise_id = excluded.source_season_franchise_id,
+        source = 'automatic', details = excluded.details, selected_by = null, selected_at = now(), locked_at = excluded.locked_at;
+  return v_auto;
+end
+$function$;
+
+revoke execute on function public.chaos_lock_auto_captain(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.chaos_lock_auto_captain(uuid, uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 6. chaos_clause_decision: the text of 20261004010000. Changes: for a Chaos
@@ -819,6 +914,8 @@ begin
   -- matchup v_cards stays null and nothing below differs from 20261004010000. v_home / v_away become the
   -- adjusted totals; the base totals and each adjustment line go to context->'chaos_cards'.
   if v_m.event_type='chaos' then
+    -- The captain locks at kickoff: record a due AUTOMATIC captain before scoring, so the score below reads the recorded row. Does nothing unless a CAPTAIN card was dealt.
+    if not v_m.is_final then perform chaos_lock_auto_captain(v_m.id,v_m.home_season_franchise_id), chaos_lock_auto_captain(v_m.id,v_m.away_season_franchise_id); end if;
     v_side_home:=chaos_card_side_score(v_m.id,v_m.home_season_franchise_id);
     if v_side_home->>'card_code' is not null then
       v_side_away:=chaos_card_side_score(v_m.id,v_m.away_season_franchise_id);
@@ -935,6 +1032,16 @@ begin
   from public.lineups
   where season_franchise_id = p_season_franchise_id and week = p_week
   for update;
+
+  -- Chaos Week CAPTAIN card: if the automatic captain has locked (its game has
+  -- kicked off) but scoring has not recorded it yet, record it now, from the
+  -- lineup as it is BEFORE this change. No rows unless a CAPTAIN card was dealt.
+  perform public.chaos_lock_auto_captain(m.id, p_season_franchise_id)
+  from public.matchups m
+  join public.chaos_card_draws d on d.matchup_id = m.id
+  join public.chaos_cards c on c.code = d.card_code and c.kind = 'captain'
+  where m.league_season_id = v_league_season and m.week = p_week and m.event_type = 'chaos' and not m.is_final
+    and p_season_franchise_id in (m.home_season_franchise_id, m.away_season_franchise_id);
 
   select l.athlete_id, l.real_team_id
     into v_previous_athlete, v_previous_real_team

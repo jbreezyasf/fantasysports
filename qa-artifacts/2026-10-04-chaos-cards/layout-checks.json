@@ -76,6 +76,18 @@
     "focusOnSubmit": true
   },
   {
+    "name": "lineup-captain-auto-locked",
+    "width": 1440,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": false,
+    "overflowOffenders": [],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": []
+  },
+  {
     "name": "lineup-captain-auto",
     "width": 1440,
     "reducedMotion": "no-preference",
@@ -264,6 +276,34 @@
     "focusOnSubmit": true
   },
   {
+    "name": "lineup-captain-auto-locked",
+    "width": 390,
+    "reducedMotion": "no-preference",
+    "cardPanels": 1,
+    "overflow": true,
+    "overflowOffenders": [
+      {
+        "tag": "NAV",
+        "class": "franchiseNav",
+        "inCard": false
+      },
+      {
+        "tag": "SECTION",
+        "class": "leagueHero franchiseStadiumHero",
+        "inCard": false
+      },
+      {
+        "tag": "DIV",
+        "class": "stadiumColorWash",
+        "inCard": false
+      }
+    ],
+    "panelOverflow": 0,
+    "smallTargets": [],
+    "axe": [],
+    "axeInCard": []
+  },
+  {
     "name": "lineup-captain-auto",
     "width": 390,
     "reducedMotion": "no-preference",
@@ -502,6 +542,31 @@
   },
   {
     "name": "lineup-captain",
+    "width": 390,
+    "reducedMotion": "reduce",
+    "cardPanels": 1,
+    "overflow": true,
+    "overflowOffenders": [
+      {
+        "tag": "NAV",
+        "class": "franchiseNav",
+        "inCard": false
+      },
+      {
+        "tag": "SECTION",
+        "class": "leagueHero franchiseStadiumHero",
+        "inCard": false
+      },
+      {
+        "tag": "DIV",
+        "class": "stadiumColorWash",
+        "inCard": false
+      }
+    ],
+    "motion": 0
+  },
+  {
+    "name": "lineup-captain-auto-locked",
     "width": 390,
     "reducedMotion": "reduce",
     "cardPanels": 1,

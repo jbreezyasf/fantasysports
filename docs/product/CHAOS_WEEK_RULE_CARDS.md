@@ -13,6 +13,8 @@
 | Selections are visible to both managers as soon as they are made, and lock at that player's kickoff. There is no in-game lock. | Confirmed. Already built. |
 | Cards are dealt automatically as soon as Week 12 closes, and revealed when dealt. | Confirmed. Already built. |
 | **Automatic captain.** A manager under Captain who names nobody gets a captain chosen automatically. | New. Built: section 1 "Captain", section 4 "The automatic captain". |
+| **The captain locks at kickoff, named or automatic.** Once the automatic captain's game has kicked off, the captain is fixed for the week and nobody can be named. The locked automatic captain is recorded. | Decided after the first build of the automatic captain, to close a hindsight loophole. Built: section 4. |
+| **The automatic rule skips a starter whose Week 13 game is postponed or canceled.** A named captain in that situation is still honoured. | Decided with the lock. Built: section 4. |
 | **Bounty** replaces Upset Bounty and rewards whoever wins. | New. Built: section 1 "Bounty", section 4 "The Bounty waiver order". |
 | **Deal deadline alert** in the weekly job, and a way for an operator to deal by hand. | New. Built: section 5. |
 | A starting kicker or D/ST can be captain. | Treated as settled: the automatic-captain instruction says they are eligible "exactly as for a named captain". |
@@ -51,12 +53,13 @@ This season each of the five Chaos Week games is dealt one **rule card**. Both t
 
 **Captain**
 - Your captain must be in your starting lineup. A starting kicker or D/ST can be captain.
-- **If you name nobody, you still get a captain.** The automatic captain is the starter in your final Week 13 lineup with the highest average fantasy points per game over their three most recent scored weeks before Week 13 (normally Weeks 10 to 12; fewer if the player has fewer). Ties go to the higher season total, then to a fixed order. A starter with no score before Week 13 ranks last. Kickers and D/ST count like anyone else. Nothing from Week 13 is used, so it cannot be picked with hindsight.
-- Your lineup page tells you, before you choose, who it would be and why: "If you do not choose, your captain will be ...". It changes when your lineup changes.
-- A captain you name always replaces the automatic one, whatever either of them scores.
+- **If you name nobody, you still get a captain.** The automatic captain is the starter in your Week 13 lineup with the highest average fantasy points per game over their three most recent scored weeks before Week 13 (normally Weeks 10 to 12; fewer if the player has fewer). Ties go to the higher season total, then to a fixed order. A starter with no score before Week 13 ranks last. Kickers and D/ST count like anyone else. A starter whose Week 13 game is postponed or canceled is skipped. Nothing from Week 13 scores is used.
+- **The captain locks at kickoff, whether you named it or not.** Until your automatic captain's game kicks off you can still name any starter whose game has not started, and changing your lineup can change who the automatic captain would be. From the moment that player's game kicks off, the captain is fixed for the week: you cannot name anyone, and later lineup changes do not move it.
+- Your lineup page tells you, before you choose, who it would be and why: "If you do not choose, your captain will be ...". Once it has locked, the page shows "Automatic captain: ... (locked at kickoff)" and there is nothing left to choose.
+- A captain you name in time always replaces the automatic one, whatever either of them scores.
 - On the score build-up the line reads "Automatic captain" instead of "Captain bonus".
 - Once your captain's game has kicked off, the captain cannot be changed or removed.
-- If you move your captain to the bench before kickoff, that choice stops counting and you can name another starter. Until you do, the automatic captain applies.
+- If you move your captain to the bench before kickoff, that choice stops counting and you can name another starter. Until you do, the automatic captain applies, and it locks at its own kickoff like any other.
 - Double means double: a captain who scores negative points costs you twice.
 
 **Wild Slot**
@@ -105,17 +108,22 @@ The playoff tiebreak (the Chaos Clause) compares Chaos Week scores. Because each
 | Situation | What happens | Evidence |
 |---|---|---|
 | A manager never makes a selection | **Captain:** the automatic captain is used (section 4). **Wild Slot, Raid:** no extra player and no raid; nothing is assigned. | PROVEN (test) |
-| The automatic captain's game is postponed or canceled | It stays the automatic captain and adds 0, because the rule reads nothing about Week 13. The manager can still name another starter who will play. See "Decisions needed", item 2. | PROVEN (test) for a postponed game. LIKELY for a canceled one (same code path). |
-| A named captain is moved to the bench or dropped | The named choice stops counting (as before) and the automatic captain applies until another captain is named. | PROVEN (test) for the bench. LIKELY for a drop (see the row below). |
+| A starter's game is postponed or canceled when the automatic captain is chosen | That starter is skipped. The automatic captain is the best-ranked starter whose game will be played. If no starter has such a game there is no automatic captain. A starter on a bye is skipped in the same way. | PROVEN (test) for postponed and canceled games. LIKELY for a bye (same code path: no game). |
+| A named captain is moved to the bench or dropped | The named choice stops counting (as before) and the automatic captain applies until another captain is named, locking at its own kickoff. | PROVEN (test) for the bench, including the lock that follows. LIKELY for a drop (see the row below). |
 | No starter has a score before Week 13 | The automatic captain is the starter with the smallest internal id, the same one every time. | PROVEN (test) |
 | The franchise has no starters | There is no automatic captain and no bonus. | PROVEN (test) |
-| A manager names a captain after the automatic captain has already played | Allowed, as long as the named player has not kicked off. See "Decisions needed", item 1. | PROVEN (test) |
-| The selected player's game is postponed or canceled | The player has no Week 13 score, so the selection adds 0. A postponed or canceled game never locks a player, so a Captain or Wild Slot choice can be changed to another eligible player until Chaos Week is complete. A named captain is **not** replaced by the automatic one: a named captain always wins. A raid stays as it is and adds 0. | PROVEN (test) for a postponed named captain: adds 0.00, is not locked, is not replaced automatically, can be replaced by the manager. LIKELY for Wild Slot, Raid and canceled games (same code path, not separately run). |
+| A manager names nobody, the automatic captain's game kicks off, and the manager then tries to name a starter whose game has not started | Refused: "Captain locked: no captain was named before your automatic captain's game kicked off, so the automatic captain is fixed for the week". This holds from the kickoff itself, even before scoring has recorded the lock. | PROVEN (test) |
+| The manager changes the lineup before the automatic captain's kickoff | The preview and the eventual lock follow the new lineup. A better starter added before any kickoff becomes the automatic captain and locks at its own kickoff. | PROVEN (test) |
+| The lineup is changed after the lock | The captain does not move. Only the lineup total follows the lineup. | PROVEN (test) |
+| Scoring runs again after the lock | One row per franchise, unchanged; the same result. | PROVEN (test) |
+| Scoring is late: games have kicked off and no captain is recorded | The lock is worked out in kickoff order (section 4) and recorded with the kickoff as its lock time. If the manager changes the lineup first, `set_lineup_slot` records the lock from the lineup as it was before the change. | PROVEN (test) |
+| The recorded automatic captain later leaves the starting lineup | Treated like a named captain in that situation: the row stops counting. A player who has kicked off cannot be benched or dropped, so this needs a postponement after kickoff or an operator change. | LIKELY (same code path as a named captain; not separately run) |
+| The selected player's game is postponed or canceled | The player has no Week 13 score, so the selection adds 0. A postponed or canceled game never locks a player, so a Captain or Wild Slot choice can be changed to another eligible player until Chaos Week is complete. A named captain is **not** replaced by the automatic one: a named captain is honoured as before, although the automatic rule itself would skip that player. A raid stays as it is and adds 0. | PROVEN (test) for a postponed named captain: adds 0.00, is not locked, is not replaced automatically, can be replaced by the manager. LIKELY for Wild Slot, Raid and canceled games (same code path, not separately run). |
 | The selected player is on a bye | Same as above: 0 points, never locks. | LIKELY. UNVERIFIED whether any team has a Week 13 bye in 2026. |
 | The selected player is injured or inactive | No special handling. The selection counts whatever that player scores, which may be 0. Managers can change a Captain or Wild Slot choice until that player's kickoff. | LIKELY |
 | The captain is dropped before kickoff | The existing drop logic removes a dropped player from open-week lineups. The captain is then no longer a starter, so the choice stops counting, the automatic captain applies, and another captain can be named. | LIKELY (combines PROVEN "captain moved out of the lineup" with existing drop behaviour; the drop path itself was not run in this test) |
-| The Wild Slot pick is dropped before kickoff | The selection row stays and **still adds that player's Week 13 points**, unless the manager changes the pick. See "Decisions needed", item 4. | LIKELY (the score reads the selection and the player's score, not the roster) |
-| The raided player is dropped or traded by the higher seed | The raid stands and the lower seed still receives that player's Week 13 points. The higher seed still cannot start that player in Week 13. A third franchise that acquires the player may start them. See item 4. | LIKELY |
+| The Wild Slot pick is dropped before kickoff | The selection row stays and **still adds that player's Week 13 points**, unless the manager changes the pick. See "Decisions needed", item 3. | LIKELY (the score reads the selection and the player's score, not the roster) |
+| The raided player is dropped or traded by the higher seed | The raid stands and the lower seed still receives that player's Week 13 points. The higher seed still cannot start that player in Week 13. A third franchise that acquires the player may start them. See item 3. | LIKELY |
 | A player whose game has started | Cannot be dropped (existing rule) and cannot be selected, changed or cleared. | PROVEN (test) for selections |
 | The adjusted totals are level | A regular-season tie, as in any other week. A tied Bounty game earns nothing for either team. | PROVEN (test) |
 | A team wins under another card | No bounty. The existing Chaos Giant Killer award still follows the adjusted result. | PROVEN (test) |
@@ -163,7 +171,7 @@ It recomputes the deal from the stored seed and deck and returns `matches: true`
 | Selections | `chaos_card_selections`, written only by `set_chaos_card_selection` and `clear_chaos_card_selection` |
 | Bounty | `chaos_bounty_grants` (`grant_kind` is `first` or `up_three`), written by `recompute_matchup` at finalization; `chaos_bounty_waiver_order(league_season)` turns the grants in force into the league's waiver order; `process_due_waivers` sorts claims by it |
 | Score | `chaos_card_side_score(matchup, franchise)` returns base, lines and total; `recompute_matchup` uses it for `chaos` matchups with a revealed card and stores the build-up in `matchups.context.chaos_cards` |
-| Automatic captain | `chaos_auto_captain(matchup, franchise)` ranks the starters; `chaos_captain_expected_points(league_season, week, athlete, team)` gives the number they are ranked by. `chaos_card_side_score` calls it, and so do the pages. |
+| Automatic captain | `chaos_auto_captain(matchup, franchise)` ranks the eligible starters and says whether the lock is due; `chaos_captain_expected_points(league_season, week, athlete, team)` gives the number they are ranked by; `chaos_lock_auto_captain(matchup, franchise)` records the locked captain in `chaos_card_selections` (`source = 'automatic'`). `chaos_card_side_score` and the pages read them. |
 | Lineup locks | `set_lineup_slot` refuses a raided player for the lender and a Wild Slot pick for its own franchise |
 | Tiebreak | `chaos_clause_decision` compares base totals and records the adjusted totals beside them |
 | Flag | `CHAOS_CARDS_ENABLED` (`1`, `true`, `on`, `yes`), read by the weekly job and by the pages |
@@ -176,14 +184,23 @@ It recomputes the deal from the stored seed and deck and returns `matches: true`
 
 **Why an average and not a projection.** The owner asked for the "highest projected starter". Weekly projections do not exist in this product: `supabase/schema/tables.sql` and production (read 2026-10-04, PROVEN) have one projection column, `fantasy_player_market_values.projected_points`, which is per season (the table has no week column) and holds 0 rows. Until weekly projections exist, the rule below stands in.
 
-**The rule, exactly.** For a franchise under the Captain card with no named captain that counts (none named, or the named player is no longer one of its starters):
+**The rule, exactly.** For a franchise under the Captain card with no captain that counts (none recorded, or the recorded player is no longer one of its starters):
 
-1. Take every starter in the franchise's Week 13 lineup as it stands when the score is computed (at finalization, the final lineup). Bench players are never considered.
-2. For each, take the weeks before Week 13 in which that player (or D/ST) has a score in this league season, keep the three most recent, and average the points of those weeks, rounded to two decimals. Fewer than three weeks: average what there is. None: no average.
-3. Rank by average, highest first; a starter with no average ranks last. Ties: higher total over all weeks before Week 13, then the smaller asset id (as text).
-4. The first is the automatic captain. Its Week 13 points are doubled like a named captain's, negative points included.
+1. **Eligible starters.** Every starter in the franchise's Week 13 lineup whose team has a Week 13 game that is not postponed or canceled. Its kickoff is the earliest such game. Bench players are never considered.
+2. **Average.** For each, take the weeks before Week 13 in which that player (or D/ST) has a score in this league season, keep the three most recent, and average the points of those weeks, rounded to two decimals. Fewer than three weeks: average what there is. None: no average.
+3. **Rank** by average, highest first; a starter with no average ranks last. Ties: higher total over all weeks before Week 13, then the smaller asset id (as text).
+4. **Preview.** While nothing has locked, the automatic captain "would be" the best-ranked eligible starter who has not kicked off. This is what the pages show, and it follows every lineup change.
+5. **Lock.** Kickoffs are taken in time order. At each kickoff, the candidate is the best-ranked eligible starter among those who had not kicked off before it. If the candidate is in that kickoff, it is the captain, locked at that kickoff, for the week. If the candidate plays later, nothing locks yet. Put in one sentence: the captain is the earliest-kicking-off eligible starter who has kicked off and whom no eligible starter kicking off at the same time or later outranks.
+6. **Record.** The first scoring run after that kickoff (`recompute_matchup`), or the first lineup change after it (`set_lineup_slot`, before it applies the change), writes one row in `chaos_card_selections` with `source = 'automatic'`, no user, `locked_at` = that kickoff, and `details` holding the basis and every average compared. From then on scoring reads the row and never recomputes it. A second run writes nothing.
+7. Its Week 13 points are doubled like a named captain's, negative points included.
 
-**Properties.** It reads nothing about Week 13 except the lineup, so there is no hindsight in the ranking (PROVEN, test: changing Week 13 scores does not change the choice). It is computed inside `chaos_card_side_score`, the function that builds the matchup total, on every recompute; nothing is stored between runs, so the total and the captain cannot disagree. A named captain who is in the lineup always wins. The adjustment line in `matchups.context.chaos_cards` and in the `matchup_final` feed payload carries `automatic: true`, the basis (`recent_average_v1`), the average, the number of weeks counted, the season total, and under `compared` the same numbers for every starter in rank order.
+**From the kickoff in step 5** `set_chaos_card_selection` refuses to name a captain, whether or not the row has been written yet, and the pages remove the choose control.
+
+**When scoring is late** (the realistic case: the weekly job does not run at every kickoff), step 5 is replayed on the lineup as it stands when the function runs. This reproduces the lineup at the kickoff for every starter who has kicked off, because a player who has kicked off cannot leave or enter the lineup. PROVEN (test): with both games kicked off and nothing recorded, the best-ranked starter in the first game is locked at the first kickoff; when the best-ranked starter plays in the second game, nothing locks at the first kickoff and that starter locks at the second.
+
+**What the replay cannot see.** Starters who had not kicked off can have changed between a kickoff and the moment the lock is recorded. Lineup moves made by the manager are covered (the lock is recorded before the move). A drop, trade or waiver award that removes a not-yet-started starter in that window is not: if that starter outranked the one who had kicked off, the replay would now lock the earlier player. See "Decisions needed", item 1.
+
+**Properties.** No Week 13 score is read, so the ranking has no hindsight (PROVEN, test: changing Week 13 scores does not change the choice). The preview and the lock are computed by one function, `chaos_auto_captain`, which `chaos_card_side_score` uses for the matchup total, so the total and the captain cannot disagree. A captain named in time always wins. The adjustment line in `matchups.context.chaos_cards` and in the `matchup_final` feed payload carries `automatic: true`, the basis (`recent_average_v1`), the average, the number of weeks counted, the season total, the kickoff, `locked_at`, and under `compared` the same numbers for every eligible starter in rank order.
 
 **Replacing the average with a real projection.** Replace the body of `chaos_captain_expected_points` and nothing else. It must keep returning `expected` (higher is better, null ranks last), `season_total` (first tie-break) and `basis` (a new name, so stored results say which method chose them).
 
@@ -228,8 +245,8 @@ Each is as simple as it could be made while staying enforceable. Items that need
 9. Selections are visible to the whole league as soon as they are made, like lineups. (Confirmed 2026-10-04.)
 10. Twist multipliers: TE x2, K x3, D/ST x2, rushing x2, passing x2, fumbles lost x3.
 11. A selection survives a later drop or trade of the player (section 2).
-12. The automatic captain uses the lineup as it stands at each recompute and is not frozen at any kickoff (section 6, item 1).
-13. The automatic captain ignores postponements and cancellations (section 6, item 2).
+12. A starter on a bye is skipped by the automatic rule, like one whose game is postponed or canceled.
+13. The lock time recorded for an automatic captain is that player's kickoff, not the time the row was written.
 14. "Moves up three places" is counted among the franchises that are not lower-seed Bounty winners.
 
 ### Scoring twists that were rejected
@@ -293,14 +310,13 @@ Turning it off: unset the variable and redeploy. The pages stop showing cards an
 
 ## 6. Decisions needed
 
-Confirmed on 2026-10-04 and removed from this list: the Chaos Clause basis, raid finality and deadline, selections being public and locking at kickoff, cards revealed when dealt, and (by the Bounty change) the old question of a card that only one side could benefit from. They are recorded at the top of this document.
+Confirmed or decided on 2026-10-04 and removed from this list: the Chaos Clause basis, raid finality and deadline, selections being public and locking at kickoff, cards revealed when dealt, the old question of a card that only one side could benefit from (by the Bounty change), whether the automatic captain locks at kickoff (it does), and how the automatic rule treats a postponed or canceled game (the starter is skipped). They are recorded at the top of this document.
 
 Still open. Each has a working default in the build.
 
-1. **Should the automatic captain lock once that player has kicked off?** Built: no. A named captain always wins, so a manager who has named nobody can watch the automatic captain play on Thursday and then either keep it or name a Sunday starter instead. A manager who names a captain has no such second look. The same manager can also change which starter is the automatic captain by changing the lineup among players who have not kicked off. Alternative: once the automatic captain's game has kicked off with no captain named, the automatic captain is fixed.
-2. **The automatic captain and a postponed or canceled game.** Built: the rule reads nothing about Week 13, so a starter whose game is postponed can be the automatic captain and adds 0. Alternative: skip starters whose game is not going to be played.
-3. **Bounty window.** Built: from the game going final until the last Week 14 kickoff, applied to every waiver claim in that time. Alternatives: one claim only; a fixed number of days; until Week 15 kickoff.
-4. **A selected player who is later dropped or traded.** Built: the Wild Slot pick and the raid still count. Should a dropped Wild Slot pick stop counting? Should the higher seed be blocked from dropping a raided player?
-5. **The twist list and its multipliers** (assumption 10), including that Air Show doubles interception losses and Golden Boot is triple, not double.
-6. **Announcement.** When and where managers are told about rule cards, the automatic captain and the tiebreak basis. Nothing in this build sends that message.
-7. **Late-start and test leagues.** Cards are dealt to any league season with open `chaos` matchups in Week 13 while the flag is on. Should some leagues be excluded?
+1. **A not-yet-started starter is dropped or traded between a kickoff and the recording of the lock.** Built: the lock is replayed on the current lineup, so in that narrow case it can land on a different starter than the lineup at kickoff would have given (section 4, "What the replay cannot see"). Closing it needs either a scoring run at every kickoff or a lock hook in the drop, trade and waiver functions, which this migration does not replace.
+2. **Bounty window.** Built: from the game going final until the last Week 14 kickoff, applied to every waiver claim in that time. Alternatives: one claim only; a fixed number of days; until Week 15 kickoff.
+3. **A selected player who is later dropped or traded.** Built: the Wild Slot pick and the raid still count. Should a dropped Wild Slot pick stop counting? Should the higher seed be blocked from dropping a raided player?
+4. **The twist list and its multipliers** (assumption 10), including that Air Show doubles interception losses and Golden Boot is triple, not double.
+5. **Announcement.** When and where managers are told about rule cards, the automatic captain and the tiebreak basis. Nothing in this build sends that message.
+6. **Late-start and test leagues.** Cards are dealt to any league season with open `chaos` matchups in Week 13 while the flag is on. Should some leagues be excluded?
