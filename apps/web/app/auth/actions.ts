@@ -1,6 +1,8 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { checkRateLimits, clientIpFromHeaders, RATE_LIMITED_MESSAGE } from '../../lib/security/rateLimit';
 import { createClient } from '../../lib/supabase/server';
 
 function safeNext(value: FormDataEntryValue | null) {
@@ -52,12 +54,16 @@ export async function signIn(formData: FormData) {
   const email = normalizeEmail(String(formData.get('email') ?? ''));
   const password = String(formData.get('password') ?? '');
   const next = safeNext(formData.get('next'));
+  const limit = await checkRateLimits([['authSignInByIp', clientIpFromHeaders(await headers())], ['authSignInByEmail', email]]);
+  if (!limit.allowed) redirect('/login?error=' + encodeURIComponent(RATE_LIMITED_MESSAGE) + '&next=' + encodeURIComponent(next));
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) redirect('/login?error=' + encodeURIComponent(friendlyAuthError(error.message, 'signin')) + '&next=' + encodeURIComponent(next));
   redirect(next);
 }
 
 export async function signUp(formData: FormData) {
+  const signUpLimit = await checkRateLimits([['authSignUpByIp', clientIpFromHeaders(await headers())]]);
+  if (!signUpLimit.allowed) redirect('/login?mode=signup&error=' + encodeURIComponent(RATE_LIMITED_MESSAGE) + '&next=' + encodeURIComponent(safeNext(formData.get('next'))));
   const supabase = await createClient();
   const email = normalizeEmail(String(formData.get('email') ?? ''));
   const password = String(formData.get('password') ?? '');
@@ -98,6 +104,9 @@ export async function signOutTo(formData: FormData) {
 export async function requestPasswordReset(formData: FormData) {
   const supabase = await createClient();
   const email = normalizeEmail(String(formData.get('email') ?? ''));
+  // Same response for every email, so this limit does not reveal whether an account exists.
+  const limit = await checkRateLimits([['authResetByIp', clientIpFromHeaders(await headers())], ['authResetByEmail', email]]);
+  if (!limit.allowed) redirect('/login/forgot?message=' +encodeURIComponent(RATE_LIMITED_MESSAGE));
   if (email) {
     await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${appUrl()}/auth/confirm?next=${encodeURIComponent('/login/reset')}`

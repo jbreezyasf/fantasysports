@@ -9,6 +9,7 @@ import { type BigExecCapabilityId } from '../executive/capabilities';
 import { type EntitlementSupabase } from '../executive/entitlements';
 import { resolveExecutiveFeatureFlags } from '../executive/featureFlags';
 import { createClient } from '../supabase/server';
+import { checkRateLimit, rateLimitedResponse } from '../security/rateLimit';
 
 export type MachineRouteParams = { params: Promise<{ leagueId: string }> };
 
@@ -54,6 +55,8 @@ export async function runMachineReadTools(input: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using this machine API.' }, { status: 401 });
+  const rateLimit = await checkRateLimit('machineApiByUser', user.id);
+  if (!rateLimit.allowed) return rateLimitedResponse(rateLimit);
 
   const scope = await resolveAssistantGmServerScope(supabase as unknown as AssistantGmScopeSupabase, { userId: user.id, leagueId: input.leagueId });
   if (!scope.ok) return NextResponse.json({ ok: false, code: scope.code, message: scope.message }, { status: scope.status });
