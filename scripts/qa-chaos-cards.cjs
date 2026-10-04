@@ -72,6 +72,10 @@ const allFinal = upcoming.map((g, i) => ({ ...g, starts_at: hours(-90 + i * 40),
 const autoReply = (id, expected, games) => ({ athlete_id: id, real_team_id: null, basis: 'recent_average_v1', expected, games, season_total: expected * games, compared: [] });
 // The row the database records once the automatic captain's game has kicked off.
 const autoRow = (sf, id, expected, games) => ({ season_franchise_id: sf, athlete_id: id, source: 'automatic', locked_at: hours(-20), details: { basis: 'recent_average_v1', expected, games } });
+// A selection whose player left the roster before kickoff ('gone' is on no roster; the page looks the name up in athletes).
+const DROPPED = { voided_at: hours(-30), void_reason: 'dropped' };
+const goneAthlete = { id: 'gone', display_name: 'Kit Marlowe', position: 'RB', real_team_id: 't1', real_teams: { abbreviation: teamAbbr.t1 } };
+const homeBenchIds = new Set(cast.filter((c) => c[4] === HOME && !c[5]).map((c) => c[0]));
 const scenarios = {
   // Seed 1 named a captain (locked). Seed 10 named nobody: its automatic captain kicked off on Thursday and is recorded and locked.
   'matchup-captain': { page: 'matchup', flag: 'true', user: 'f0', card: 'CAPTAIN', games: thursdayPlayed, selections: [{ season_franchise_id: HOME, athlete_id: 'hq', source: 'named' }, autoRow(AWAY, 'aq', 14.2, 3)], build: { home: side(HOME, [line('captain', 'hq')]), away: side(AWAY, [{ ...line('captain', 'aq'), automatic: true, basis: 'recent_average_v1', expected: 14.2, games: 3 }]) } },
@@ -86,9 +90,29 @@ const scenarios = {
   'lineup-captain-auto-locked': { page: 'team', flag: 'true', user: 'f9', card: 'CAPTAIN', games: thursdayPlayed, selections: [autoRow(AWAY, 'aq', 14.2, 3)] },
   // No captain named yet: "If you do not choose, your captain will be ...".
   'lineup-captain-auto': { page: 'team', flag: 'true', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [], auto: { [HOME]: autoReply('hq', 20, 3) } },
-  'lineup-wild-slot': { page: 'team', flag: 'true', user: 'f0', card: 'WILD_SLOT', games: upcoming, selections: [] },
-  'lineup-raid-lower-seed': { page: 'team', flag: 'true', user: 'f9', card: 'RAID', games: upcoming, selections: [] },
+  // No Wild Slot player named yet: "If you do not choose, the system will pick ...".
+  'lineup-wild-slot': { page: 'team', flag: 'true', user: 'f0', card: 'WILD_SLOT', games: upcoming, selections: [], auto: { [HOME]: autoReply('hb1', 15.4, 3) } },
+  // The named Wild Slot player was dropped before kickoff: shown as void, choose again, with the automatic pick that applies otherwise.
+  'lineup-wild-slot-void': { page: 'team', flag: 'true', user: 'f0', card: 'WILD_SLOT', games: upcoming, selections: [{ season_franchise_id: HOME, athlete_id: 'gone', source: 'named', ...DROPPED }], auto: { [HOME]: autoReply('hb1', 15.4, 3) } },
+  // Nobody was named before the automatic Wild Slot player's kickoff: recorded, locked, no choose control.
+  'lineup-wild-slot-auto-locked': { page: 'team', flag: 'true', user: 'f0', card: 'WILD_SLOT', games: thursdayPlayed, selections: [autoRow(HOME, 'hb2', 9.8, 3)] },
+  // Both sides: seed 1's void pick with its automatic replacement pending; seed 10's automatic pick shown as the system's choice.
+  'matchup-wild-slot-auto': { page: 'matchup', flag: 'true', user: 'f0', card: 'WILD_SLOT', games: upcoming, selections: [{ season_franchise_id: HOME, athlete_id: 'gone', source: 'named', ...DROPPED }], auto: { [HOME]: autoReply('hb1', 15.4, 3), [AWAY]: autoReply('ab1', 12.1, 3) },
+    build: { home: side(HOME, [{ ...line('wild_slot', 'hb1'), points: 0, automatic: true, expected: 15.4, games: 3 }]), away: side(AWAY, [{ ...line('wild_slot', 'ab1'), points: 0, automatic: true, expected: 12.1, games: 3 }]) } },
+  // The lower seed has not raided yet: the normal bench picker, and "If you do not choose, the system will pick ...".
+  'lineup-raid-lower-seed': { page: 'team', flag: 'true', user: 'f9', card: 'RAID', games: upcoming, selections: [], auto: { [AWAY]: { ...autoReply('hb1', 15.4, 3), penalty: false } } },
   'lineup-raid-higher-seed': { page: 'team', flag: 'true', user: 'f0', card: 'RAID', games: upcoming, selections: [{ season_franchise_id: AWAY, athlete_id: 'hb1' }] },
+  // The raided player was dropped by the higher seed before the deadline: void, choose again.
+  'lineup-raid-void': { page: 'team', flag: 'true', user: 'f9', card: 'RAID', games: upcoming, selections: [{ season_franchise_id: AWAY, athlete_id: 'gone', source: 'named', ...DROPPED }], auto: { [AWAY]: { ...autoReply('hb1', 15.4, 3), penalty: false } } },
+  // RAID PENALTY: the higher seed has no bench, so the picker offers exactly its best-ranked starter and says why.
+  'lineup-raid-penalty': { page: 'team', flag: 'true', user: 'f9', card: 'RAID', games: upcoming, noHomeBench: true, selections: [], auto: { [AWAY]: { ...autoReply('hq', 20, 3), penalty: true } } },
+  // After the deadline nobody had raided: the system's raid, recorded, no choose control.
+  'lineup-raid-auto-locked': { page: 'team', flag: 'true', user: 'f9', card: 'RAID', games: thursdayPlayed, selections: [{ ...autoRow(AWAY, 'hb1', 15.4, 3), details: { basis: 'recent_average_v1', expected: 15.4, games: 3, penalty: false } }] },
+  // The higher seed's lineup page after a penalty raid: its starter is taken, stays in the lineup, and the notice says so.
+  'lineup-raid-higher-seed-penalty': { page: 'team', flag: 'true', user: 'f0', card: 'RAID', games: upcoming, noHomeBench: true, selections: [{ season_franchise_id: AWAY, athlete_id: 'hq', source: 'named', locked_at: hours(-2), details: { penalty: true } }] },
+  // Matchup page, automatic penalty raid made at the deadline, with "Automatic penalty raid" on the score build-up.
+  'matchup-raid-auto-penalty': { page: 'matchup', flag: 'true', user: 'f9', card: 'RAID', games: thursdayPlayed, noHomeBench: true, selections: [{ ...autoRow(AWAY, 'hq', 20, 3), details: { basis: 'recent_average_v1', expected: 20, games: 3, penalty: true } }],
+    build: { home: side(HOME, []), away: side(AWAY, [{ ...line('raid', 'hq'), automatic: true, penalty: true, expected: 20, games: 3 }]) } },
   // Inert states: these must render NO card surface.
   'matchup-flag-off': { page: 'matchup', flag: '', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [], expectNoCard: true },
   'lineup-flag-off': { page: 'team', flag: '', user: 'f0', card: 'CAPTAIN', games: upcoming, selections: [], expectNoCard: true },
@@ -103,7 +127,10 @@ function tables() {
   const matchup = { id: 'chaos-matchup', league_season_id: 'season', week: 13, event_type: 'chaos', home_season_franchise_id: HOME, away_season_franchise_id: AWAY, home_points: home, away_points: away, is_final: !!s.final, winner_season_franchise_id: s.final ? (home > away ? HOME : AWAY) : null,
     context: { home_seed: 1, away_seed: 10, format: 'standings_inversion', ...(s.card && s.build ? { chaos_cards: { version: 1, card_code: s.card, ...s.build } } : {}) } };
   return {
-    matchups: [matchup], season_franchises: seasonFranchises, franchises, standings, lineups, roster_entries: rosterEntries,
+    matchups: [matchup], season_franchises: seasonFranchises, franchises, standings, lineups,
+    // noHomeBench: the higher seed has dropped every bench player (the raid penalty scenarios).
+    roster_entries: s.noHomeBench ? rosterEntries.filter((row) => !homeBenchIds.has(row.athlete_id)) : rosterEntries,
+    athletes: [goneAthlete, ...cast.map((c) => ({ id: c[0], ...athleteRef(c) }))], real_teams: Object.entries(teamAbbr).map(([id, abbreviation]) => ({ id, abbreviation, display_name: abbreviation })),
     league_seasons: [{ id: 'season', league_id: 'fixture', competition_season_id: 'cs', is_current: true, trade_deadline_at: null, roster_integrity_mode: 'open' }],
     franchise_owners: [{ franchise_id: s.user, user_id: 'qa', ends_on: null }],
     fantasy_player_scores: playerScores, fantasy_team_scores: teamScores,
@@ -115,7 +142,8 @@ function tables() {
 // A stub query builder that honours eq / in / is filters on columns the rows have.
 const db = {
   auth: { getUser: async () => ({ data: { user: { id: 'qa', user_metadata: {} } } }) },
-  rpc: async (name, args) => ({ data: name === 'chaos_auto_captain' ? (scenario.auto?.[args.p_season_franchise_id] ?? null) : null, error: null }),
+  // chaos_auto_pick (and chaos_auto_captain): a fixed stand-in for the database reply; the ranking is tested in supabase/tests.
+  rpc: async (name, args) => ({ data: name === 'chaos_auto_pick' || name === 'chaos_auto_captain' ? (scenario.auto?.[args.p_season_franchise_id] ?? null) : null, error: null }),
   from(table) {
     const filters = []; let single = false;
     const run = () => {
