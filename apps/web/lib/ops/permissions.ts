@@ -2,9 +2,9 @@ import 'server-only';
 import { redirect, unstable_rethrow } from 'next/navigation';
 import { createAdminClient } from '../supabase/admin';
 import { createClient } from '../supabase/server';
-export { OPS_PERMISSIONS, OPS_ROLES, canManageProviderData, permissionsForRole, roleHasPermission } from './permissionsCore';
+export { OPS_PERMISSIONS, OPS_ROLES, canManageProviderData, canSendAnnouncements, permissionsForRole, roleHasPermission } from './permissionsCore';
 export type { OpsPermission, OpsRole };
-import { OPS_ROLES, canManageProviderData, permissionsForRole, roleHasPermission, type OpsPermission, type OpsRole } from './permissionsCore';
+import { OPS_ROLES, canManageProviderData, canSendAnnouncements, permissionsForRole, roleHasPermission, type OpsPermission, type OpsRole } from './permissionsCore';
 
 export type OpsSession = {
   user: { id: string; email?: string | null };
@@ -68,5 +68,19 @@ export async function requireProviderDataOperator(loginNext = '/admin/data') {
     session = null;
   }
   if (!session || !canManageProviderData(session.role)) redirect('/dashboard');
+  return session;
+}
+
+// Gate for /ops/announcements and every one of its server actions. Fails closed in the same
+// way as requireProviderDataOperator: only an enabled super_admin gets through.
+export async function requireAnnouncementOperator(loginNext = '/ops/announcements') {
+  let session: OpsSession | null = null;
+  try {
+    session = await getOpsSession(loginNext);
+  } catch (error) {
+    unstable_rethrow(error);
+    session = null;
+  }
+  if (!session || !canSendAnnouncements(session.role)) redirect('/dashboard');
   return session;
 }
