@@ -256,6 +256,18 @@ insert into public.fantasy_player_scores(league_season_id, athlete_id, game_id, 
 insert into public.fantasy_team_scores(league_season_id, real_team_id, game_id, week, points, breakdown) values
   (:'ls', :'t1', gen_random_uuid(), 13, 7.00, '{"sacks":3,"safeties":0,"touchdowns":0,"blocked_kicks":0,"interceptions":1,"points_allowed":17,"fumble_recoveries":0}'),
   (:'ls', :'t2', gen_random_uuid(), 13, -1.00, '{"sacks":1,"safeties":0,"touchdowns":0,"blocked_kicks":0,"interceptions":0,"points_allowed":38,"fumble_recoveries":0}');
+-- Earlier weeks for the cast. Only the automatic captain reads them: no lineup of
+-- Weeks 1-12 holds a cast player, so no matchup of the base season changes.
+--   seed 1:  hq 40 / 18 / 22 / 20 (Weeks 9-12), hrb 20 / 20 (Weeks 11-12), hte 8 (Week 12), hk nothing, T1 D/ST 5 / 7 / 9
+--   seed 10: aq 10 / 10 / 10, arb 8 / 8 / 8, ate 9 (Week 12), ak nothing, T2 D/ST 14 / 16 / 18
+insert into public.fantasy_player_scores(league_season_id, athlete_id, game_id, week, points, breakdown)
+  select :'ls', c.id, gen_random_uuid(), v.week, v.points, '{}'::jsonb
+  from (values ('hq', 9, 40.00), ('hq', 10, 18.00), ('hq', 11, 22.00), ('hq', 12, 20.00), ('hrb', 11, 20.00), ('hrb', 12, 20.00), ('hte', 12, 8.00),
+               ('aq', 10, 10.00), ('aq', 11, 10.00), ('aq', 12, 10.00), ('arb', 10, 8.00), ('arb', 11, 8.00), ('arb', 12, 8.00), ('ate', 12, 9.00)) v(role, week, points)
+  join cast_list c on c.role = v.role;
+insert into public.fantasy_team_scores(league_season_id, real_team_id, game_id, week, points, breakdown)
+  select :'ls', v.team, gen_random_uuid(), v.week, v.points, '{}'::jsonb
+  from (values (:'t1'::uuid, 10, 5.00), (:'t1'::uuid, 11, 7.00), (:'t1'::uuid, 12, 9.00), (:'t2'::uuid, 10, 14.00), (:'t2'::uuid, 11, 16.00), (:'t2'::uuid, 12, 18.00)) v(team, week, points);
 -- Week 13 has not kicked off: T1-T2 plays in two days, T3-T4 in three.
 delete from public.real_games where week = 13;
 insert into public.real_games(competition_season_id, week, home_team_id, away_team_id, starts_at, state) values
@@ -287,10 +299,10 @@ rollback;
 -- 2. The deal.
 -- ---------------------------------------------------------------------------
 select pg_temp.expect(public.chaos_card_deal_order('big-exec-audit-seed-0001', (select array_agg(code order by code) from public.chaos_cards))
-  = array['WILD_SLOT','TWIST_DST_DOUBLE','TWIST_TE_DOUBLE','TWIST_PASS_DOUBLE','RAID','UPSET_BOUNTY','TWIST_K_TRIPLE','TWIST_RUSH_DOUBLE','CAPTAIN','TWIST_FUMBLE_TRIPLE'],
+  = array['WILD_SLOT','TWIST_DST_DOUBLE','TWIST_TE_DOUBLE','TWIST_PASS_DOUBLE','RAID','TWIST_K_TRIPLE','TWIST_RUSH_DOUBLE','CAPTAIN','BOUNTY','TWIST_FUMBLE_TRIPLE'],
   'deal order: a fixed seed gives the order computed independently (sha256 in Node) outside the database');
 select pg_temp.expect(public.chaos_card_deal_order('big-exec-audit-seed-0002', (select array_agg(code order by code) from public.chaos_cards))
-  = array['TWIST_TE_DOUBLE','TWIST_DST_DOUBLE','TWIST_PASS_DOUBLE','TWIST_K_TRIPLE','TWIST_RUSH_DOUBLE','TWIST_FUMBLE_TRIPLE','RAID','CAPTAIN','UPSET_BOUNTY','WILD_SLOT'],
+  = array['TWIST_TE_DOUBLE','TWIST_DST_DOUBLE','TWIST_PASS_DOUBLE','TWIST_K_TRIPLE','TWIST_RUSH_DOUBLE','TWIST_FUMBLE_TRIPLE','RAID','CAPTAIN','BOUNTY','WILD_SLOT'],
   'deal order: a different seed gives a different, equally reproducible order');
 select pg_temp.expect(public.chaos_card_deal_order('s', array['B','A','C']) = public.chaos_card_deal_order('s', array['C','B','A']), 'deal order: does not depend on the order the deck is passed in');
 select pg_temp.expect((select count(*) = 10 and count(*) filter (where kind = 'twist') = 6 and bool_and(length(name_es) > 0 and length(rules_es) > 0 and length(rules_en) > 0) from public.chaos_cards), 'deck: 10 active cards (4 named cards, 6 scoring twists), each with English and Spanish name and rules');
@@ -351,8 +363,13 @@ select pg_temp.expect(not has_function_privilege('authenticated', 'public.deal_c
   and has_function_privilege('authenticated', 'public.set_chaos_card_selection(uuid, uuid, text, uuid, uuid)', 'execute') and not has_function_privilege('anon', 'public.set_chaos_card_selection(uuid, uuid, text, uuid, uuid)', 'execute')
   and has_function_privilege('authenticated', 'public.clear_chaos_card_selection(uuid, uuid)', 'execute') and not has_function_privilege('anon', 'public.clear_chaos_card_selection(uuid, uuid)', 'execute')
   and has_function_privilege('service_role', 'public.deal_chaos_week_cards(uuid, integer)', 'execute'), 'privileges: only the service role deals, audits and scores; signed-in managers may call the two selection RPCs; anon nothing');
-select pg_temp.expect((select count(*) = 13 and bool_and(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.proname in ('chaos_asset_game_started','chaos_week_first_kickoff','chaos_lower_seed','chaos_card_deal_order','chaos_card_side_score','deal_chaos_week_cards','audit_chaos_week_deal','set_chaos_card_selection','clear_chaos_card_selection','chaos_clause_decision','recompute_matchup','set_lineup_slot','process_due_waivers')),
+select pg_temp.expect(has_function_privilege('authenticated', 'public.chaos_auto_captain(uuid, uuid)', 'execute') and has_function_privilege('authenticated', 'public.chaos_captain_expected_points(uuid, integer, uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.chaos_auto_captain(uuid, uuid)', 'execute') and not has_function_privilege('anon', 'public.chaos_captain_expected_points(uuid, integer, uuid, uuid)', 'execute')
+  and not (select prosecdef from pg_proc where oid = 'public.chaos_auto_captain(uuid, uuid)'::regprocedure) and not (select prosecdef from pg_proc where oid = 'public.chaos_captain_expected_points(uuid, integer, uuid, uuid)'::regprocedure)
+  and not has_function_privilege('authenticated', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute') and not has_function_privilege('anon', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute'),
+  'privileges: signed-in managers may ask who the automatic captain would be (the two functions run with the caller''s rights, not the definer''s); anon may not; the bounty order is for the service role');
+select pg_temp.expect((select count(*) = 16 and bool_and(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname in ('chaos_asset_game_started','chaos_week_first_kickoff','chaos_lower_seed','chaos_card_deal_order','chaos_card_side_score','chaos_captain_expected_points','chaos_auto_captain','chaos_bounty_waiver_order','deal_chaos_week_cards','audit_chaos_week_deal','set_chaos_card_selection','clear_chaos_card_selection','chaos_clause_decision','recompute_matchup','set_lineup_slot','process_due_waivers')),
   'every function this migration creates or replaces has a fixed search_path');
 select pg_temp.expect((select bool_and(c.relrowsecurity) and count(*) = 5 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname in ('chaos_cards','chaos_card_deals','chaos_card_draws','chaos_card_selections','chaos_bounty_grants')), 'RLS is enabled on all five new tables');
 rollback;
@@ -434,15 +451,20 @@ select pg_temp.deal();
 select pg_temp.force_card(:'g', 'CAPTAIN');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, null, %L)', :'g', :'h', 'CAPTAIN', :'t1')) = '', 'captain: a starting D/ST can be captain');
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[63.50, 42.00] and pg_temp.cards(:'g')->'away' = '{"base":42.00,"adjustments":[],"total":42.00}'::jsonb, 'NO SELECTION: the side that names no captain gets no bonus (42.00); D/ST captain adds 7.00');
+select pg_temp.expect(pg_temp.points(:'g') = array[63.50, 41.00] and pg_temp.cards(:'g')->'home'->'adjustments' = jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', null, 'real_team_id', :'t1', 'points', 7.00))
+  and pg_temp.cards(:'g')->'away'->'adjustments'->0 @> jsonb_build_object('effect', 'captain', 'automatic', true, 'athlete_id', null, 'real_team_id', :'t2', 'points', -1.00),
+  'NO SELECTION (changed 2026-10-04): the side that names no captain gets the AUTOMATIC captain (its D/ST, average 16.00, which scored -1.00: 42.00 - 1.00 = 41.00); the named D/ST captain adds 7.00 and its line is not marked automatic');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hrb')) = '', 'captain: switch to the running back');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'RB', :'hb2')) = '', 'captain: the manager benches the captain before kickoff (normal lineup move)');
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[50.00, 42.00] and pg_temp.cards(:'g')->'home' = '{"base":50.00,"adjustments":[],"total":50.00}'::jsonb, 'captain moved to the bench: no bonus, and the base follows the new lineup (56.50 - 12.50 + 6.00)');
+select pg_temp.expect(pg_temp.points(:'g') = array[70.00, 41.00] and (pg_temp.cards(:'g')->'home'->>'base')::numeric = 50.00 and jsonb_array_length(pg_temp.cards(:'g')->'home'->'adjustments') = 1
+  and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('effect', 'captain', 'automatic', true, 'athlete_id', :'hq', 'points', 20.00),
+  'captain moved to the bench (changed 2026-10-04): the named choice stops counting, the base follows the new lineup (56.50 - 12.50 + 6.00 = 50.00), and the AUTOMATIC captain takes over (hq, +20.00)');
 select pg_temp.kickoff(:'t1');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '', 'captain moved to the bench: that choice no longer counts, so a new captain who has not kicked off can still be named');
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[58.00, 42.00], 'new captain: 50.00 + 8.00');
+select pg_temp.expect(pg_temp.points(:'g') = array[58.00, 41.00] and pg_temp.cards(:'g')->'home'->'adjustments' = jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hte', 'real_team_id', null, 'points', 8.00)),
+  'new captain: 50.00 + 8.00; a NAMED captain replaces the automatic one even though the automatic one would have added more');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'captain: a captain who has not kicked off can be cleared');
 select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections), 'captain: clearing removes the selection row');
 rollback;
@@ -455,15 +477,143 @@ select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card
 update public.real_games set state = 'postponed', starts_at = now() - interval '1 hour' where week = 13 and home_team_id = :'t3';
 delete from public.fantasy_player_scores where week = 13 and athlete_id = :'hte';
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[48.50, 42.00] and pg_temp.cards(:'g')->'home' = jsonb_build_object('base', 48.50, 'adjustments', jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hte', 'real_team_id', null, 'points', 0.00)), 'total', 48.50)
-  and (select locked_at is null from public.chaos_card_selections where season_franchise_id = :'h'), 'POSTPONED: a captain whose game is postponed has no score, adds 0.00, and is not locked');
+select pg_temp.expect(pg_temp.points(:'g') = array[48.50, 41.00] and pg_temp.cards(:'g')->'home' = jsonb_build_object('base', 48.50, 'adjustments', jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hte', 'real_team_id', null, 'points', 0.00)), 'total', 48.50)
+  and (select locked_at is null from public.chaos_card_selections where season_franchise_id = :'h'), 'POSTPONED: a NAMED captain whose game is postponed has no score, adds 0.00, is not locked, and is NOT replaced by the automatic captain');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) = '', 'POSTPONED: the captain can still be changed to a starter whose game has not kicked off');
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[68.50, 42.00], 'postponed: new captain counts (48.50 + 20.00)');
+select pg_temp.expect(pg_temp.points(:'g') = array[68.50, 41.00], 'postponed: new captain counts (48.50 + 20.00)');
 delete from public.chaos_card_deals;
 select pg_temp.expect((select count(*) = 0 from public.chaos_card_draws) and (select count(*) = 0 from public.chaos_card_selections), 'withdrawn deal: deleting the deal row removes its draws and selections');
 select pg_temp.recompute(:'g', false, false) as withdrawn \gset
 select pg_temp.expect(pg_temp.points(:'g') = array[48.50, 42.00] and pg_temp.cards(:'g') is null and (:'withdrawn'::jsonb->'new') = (:'withdrawn'::jsonb->'old'), 'withdrawn deal: the next recompute scores the lineup total, removes the stale build-up, and returns what the pre-cards function returns');
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- 3b. AUTOMATIC CAPTAIN (owner decision of 2026-10-04).
+-- ---------------------------------------------------------------------------
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'CAPTAIN');
+select pg_temp.expect(public.chaos_captain_expected_points(:'ls', 13, :'hq', null) = '{"basis":"recent_average_v1","expected":20.00,"games":3,"weeks":[10,11,12],"season_total":100.00}'::jsonb,
+  'expected points: the average of the THREE MOST RECENT scored weeks before Week 13 (18 + 22 + 20 over Weeks 10-12 = 20.00); Week 9 counts in the season total only');
+select pg_temp.expect(public.chaos_captain_expected_points(:'ls', 13, :'hrb', null) = '{"basis":"recent_average_v1","expected":20.00,"games":2,"weeks":[11,12],"season_total":40.00}'::jsonb
+  and public.chaos_captain_expected_points(:'ls', 13, :'hte', null) = '{"basis":"recent_average_v1","expected":8.00,"games":1,"weeks":[12],"season_total":8.00}'::jsonb,
+  'expected points: fewer weeks are used when fewer exist (two, one)');
+select pg_temp.expect(public.chaos_captain_expected_points(:'ls', 13, :'hk', null) = '{"basis":"recent_average_v1","expected":null,"games":0,"weeks":[],"season_total":0}'::jsonb,
+  'expected points: a player with no earlier score has no average');
+select pg_temp.expect(public.chaos_captain_expected_points(:'ls', 13, null, :'t1') = '{"basis":"recent_average_v1","expected":7.00,"games":3,"weeks":[10,11,12],"season_total":21.00}'::jsonb,
+  'expected points: a D/ST is averaged from fantasy_team_scores in the same way');
+select public.chaos_auto_captain(:'g', :'h') as auto_h \gset
+select pg_temp.expect(:'auto_h'::jsonb - 'compared' = jsonb_build_object('athlete_id', :'hq', 'real_team_id', null, 'basis', 'recent_average_v1', 'expected', 20.00, 'games', 3, 'weeks', '[10,11,12]'::jsonb, 'season_total', 100.00),
+  'AUTOMATIC CAPTAIN: the starter with the highest average; hq and hrb tie on 20.00 and the higher SEASON TOTAL (100.00 over 40.00) decides');
+select pg_temp.expect(:'auto_h'::jsonb->'compared' = jsonb_build_array(
+    jsonb_build_object('athlete_id', :'hq', 'real_team_id', null, 'expected', 20.00, 'games', 3, 'season_total', 100.00),
+    jsonb_build_object('athlete_id', :'hrb', 'real_team_id', null, 'expected', 20.00, 'games', 2, 'season_total', 40.00),
+    jsonb_build_object('athlete_id', :'hte', 'real_team_id', null, 'expected', 8.00, 'games', 1, 'season_total', 8.00),
+    jsonb_build_object('athlete_id', null, 'real_team_id', :'t1', 'expected', 7.00, 'games', 3, 'season_total', 21.00),
+    jsonb_build_object('athlete_id', :'hk', 'real_team_id', null, 'expected', null, 'games', 0, 'season_total', 0)),
+  'AUTOMATIC CAPTAIN: every starter is ranked and recorded; the kicker and the D/ST are eligible; the starter with no earlier score ranks LAST');
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'a') @> jsonb_build_object('athlete_id', null, 'real_team_id', :'t2', 'expected', 16.00, 'games', 3), 'AUTOMATIC CAPTAIN: a D/ST with the highest average is chosen like any starter');
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'h3') is null and public.chaos_auto_captain(:'g3', :'h') is null, 'automatic captain: nothing is returned for a franchise that is not in the matchup');
+
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[76.50, 41.00], 'AUTOMATIC CAPTAIN score: neither manager named a captain; 56.50 + 20.00 = 76.50 and 42.00 - 1.00 = 41.00 (a negative automatic captain is doubled too)');
+select pg_temp.expect(pg_temp.cards(:'g')->'home' = jsonb_build_object('base', 56.50, 'total', 76.50, 'adjustments', jsonb_build_array(
+    jsonb_build_object('effect', 'captain', 'athlete_id', :'hq', 'real_team_id', null, 'points', 20.00, 'automatic', true) || (:'auto_h'::jsonb - 'athlete_id' - 'real_team_id' - 'weeks'))),
+  'AUTOMATIC CAPTAIN: the adjustment line in matchups.context.chaos_cards says automatic: true and records the basis and every average compared');
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections), 'automatic captain: no selection row is written; it is computed inside chaos_card_side_score every time');
+
+-- No hindsight: Week 13 results do not move the choice.
+savepoint hindsight;
+update public.fantasy_player_scores set points = 0 where week = 13 and athlete_id = :'hq';
+update public.fantasy_player_scores set points = 99 where week = 13 and athlete_id = :'hk';
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') = :'auto_h'::jsonb and pg_temp.points(:'g') = array[126.50, 41.00] and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('athlete_id', :'hq', 'automatic', true, 'points', 0.00),
+  'NO HINDSIGHT: with the automatic captain scoring 0 and the kicker 99 in Week 13, the automatic captain is unchanged and adds 0.00 (36.50 + 99.00 - 9.00 = 126.50)');
+rollback to savepoint hindsight;
+
+-- It follows the lineup.
+savepoint lineup_change;
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'QB')) = '', 'automatic captain: the manager empties the QB slot');
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') @> jsonb_build_object('athlete_id', :'hrb', 'expected', 20.00, 'games', 2), 'AUTOMATIC CAPTAIN follows the lineup: with hq out, hrb is next');
+rollback to savepoint lineup_change;
+
+-- A named captain always wins; clearing brings the automatic one back.
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hk')) = '', 'named captain: seed 1 names the kicker, the lowest-ranked starter');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[65.50, 41.00] and pg_temp.cards(:'g')->'home'->'adjustments' = jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hk', 'real_team_id', null, 'points', 9.00)),
+  'A NAMED CAPTAIN ALWAYS WINS: 56.50 + 9.00 = 65.50, one line, not marked automatic, although the automatic captain would have added 20.00');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'named captain: cleared before kickoff');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[76.50, 41.00], 'automatic captain: back in force once the named captain is cleared');
+
+-- The automatic captain's game is postponed: still the captain, adds nothing.
+savepoint auto_postponed;
+update public.real_games set state = 'postponed', starts_at = now() - interval '1 hour' where week = 13 and home_team_id = :'t1';
+delete from public.fantasy_player_scores where week = 13 and athlete_id = :'hq';
+delete from public.fantasy_team_scores where week = 13 and real_team_id = :'t2';
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[36.50, 43.00] and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('athlete_id', :'hq', 'automatic', true, 'points', 0.00)
+  and pg_temp.cards(:'g')->'away'->'adjustments'->0 @> jsonb_build_object('real_team_id', :'t2', 'automatic', true, 'points', 0.00),
+  'POSTPONED automatic captain: it uses no Week 13 information, so it stays the captain and adds 0.00 (a manager can still name another starter)');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '', 'postponed automatic captain: the manager names a starter who will play');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[44.50, 43.00], 'postponed automatic captain: the named captain counts instead (36.50 + 8.00)');
+rollback to savepoint auto_postponed;
+
+-- Level on average and season total: the stable id order decides.
+savepoint id_order;
+delete from public.fantasy_player_scores where week < 13 and athlete_id in (:'aq', :'arb', :'ate', :'ak');
+delete from public.fantasy_team_scores where week < 13 and real_team_id = :'t2';
+select pg_temp.expect(coalesce(public.chaos_auto_captain(:'g', :'a')->>'athlete_id', public.chaos_auto_captain(:'g', :'a')->>'real_team_id') = (select min(x) from unnest(array[:'aq', :'arb', :'ate', :'ak', :'t2']::text[]) x)
+  and public.chaos_auto_captain(:'g', :'a')->'expected' = 'null'::jsonb and public.chaos_auto_captain(:'g', :'a') = public.chaos_auto_captain(:'g', :'a'),
+  'TIE-BREAK: with no earlier score for any starter (all level on average and season total) the smallest asset id, as text, is the automatic captain, every time');
+rollback to savepoint id_order;
+
+-- No starters: no automatic captain and no line.
+savepoint no_starters;
+delete from public.lineups where week = 13 and season_franchise_id = :'a';
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'a') is null and pg_temp.cards(:'g')->'away' = '{"base":0,"adjustments":[],"total":0}'::jsonb, 'automatic captain: a franchise with no starters has none, and no adjustment line');
+rollback to savepoint no_starters;
+
+-- Who may ask: production's read policies on the tables the function reads.
+savepoint rls;
+alter table public.lineups enable row level security;
+alter table public.fantasy_player_scores enable row level security;
+alter table public.fantasy_team_scores enable row level security;
+alter table public.matchups enable row level security;
+create policy member_read_lineups on public.lineups for select to authenticated using (exists (select 1 from season_franchises sf join league_seasons ls on ls.id = sf.league_season_id where sf.id = lineups.season_franchise_id and is_league_member(ls.league_id)));
+create policy member_read_player_scores on public.fantasy_player_scores for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = fantasy_player_scores.league_season_id and is_league_member(ls.league_id)));
+create policy member_read_team_scores on public.fantasy_team_scores for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = fantasy_team_scores.league_season_id and is_league_member(ls.league_id)));
+create policy member_read_matchups on public.matchups for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = matchups.league_season_id and is_league_member(ls.league_id)));
+grant select on public.lineups, public.fantasy_player_scores, public.fantasy_team_scores, public.season_franchises to authenticated;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', :'ua', true);
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') = :'auto_h'::jsonb, 'RLS: a league member (here the opponent) gets the same automatic captain the scoring function uses');
+select set_config('request.jwt.claim.sub', :'outsider', true);
+select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') is null and (public.chaos_captain_expected_points(:'ls', 13, :'hq', null)->>'games')::int = 0, 'RLS: a user outside the league learns nothing (production read policies copied into this scenario)');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+rollback to savepoint rls;
+
+-- Final: the automatic captain is part of the result.
+select pg_temp.kickoff(:'t1');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) = 'That player''s game has already started'
+  and pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '',
+  'automatic captain is not a lock: after its kickoff a manager can still NAME a starter who has not kicked off (see "Decisions needed")');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'automatic captain: that named captain is cleared again');
+select pg_temp.finish_week13();
+select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'AUTOMATIC CAPTAIN: Week 13 closes');
+select pg_temp.expect((select is_final and winner_season_franchise_id = :'h' and home_points = 76.50 and away_points = 41.00 from public.matchups where id = :'g')
+  and pg_temp.cards(:'g')->'home'->'adjustments'->0->>'automatic' = 'true' and pg_temp.cards(:'g')->'away'->'adjustments'->0->>'automatic' = 'true',
+  'AUTOMATIC CAPTAIN: final 76.50 to 41.00 with both automatic captains recorded');
+select pg_temp.expect((select payload->'chaos_cards' = pg_temp.cards(:'g') from public.league_feed_events where event_type = 'matchup_final' and payload->>'matchup_id' = :'g'), 'AUTOMATIC CAPTAIN: the matchup_final feed payload carries the same record');
+select pg_temp.expect(public.chaos_clause_decision(:'ls', :'h', :'a')->'steps'->0 = '{"step":"chaos_week","week":13,"home":56.50,"away":42.00,"outcome":"home","basis":"base_lineup_total","home_adjusted":76.50,"away_adjusted":41.00}'::jsonb,
+  'CHAOS CLAUSE: still compares the base lineup totals, before the (automatic) captain is applied');
+create temp table auto_snap on commit drop as select pg_temp.snapshot(:'g') as s;
+select public.recompute_matchup(:'g', true), public.recompute_matchup(:'g', false);
+select pg_temp.expect((select pg_temp.snapshot(:'g') = s from auto_snap), 'STABLE: recomputing the finalized game changes nothing about the automatic captain');
 rollback;
 
 -- ---------------------------------------------------------------------------
@@ -595,27 +745,27 @@ select pg_temp.expect((pg_temp.recompute(:'g', false, false)->'new'->>'home_poin
 rollback;
 
 -- ---------------------------------------------------------------------------
--- 7. UPSET BOUNTY and process_due_waivers. Uses the 5 v 6 game: seed 6 is the
---    lower seed, and seed 10 is the franchise that is normally first in line.
+-- 7. BOUNTY and process_due_waivers. Uses the 5 v 6 and 3 v 8 games: seeds 6
+--    and 8 are lower seeds, and seed 10 is the franchise normally first in line.
 -- ---------------------------------------------------------------------------
 begin;
 select pg_temp.deal();
 select pg_temp.force_card(d.matchup_id, 'TWIST_TE_DOUBLE') from public.chaos_card_draws d;
-select pg_temp.force_card(:'g5', 'UPSET_BOUNTY');
-select pg_temp.force_card(:'g3', 'UPSET_BOUNTY');
+select pg_temp.force_card(:'g5', 'BOUNTY');
+select pg_temp.force_card(:'g3', 'BOUNTY');
 update public.real_games set starts_at = now() + interval '9 days', state = 'scheduled' where week = 14;
 select starts_at as week14_kickoff from public.real_games where week = 14 \gset
 -- The lower seeds of both bounty games win; in the 1 v 10 game seed 1 wins.
 update public.fantasy_player_scores s set points = 150 from teams t where s.week = 13 and s.athlete_id = t.athlete and t.sf in (:'a5', :'a3');
 update public.fantasy_player_scores s set points = 60 from teams t where s.week = 13 and s.athlete_id = t.athlete and t.sf in (:'h5', :'h3');
 select public.recompute_matchup(:'g5', false);
-select pg_temp.expect(pg_temp.points(:'g5') = array[60.00, 150.00] and pg_temp.cards(:'g5') @> '{"card_code":"UPSET_BOUNTY","kind":"bounty","home":{"adjustments":[]},"away":{"adjustments":[]}}' and not (pg_temp.cards(:'g5') ? 'bounty'), 'UPSET BOUNTY: the card changes no score, and nothing is granted while the game is open');
-select pg_temp.expect(pg_temp.err_as((select manager from teams where sf = :'a5'), format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g5', :'a5', 'UPSET_BOUNTY', :'fa')) = 'Upset Bounty needs no selection', 'UPSET BOUNTY: takes no selection');
+select pg_temp.expect(pg_temp.points(:'g5') = array[60.00, 150.00] and pg_temp.cards(:'g5') @> '{"card_code":"BOUNTY","kind":"bounty","home":{"adjustments":[]},"away":{"adjustments":[]}}' and not (pg_temp.cards(:'g5') ? 'bounty'), 'BOUNTY: the card changes no score, and nothing is granted while the game is open');
+select pg_temp.expect(pg_temp.err_as((select manager from teams where sf = :'a5'), format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g5', :'a5', 'BOUNTY', :'fa')) = 'Bounty needs no selection', 'BOUNTY: takes no selection');
 select pg_temp.finish_week13();
 select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'bounty: Week 13 closes');
-select pg_temp.expect((select count(*) = 2 and bool_and(source_week = 13 and effective_until = :'week14_kickoff'::timestamptz and effective_from <= now()) and array_agg(season_franchise_id order by season_franchise_id) = (select array_agg(x order by x) from unnest(array[:'a5'::uuid, :'a3'::uuid]) x) from public.chaos_bounty_grants),
-  'UPSET BOUNTY: each winning lower seed gets ONE recorded grant, in force until the last Week 14 kickoff');
-select pg_temp.expect(pg_temp.cards(:'g5')->'bounty'->>'season_franchise_id' = :'a5' and (select count(*) = 2 from public.league_feed_events where event_type = 'chaos_bounty_granted'), 'UPSET BOUNTY: the grant is recorded on the matchup and announced in the feed');
+select pg_temp.expect((select count(*) = 2 and bool_and(grant_kind = 'first' and source_week = 13 and effective_until = :'week14_kickoff'::timestamptz and effective_from <= now()) and array_agg(season_franchise_id order by season_franchise_id) = (select array_agg(x order by x) from unnest(array[:'a5'::uuid, :'a3'::uuid]) x) from public.chaos_bounty_grants),
+  'BOUNTY, lower seed wins: each winning lower seed gets ONE recorded grant of kind first, in force until the last Week 14 kickoff');
+select pg_temp.expect(pg_temp.cards(:'g5')->'bounty' @> jsonb_build_object('season_franchise_id', :'a5', 'grant', 'first') and (select count(*) = 2 and bool_and(body = 'Bounty earned' and payload->>'grant' = 'first') from public.league_feed_events where event_type = 'chaos_bounty_granted'), 'BOUNTY: the grant and its kind are recorded on the matchup and announced in the feed');
 select public.recompute_matchup(:'g5', true), public.recompute_matchup(:'g5', false);
 select pg_temp.expect((select count(*) = 2 from public.chaos_bounty_grants) and (select count(*) = 2 from public.league_feed_events where event_type = 'chaos_bounty_granted') and pg_temp.cards(:'g5')->'bounty'->>'season_franchise_id' = :'a5', 'STABLE: recomputing the finalized bounty game grants nothing twice and keeps the record');
 
@@ -634,26 +784,123 @@ end $$;
 select pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[], 'process_due_waivers_before_cards') as normal_first \gset
 select pg_temp.claim_race(array[:'a5', :'a3']::uuid[], 'process_due_waivers_before_cards') as normal_among_holders \gset
 select pg_temp.expect(:'normal_first' = :'a', 'waiver fixture: by the normal inverse-standings rule seed 10 is first of the three');
-select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'normal_among_holders' and :'normal_among_holders' in (:'a5', :'a3'), 'UPSET BOUNTY honoured: a bounty holder is awarded the claim ahead of seed 10; between the two holders the normal rule decides');
-select pg_temp.expect(pg_temp.claim_race(array[:'a', case when :'normal_among_holders' = :'a5' then :'a3' else :'a5' end]::uuid[]) <> :'a', 'UPSET BOUNTY honoured: the other holder also goes ahead of seed 10');
-select pg_temp.expect(pg_temp.claim_race(array[:'a', :'h']::uuid[]) = pg_temp.claim_race(array[:'a', :'h']::uuid[], 'process_due_waivers_before_cards'), 'bounty: claims between franchises with no bounty are ordered exactly as before');
+select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'normal_among_holders' and :'normal_among_holders' in (:'a5', :'a3'), 'BOUNTY honoured: a lower-seed winner is awarded the claim ahead of seed 10; between the two holders the normal rule decides');
+select pg_temp.expect(pg_temp.claim_race(array[:'a', case when :'normal_among_holders' = :'a5' then :'a3' else :'a5' end]::uuid[]) <> :'a', 'BOUNTY honoured: the other holder also goes ahead of seed 10');
+select pg_temp.expect(pg_temp.claim_race(array[:'a', :'h']::uuid[]) = pg_temp.claim_race(array[:'a', :'h']::uuid[], 'process_due_waivers_before_cards'), 'bounty: claims between franchises with no bounty keep their normal order');
 -- The week is over: the grant is no longer in force.
 update public.chaos_bounty_grants set effective_from = now() - interval '8 days', effective_until = now() - interval '1 second';
-select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'a', 'UPSET BOUNTY lasts exactly one window: after effective_until the normal order is back (seed 10 first)');
+select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'a' and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls')), 'BOUNTY lasts exactly one window: after effective_until the normal order is back (seed 10 first) and there is no bounty order');
 update public.chaos_bounty_grants set effective_from = now() + interval '1 hour', effective_until = now() + interval '2 hours';
-select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'a', 'UPSET BOUNTY: a grant that is not yet in force changes nothing either');
+select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'a' and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls')), 'BOUNTY: a grant that is not yet in force changes nothing either');
 rollback;
 
--- The higher seed wins, or the game is level: no bounty.
+-- The higher seed wins: it is paid too. A level game pays nobody.
 begin;
 select pg_temp.deal();
-select pg_temp.force_card(d.matchup_id, 'UPSET_BOUNTY') from public.chaos_card_draws d;
+select pg_temp.force_card(d.matchup_id, 'BOUNTY') from public.chaos_card_draws d;
 update public.fantasy_player_scores s set points = 100 from teams t where s.week = 13 and s.athlete_id = t.athlete and t.sf in (:'h3', :'a3');
 select pg_temp.finish_week13();
-select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'bounty fixture: Week 13 closes with every game under Upset Bounty');
+select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'bounty fixture: Week 13 closes with every game under Bounty');
 select pg_temp.expect((select winner_season_franchise_id = :'h' from public.matchups where id = :'g') and (select winner_season_franchise_id is null and is_final from public.matchups where id = :'g3'), 'bounty fixture: seed 1 beats seed 10, and the 3 v 8 game is level');
-select pg_temp.expect((select count(*) = 0 from public.chaos_bounty_grants where matchup_id in (:'g', :'g3')) and not (pg_temp.cards(:'g') ? 'bounty'), 'UPSET BOUNTY: no grant when the higher seed wins or the game is tied');
-select pg_temp.expect((select count(*) = (select count(*) from public.matchups m where m.week = 13 and m.winner_season_franchise_id = public.chaos_lower_seed(m.id)) from public.chaos_bounty_grants), 'UPSET BOUNTY: grants exist for exactly the games a lower seed won');
+select pg_temp.expect((select count(*) = 1 and bool_and(season_franchise_id = :'h' and grant_kind = 'up_three' and source_week = 13) from public.chaos_bounty_grants where matchup_id = :'g')
+  and pg_temp.cards(:'g')->'bounty' @> jsonb_build_object('season_franchise_id', :'h', 'grant', 'up_three')
+  and (select count(*) = 1 from public.league_feed_events where event_type = 'chaos_bounty_granted' and payload->>'matchup_id' = :'g' and payload->>'grant' = 'up_three'),
+  'BOUNTY, higher seed wins: the winning HIGHER seed gets one grant of kind up_three, recorded on the matchup and in the feed');
+select pg_temp.expect((select count(*) = 0 from public.chaos_bounty_grants where matchup_id = :'g3') and not (pg_temp.cards(:'g3') ? 'bounty'), 'BOUNTY, tie: a level Bounty game pays nobody');
+select pg_temp.expect((select count(*) = 4 and count(*) = (select count(*) from public.matchups m where m.week = 13 and m.winner_season_franchise_id is not null)
+    and bool_and(g.season_franchise_id = m.winner_season_franchise_id and g.grant_kind = case when m.winner_season_franchise_id = public.chaos_lower_seed(m.id) then 'first' else 'up_three' end)
+  from public.chaos_bounty_grants g join public.matchups m on m.id = g.matchup_id),
+  'BOUNTY: one grant per game that had a winner, always to the winner, first for a lower seed and up_three for a higher seed');
+select public.recompute_matchup(:'g', true), public.recompute_matchup(:'g', false);
+select pg_temp.expect((select count(*) = 4 from public.chaos_bounty_grants) and (select count(*) = 4 from public.league_feed_events where event_type = 'chaos_bounty_granted'), 'STABLE: recomputing a finalized higher-seed bounty game grants nothing twice');
+rollback;
+
+-- The exact Week 14 waiver order. Fixture surgery: the standings are set so the
+-- NORMAL order is known (N1 claims first ... N10 last: N-n has n wins), and
+-- grants are inserted directly. Every franchise claims the same free agent with
+-- a roster limit of 0, so every claim fails "roster is full" and
+-- process_due_waivers writes its priority_rank for all ten.
+begin;
+create temp table n on commit drop as select row_number() over (order by sf)::int as pos, sf from teams;
+update public.standings s set wins = n.pos, losses = 13 - n.pos, ties = 0, points_for = 1000 from n where s.season_franchise_id = n.sf;
+update public.league_seasons set roster_config = '{"starters":{},"bench":0}'::jsonb;
+create function pg_temp.grant_bounty(p_pos integer, p_kind text) returns void language sql as $$
+  insert into public.chaos_bounty_grants(league_season_id, season_franchise_id, matchup_id, source_week, grant_kind, effective_from, effective_until)
+  select (select ls from ids), n.sf, (select m.id from public.matchups m where m.week = 13 and not exists (select 1 from public.chaos_bounty_grants g where g.matchup_id = m.id) order by m.id limit 1),
+    13, p_kind, now() - interval '1 hour', now() + interval '7 days'
+  from n where n.pos = p_pos
+$$;
+-- The order process_due_waivers gives ten claims, as normal positions. Claims are filed in REVERSE normal order.
+create function pg_temp.waiver_ranks(p_fn text default 'process_due_waivers') returns integer[] language plpgsql as $$
+declare v_hold uuid; v integer[];
+begin
+  insert into public.waiver_holds(league_season_id, athlete_id, clears_at) values ((select ls from ids), (select id from cast_list where role = 'fa'), now() - interval '1 minute') returning id into v_hold;
+  insert into public.waiver_claims(waiver_hold_id, season_franchise_id, created_at) select v_hold, n.sf, now() - interval '1 hour' - (n.pos || ' minutes')::interval from n;
+  execute format('select public.%I($1)', p_fn) using (select ls from ids);
+  select array_agg(n.pos order by wc.priority_rank) into v from public.waiver_claims wc join n on n.sf = wc.season_franchise_id where wc.waiver_hold_id = v_hold and wc.priority_rank is not null and wc.status = 'failed';
+  return v;
+end $$;
+create function pg_temp.bounty_order() returns integer[] language sql as
+$$ select array_agg(n.pos order by o.waiver_position) from public.chaos_bounty_waiver_order((select ls from ids)) o join n on n.sf = o.season_franchise_id $$;
+
+select pg_temp.expect((select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls')), 'bounty order: with no grant there is no bounty order at all');
+select pg_temp.expect(pg_temp.waiver_ranks() = array[1,2,3,4,5,6,7,8,9,10] and pg_temp.waiver_ranks('process_due_waivers_before_cards') = array[1,2,3,4,5,6,7,8,9,10],
+  'NO GRANTS: process_due_waivers ranks all ten claims in the normal order, exactly as the function of 20261003030000 does');
+
+savepoint one_each;
+select pg_temp.grant_bounty(8, 'first'), pg_temp.grant_bounty(6, 'up_three');
+select pg_temp.expect(pg_temp.bounty_order() = array[8,1,2,6,3,4,5,7,9,10], 'BOUNTY ORDER, one upset winner (N8) and one favourite winner (N6) in a 10-team league: N8, N1, N2, N6, N3, N4, N5, N7, N9, N10');
+select pg_temp.expect(pg_temp.waiver_ranks() = array[8,1,2,6,3,4,5,7,9,10], 'process_due_waivers HONOURS BOTH GRANT KINDS: ten claims are ranked N8, N1, N2, N6, N3, N4, N5, N7, N9, N10');
+select pg_temp.expect(pg_temp.waiver_ranks('process_due_waivers_before_cards') = array[1,2,3,4,5,6,7,8,9,10], 'fixture check: the pre-cards function still gives the normal order for the same claims');
+select pg_temp.expect((select array_agg(row(o.normal_position, o.grant_kind)::text order by o.waiver_position) = array['(8,first)','(1,)','(2,)','(6,up_three)','(3,)','(4,)','(5,)','(7,)','(9,)','(10,)'] from public.chaos_bounty_waiver_order(:'ls') o),
+  'bounty order: each row reports the normal position and the grant kind');
+update public.chaos_bounty_grants set effective_from = now() - interval '8 days', effective_until = now() - interval '1 second';
+select pg_temp.expect((select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls')) and pg_temp.waiver_ranks() = array[1,2,3,4,5,6,7,8,9,10], 'ONE WEEK ONLY: once both grants have run out, process_due_waivers is back to the normal order');
+rollback to savepoint one_each;
+
+savepoint adjacent;
+select pg_temp.grant_bounty(5, 'up_three'), pg_temp.grant_bounty(6, 'up_three');
+select pg_temp.expect(pg_temp.bounty_order() = array[1,5,6,2,3,4,7,8,9,10] and pg_temp.waiver_ranks() = array[1,5,6,2,3,4,7,8,9,10],
+  'BOUNTY ORDER, two favourite winners adjacent in the order (N5, N6): N1, N5, N6, N2, N3, N4, N7, N8, N9, N10 (each moves up three; N5 is processed first and stays ahead of N6)');
+rollback to savepoint adjacent;
+
+savepoint near_top;
+select pg_temp.grant_bounty(2, 'up_three');
+select pg_temp.expect(pg_temp.bounty_order() = array[2,1,3,4,5,6,7,8,9,10], 'bounty order: a favourite winner already in the top three (N2) moves to first when no lower-seed winner holds a bounty');
+select pg_temp.grant_bounty(9, 'first');
+select pg_temp.expect(pg_temp.bounty_order() = array[9,2,1,3,4,5,6,7,8,10] and pg_temp.waiver_ranks() = array[9,2,1,3,4,5,6,7,8,10], 'bounty order: it does NOT pass a lower-seed bounty winner (N9 first, then N2)');
+rollback to savepoint near_top;
+
+savepoint several;
+select pg_temp.grant_bounty(9, 'first'), pg_temp.grant_bounty(4, 'first'), pg_temp.grant_bounty(10, 'up_three'), pg_temp.grant_bounty(3, 'up_three'), pg_temp.grant_bounty(7, 'up_three');
+-- first: N4, N9. Rest: 1,2,3,5,6,7,8,10. N3 (third) to the top: 3,1,2,5,6,7,8,10. N7 (sixth) up three: 3,1,7,2,5,6,8,10. N10 (eighth) up three: 3,1,7,2,10,5,6,8.
+select pg_temp.expect(pg_temp.bounty_order() = array[4,9,3,1,7,2,10,5,6,8] and pg_temp.waiver_ranks() = array[4,9,3,1,7,2,10,5,6,8],
+  'BOUNTY ORDER, five grants: lower-seed winners first in normal order (N4, N9), then the rest with N3, N7, N10 each moved up three in normal-order sequence: N3, N1, N7, N2, N10, N5, N6, N8');
+select pg_temp.expect(pg_temp.bounty_order() = pg_temp.bounty_order(), 'bounty order: deterministic');
+rollback to savepoint several;
+
+-- Level standings: with no grant, claim time decides exactly as before.
+savepoint level;
+update public.standings set wins = 6, losses = 7, ties = 0, points_for = 1000;
+select pg_temp.expect(pg_temp.waiver_ranks() = array[10,9,8,7,6,5,4,3,2,1] and pg_temp.waiver_ranks('process_due_waivers_before_cards') = array[10,9,8,7,6,5,4,3,2,1], 'NO GRANTS, level standings: the earliest claim goes first in both versions (claims were filed in reverse order)');
+rollback to savepoint level;
+rollback;
+
+-- The natural standings of the fixture, no surgery: both versions rank ten claims identically.
+begin;
+create temp table n on commit drop as select row_number() over (order by sf)::int as pos, sf from teams;
+update public.league_seasons set roster_config = '{"starters":{},"bench":0}'::jsonb;
+create function pg_temp.natural_ranks(p_fn text) returns uuid[] language plpgsql as $$
+declare v_hold uuid; v uuid[];
+begin
+  insert into public.waiver_holds(league_season_id, athlete_id, clears_at) values ((select ls from ids), (select id from cast_list where role = 'fa'), now() - interval '1 minute') returning id into v_hold;
+  insert into public.waiver_claims(waiver_hold_id, season_franchise_id, created_at) select v_hold, n.sf, now() - interval '1 hour' + (((n.pos * 7) % 10) || ' minutes')::interval from n;
+  execute format('select public.%I($1)', p_fn) using (select ls from ids);
+  select array_agg(wc.season_franchise_id order by wc.priority_rank) into v from public.waiver_claims wc where wc.waiver_hold_id = v_hold and wc.priority_rank is not null;
+  return v;
+end $$;
+select pg_temp.expect(cardinality(pg_temp.natural_ranks('process_due_waivers')) = 10 and pg_temp.natural_ranks('process_due_waivers') = pg_temp.natural_ranks('process_due_waivers_before_cards'),
+  'NO GRANTS, the fixture''s real standings after Week 12: process_due_waivers ranks all ten claims exactly as the function of 20261003030000 does');
 rollback;
 
 -- ---------------------------------------------------------------------------

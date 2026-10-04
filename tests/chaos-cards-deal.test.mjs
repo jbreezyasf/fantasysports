@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { CHAOS_WEEK, chaosCardsEnabled, dealChaosWeekCards } from '../scripts/advance-fantasy-season.mjs';
+import { CHAOS_WEEK, chaosCardsEnabled, chaosDealDeadline, dealChaosWeekCards } from '../scripts/advance-fantasy-season.mjs';
 
 // Minimal stand-in for the Supabase client. `seasons` maps a league season id
-// to { matchups, dealt }. The rpc behaves like deal_chaos_week_cards.
-function fakeDb({ seasons, missing = null, kickedOff = new Set(), failFor = new Set() }) {
+// to { matchups, dealt }. The rpc behaves like deal_chaos_week_cards. `games`
+// are the Week 13 real_games rows of the one competition season ('cs').
+function fakeDb({ seasons, missing = null, kickedOff = new Set(), failFor = new Set(), games = [], gamesError = null }) {
   const calls = { rpc: [], reads: 0 };
   const from = table => {
     const filters = {};
@@ -16,6 +17,8 @@ function fakeDb({ seasons, missing = null, kickedOff = new Set(), failFor = new 
         calls.reads += 1;
         const season = seasons[filters.league_season_id];
         if (table === 'chaos_card_deals' && missing === 'table') return Promise.resolve({ data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.chaos_card_deals' in the schema cache" } }).then(resolve, reject);
+        if (table === 'league_seasons') return Promise.resolve({ data: seasons[filters.id] ? [{ competition_season_id: 'cs' }] : [], error: null }).then(resolve, reject);
+        if (table === 'real_games') return Promise.resolve(gamesError ? { data: null, error: { message: gamesError } } : { data: filters.competition_season_id === 'cs' && filters.week === CHAOS_WEEK ? games : [], error: null }).then(resolve, reject);
         const data = table === 'matchups' ? (season?.matchups ?? []).filter(m => m.week === filters.week) : season?.dealt ? [{ week: CHAOS_WEEK }] : [];
         return Promise.resolve({ data, error: null }).then(resolve, reject);
       },
@@ -28,7 +31,7 @@ function fakeDb({ seasons, missing = null, kickedOff = new Set(), failFor = new 
     if (kickedOff.has(args.p_league_season_id)) return { data: null, error: { message: 'Week 13 has already kicked off; rule cards can no longer be dealt' } };
     if (failFor.has(args.p_league_season_id)) return { data: null, error: { message: 'Chaos Week matchups must be open and carry both seeds before cards are dealt' } };
     const season = seasons[args.p_league_season_id];
-    const cards = season.matchups.filter(m => m.week === CHAOS_WEEK).map((m, i) => ({ matchup_id: m.id, deal_position: i + 1, card_code: ['CAPTAIN', 'RAID', 'WILD_SLOT', 'UPSET_BOUNTY', 'TWIST_K_TRIPLE'][i] }));
+    const cards = season.matchups.filter(m => m.week === CHAOS_WEEK).map((m, i) => ({ matchup_id: m.id, deal_position: i + 1, card_code: ['CAPTAIN', 'RAID', 'WILD_SLOT', 'BOUNTY', 'TWIST_K_TRIPLE'][i] }));
     if (season.dealt) return { data: { status: 'exists', week: CHAOS_WEEK, cards }, error: null };
     season.dealt = true;
     return { data: { status: 'dealt', week: CHAOS_WEEK, cards }, error: null };
@@ -37,6 +40,11 @@ function fakeDb({ seasons, missing = null, kickedOff = new Set(), failFor = new 
 const chaosWeek = (final = false) => Array.from({ length: 5 }, (_, i) => ({ id: `m${i + 1}`, week: 13, event_type: 'chaos', is_final: final }));
 const quiet = () => { const lines = { log: [], warn: [], error: [] }; return { lines, log: l => lines.log.push(JSON.parse(l)), warn: l => lines.warn.push(JSON.parse(l)), error: l => lines.error.push(JSON.parse(l)) }; };
 const leagues = ids => ids.map(id => ({ id }));
+// Production's first Week 13 kickoff (read 2026-10-04): Thursday 2026-12-03 20:15 in New York.
+const FIRST_KICKOFF = '2026-12-04T01:15:00Z';
+const week13Games = [{ starts_at: '2026-12-06T18:00:00Z', state: 'scheduled' }, { starts_at: FIRST_KICKOFF, state: 'scheduled' }, { starts_at: '2026-12-03T18:00:00Z', state: 'postponed' }];
+const DEADLINE = Date.parse('2026-12-01T17:00:00Z'); // Tuesday 12:00 EST
+const AFTER_DEADLINE = Date.parse('2026-12-02T13:15:00Z'); // 36 hours before the first kickoff
 
 test('the flag is off by default and only on for explicit values', () => {
   assert.equal(chaosCardsEnabled({}), false);
@@ -46,7 +54,7 @@ test('the flag is off by default and only on for explicit values', () => {
 
 test('disabled: nothing is read or written', async () => {
   const db = fakeDb({ seasons: { A: { matchups: chaosWeek() } } });
-  assert.deepEqual(await dealChaosWeekCards({ db, leagueSeasons: leagues(['A']), enabled: false, log: quiet() }), { enabled: false, results: [], failures: [] });
+  assert.deepEqual(await dealChaosWeekCards({ db, leagueSeasons: leagues(['A']), enabled: false, log: quiet(), now: AFTER_DEADLINE }), { enabled: false, results: [], failures: [] });
   assert.deepEqual(db.calls, { rpc: [], reads: 0 });
 });
 
@@ -108,9 +116,86 @@ for (const missing of ['table', 'function']) {
   test(`enabled before the migration is applied (${missing} missing): warns once, changes nothing, reports no failure`, async () => {
     const db = fakeDb({ seasons: { A: { matchups: chaosWeek() }, B: { matchups: chaosWeek() } }, missing }); const log = quiet();
     const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A', 'B']), enabled: true, log });
-    assert.deepEqual(outcome, { enabled: true, available: false, results: [], failures: [] });
+    assert.deepEqual(outcome, { enabled: true, available: false, results: [], failures: [], alerts: [] });
     assert.equal(log.lines.warn.length, 1);
     assert.equal(log.lines.warn[0].warning, 'chaos-cards-migration-not-applied');
     assert.equal(db.calls.rpc.length, missing === 'function' ? 1 : 0);
   });
 }
+
+test('the deal deadline is Tuesday 12:00 America/New_York before the first Week 13 kickoff, in winter and summer time', () => {
+  assert.equal(chaosDealDeadline(FIRST_KICKOFF), DEADLINE);
+  assert.equal(new Date(chaosDealDeadline('2026-12-06T18:00:00Z')).toISOString(), '2026-12-01T17:00:00.000Z', 'a Sunday opener: the Tuesday before it');
+  assert.equal(new Date(chaosDealDeadline('2026-10-30T00:15:00Z')).toISOString(), '2026-10-27T16:00:00.000Z', 'daylight saving time: noon is 16:00 UTC');
+  assert.equal(new Date(chaosDealDeadline('2026-12-01T17:00:00Z')).toISOString(), '2026-11-24T17:00:00.000Z', 'a kickoff at Tuesday noon itself: the Tuesday before');
+  assert.equal(chaosDealDeadline('not a date'), null);
+});
+
+test('deal deadline alert: one structured error line per undealt league season per run, also in the returned report; it does not throw', async () => {
+  const db = fakeDb({ seasons: { A: { matchups: chaosWeek() }, B: { matchups: chaosWeek() }, C: { matchups: chaosWeek() } }, failFor: new Set(['A', 'B']), games: week13Games }); const log = quiet();
+  const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A', 'B', 'C']), enabled: true, log, now: AFTER_DEADLINE });
+  assert.deepEqual(outcome.alerts.map(a => [a.leagueSeasonId, a.hoursUntilFirstKickoff, a.firstKickoff, a.deadline, a.reason]), [
+    ['A', 36, '2026-12-04T01:15:00.000Z', '2026-12-01T17:00:00.000Z', 'the deal failed'],
+    ['B', 36, '2026-12-04T01:15:00.000Z', '2026-12-01T17:00:00.000Z', 'the deal failed'],
+  ]);
+  assert.match(outcome.alerts[0].action, /select public\.deal_chaos_week_cards\('<league_season_id>', 13\);/);
+  const lines = log.lines.error.filter(line => line.error === 'deal-deadline-missed');
+  assert.deepEqual(lines.map(line => [line.job, line.leagueSeasonId, line.hoursUntilFirstKickoff]), [['chaos-cards', 'A', 36], ['chaos-cards', 'B', 36]]);
+  assert.deepEqual(outcome.results.map(r => [r.leagueSeasonId, r.status]), [['C', 'dealt']], 'the league that was dealt in this run raises no alert');
+  assert.equal(outcome.failures.length, 2, 'the failed deals are still reported as failures, separately');
+  const again = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A', 'B', 'C']), enabled: true, log: quiet(), now: AFTER_DEADLINE + 3600e3 });
+  assert.deepEqual(again.alerts.map(a => [a.leagueSeasonId, a.hoursUntilFirstKickoff]), [['A', 35], ['B', 35]], 'the next run alerts again, once per league season');
+});
+
+test('deal deadline alert: silent before the deadline, at the deadline, when dealt, when Chaos Week does not exist or is final, and when the flag is off', async () => {
+  const seasons = () => ({ A: { matchups: chaosWeek() }, early: { matchups: [{ id: 'x', week: 12, event_type: 'position', is_final: true }] }, done: { matchups: chaosWeek(true) }, dealt: { matchups: chaosWeek(), dealt: true } });
+  for (const now of [Date.parse('2026-11-30T12:00:00Z'), DEADLINE]) {
+    const log = quiet();
+    const outcome = await dealChaosWeekCards({ db: fakeDb({ seasons: seasons(), failFor: new Set(['A']), games: week13Games }), leagueSeasons: leagues(['A', 'early', 'done', 'dealt']), enabled: true, log, now });
+    assert.deepEqual(outcome.alerts, [], new Date(now).toISOString());
+    assert.equal(log.lines.error.filter(line => line.error === 'deal-deadline-missed').length, 0);
+  }
+  const late = await dealChaosWeekCards({ db: fakeDb({ seasons: seasons(), games: week13Games }), leagueSeasons: leagues(['A', 'early', 'done', 'dealt']), enabled: true, log: quiet(), now: AFTER_DEADLINE });
+  assert.deepEqual(late.alerts, [], 'past the deadline: A is dealt in this run; the others have no open undealt Chaos Week');
+  const off = fakeDb({ seasons: seasons(), failFor: new Set(['A']), games: week13Games });
+  assert.deepEqual(await dealChaosWeekCards({ db: off, leagueSeasons: leagues(['A']), enabled: false, log: quiet(), now: AFTER_DEADLINE }), { enabled: false, results: [], failures: [] });
+  assert.deepEqual(off.calls, { rpc: [], reads: 0 });
+});
+
+test('deal deadline alert after kickoff: hours are negative and the alert says the database now refuses', async () => {
+  const db = fakeDb({ seasons: { A: { matchups: chaosWeek() } }, kickedOff: new Set(['A']), games: week13Games }); const log = quiet();
+  const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A']), enabled: true, log, now: Date.parse('2026-12-04T03:15:00Z') });
+  assert.deepEqual(outcome.failures, []);
+  assert.deepEqual(outcome.results, [{ leagueSeasonId: 'A', status: 'skipped', reason: 'Chaos Week has kicked off; no cards are dealt' }]);
+  assert.equal(outcome.alerts.length, 1);
+  assert.equal(outcome.alerts[0].hoursUntilFirstKickoff, -2);
+  assert.match(outcome.alerts[0].action, /refuses to deal now/);
+  assert.equal(log.lines.error.length, 1);
+});
+
+test('deal deadline alert with the migration not applied: every league season with an open Chaos Week is alerted, the warning is still logged once', async () => {
+  for (const missing of ['table', 'function']) {
+    const db = fakeDb({ seasons: { A: { matchups: chaosWeek() }, B: { matchups: chaosWeek() }, early: { matchups: [] } }, missing, games: week13Games }); const log = quiet();
+    const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A', 'B', 'early']), enabled: true, log, now: AFTER_DEADLINE });
+    assert.deepEqual(outcome.alerts.map(a => [a.leagueSeasonId, a.reason]), [['A', 'the rule cards migration is not applied'], ['B', 'the rule cards migration is not applied']], missing);
+    assert.deepEqual([outcome.available, outcome.results, outcome.failures], [false, [], []]);
+    assert.equal(log.lines.warn.length, 1);
+  }
+});
+
+test('deal deadline alert: a failure of the safeguard itself is a warning; nothing is thrown and other leagues are still handled', async () => {
+  const db = fakeDb({ seasons: { A: { matchups: chaosWeek() }, B: { matchups: chaosWeek() } }, failFor: new Set(['A']), gamesError: 'real_games is unavailable' }); const log = quiet();
+  const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A', 'B']), enabled: true, log, now: AFTER_DEADLINE });
+  assert.deepEqual(outcome.alerts, []);
+  assert.deepEqual(log.lines.warn.map(line => [line.warning, line.leagueSeasonId, line.message]), [['deal-deadline-check-failed', 'A', 'real_games is unavailable']]);
+  assert.deepEqual(outcome.results.map(r => [r.leagueSeasonId, r.status]), [['B', 'dealt']]);
+});
+
+test('the weekly job returns the alerts in its report and never throws because of one', async () => {
+  const source = await readFile('scripts/import-balldontlie-nfl-weekly-stats.mjs', 'utf8');
+  assert.match(source, /const report = \{[^}]*\bchaosCards\b[^}]*\};/, 'chaosCards (results, failures, alerts) is part of the returned report');
+  assert.doesNotMatch(source, /alerts/, 'the job has no code path that reacts to an alert, so an alert cannot stop it');
+  const report = source.indexOf('const report = {'); const deal = source.indexOf('const chaosCards=await dealChaosWeekCards({db,leagueSeasons});');
+  const lifecycle = source.indexOf('finalizeCompleteFootballWeeks({db');
+  assert.ok(lifecycle > -1 && lifecycle < deal && deal < report, 'scoring and week close run before the deal step, so the safeguard cannot block them');
+});

@@ -13,6 +13,9 @@
 --     by running a whole season through both versions and comparing);
 --   * set_lineup_slot and process_due_waivers take the same decisions as
 --     20261003030000 (their added checks read empty tables).
+-- Owner decisions of 2026-10-04 (second round) built here: the AUTOMATIC
+-- CAPTAIN (chaos_auto_captain) and the BOUNTY card paying whoever wins
+-- (chaos_bounty_grants.grant_kind, chaos_bounty_waiver_order).
 --
 -- WHAT A CARD CHANGES. Card effects are applied to the MATCHUP total only.
 -- fantasy_player_scores and fantasy_team_scores are never written here.
@@ -26,12 +29,15 @@
 --    "home":{"base":56.50,"adjustments":[{"effect":"captain","athlete_id":..,
 --            "real_team_id":null,"points":20.00}],"total":76.50},
 --    "away":{...}, "bounty":{...}}            -- "bounty" only when granted
+-- An AUTOMATIC captain line (no captain named) carries, besides the keys above,
+--   "automatic":true,"basis":"recent_average_v1","expected":18.33,"games":3,
+--   "season_total":201.40,"compared":[one entry per starter, in rank order]
 --
 -- THE CHAOS CLAUSE (postseason tiebreak, 20261004010000) compares each
 -- franchise's "Chaos Week score". From this migration on it uses the BASE
 -- (unadjusted) lineup total when the Chaos Week matchup has a card, so the
 -- tiebreak is not skewed by which card a game drew. Both numbers are recorded
--- in the step. OWNER TO CONFIRM (see the product doc, "Decisions needed").
+-- in the step. Confirmed by the owner on 2026-10-04.
 --
 -- RELATION TO EARLIER MIGRATIONS (none of them applied to production on
 -- 2026-10-04; production's last applied version is 20260918042128):
@@ -120,6 +126,9 @@ create table if not exists public.chaos_bounty_grants (
   season_franchise_id uuid not null references public.season_franchises(id),
   matchup_id uuid not null unique references public.matchups(id) on delete cascade,
   source_week integer not null,
+  -- 'first': the lower seed won; it goes to the front of the waiver order.
+  -- 'up_three': the higher seed won; it moves up three places.
+  grant_kind text not null check (grant_kind in ('first', 'up_three')),
   effective_from timestamptz not null,
   effective_until timestamptz not null,
   created_at timestamptz not null default now(),
@@ -175,8 +184,8 @@ create policy chaos_bounty_grants_member_read on public.chaos_bounty_grants for 
 -- ---------------------------------------------------------------------------
 insert into public.chaos_cards (code, kind, name_en, name_es, rules_en, rules_es, params) values
   ('CAPTAIN', 'captain', 'Captain', 'Capitán',
-   'Each manager names one Week 13 starter as captain before that player''s game kicks off. The captain''s fantasy points count double in this matchup. No captain named means no bonus.',
-   'Cada mánager nombra capitán a uno de sus titulares de la Semana 13 antes de que empiece el partido de ese jugador. Los puntos fantasy del capitán cuentan doble en este enfrentamiento. Sin capitán no hay bonificación.',
+   'Each manager names one Week 13 starter as captain before that player''s game kicks off. The captain''s fantasy points count double in this matchup. If no captain is named, the starter with the highest recent scoring average becomes captain automatically.',
+   'Cada mánager nombra capitán a uno de sus titulares de la Semana 13 antes de que empiece el partido de ese jugador. Los puntos fantasy del capitán cuentan doble en este enfrentamiento. Si no se nombra capitán, el titular con el mejor promedio reciente de puntos pasa a ser capitán automáticamente.',
    '{"multiplier":2}'),
   ('WILD_SLOT', 'wild_slot', 'Wild Slot', 'Puesto Comodín',
    'Each manager may name one extra player from their active roster, at any position, who is not already starting. That player''s Week 13 points are added to the team total. Choose before that player''s game kicks off.',
@@ -186,9 +195,9 @@ insert into public.chaos_cards (code, kind, name_en, name_es, rules_en, rules_es
    'The lower seed picks one player from the higher seed''s bench before the first Week 13 kickoff. That player''s Week 13 points are added to the lower seed''s total. The player stays on the higher seed''s roster but cannot start for them in Week 13.',
    'El equipo con peor clasificación elige a un jugador de la banca del equipo mejor clasificado antes del primer partido de la Semana 13. Los puntos de ese jugador en la Semana 13 se suman al total del equipo con peor clasificación. El jugador sigue en la plantilla del rival, pero no puede ser titular con él en la Semana 13.',
    '{}'),
-  ('UPSET_BOUNTY', 'bounty', 'Upset Bounty', 'Recompensa por Sorpresa',
-   'If the lower seed wins this matchup, it moves to the front of the waiver order for the following fantasy week.',
-   'Si el equipo con peor clasificación gana este enfrentamiento, pasa al frente del orden de waivers durante la siguiente semana fantasy.',
+  ('BOUNTY', 'bounty', 'Bounty', 'Recompensa',
+   'Whoever wins this matchup moves up the waiver order for the following fantasy week. If the lower seed wins, it goes to the front. If the higher seed wins, it moves up three places. A tie changes nothing.',
+   'Quien gane este enfrentamiento sube en el orden de waivers durante la siguiente semana fantasy. Si gana el equipo con peor clasificación, pasa al frente. Si gana el equipo mejor clasificado, sube tres puestos. Un empate no cambia nada.',
    '{}'),
   ('TWIST_TE_DOUBLE', 'twist', 'Tight End Takeover', 'Dominio del Ala Cerrada',
    'Every starting tight end scores double for both teams.',
@@ -273,6 +282,72 @@ as $function$
   from unnest(p_deck) as t(code);
 $function$;
 
+-- AUTOMATIC CAPTAIN, step 1: the number a starter is ranked by.
+--
+-- THIS IS THE ONE FUNCTION TO REPLACE when the product has real weekly
+-- projections (on 2026-10-04 it has none: the only projection column in
+-- production is the season-long fantasy_player_market_values.projected_points,
+-- with no week and no rows). Keep the return shape: "expected" is the value
+-- compared (higher is better, null ranks last), "season_total" the first
+-- tie-break, "basis" names the method and is stored with every result.
+--
+-- recent_average_v1: the average fantasy points per played game in this league
+-- season over the three most recent weeks BEFORE p_week in which the player
+-- (or D/ST) has a score; fewer when fewer exist; null when there is none.
+-- Nothing from p_week itself is read, so the result cannot use hindsight.
+create or replace function public.chaos_captain_expected_points(
+  p_league_season_id uuid, p_week integer, p_athlete_id uuid, p_real_team_id uuid
+) returns jsonb
+language sql stable set search_path = public
+as $function$
+  with weekly as (
+    select fps.week, sum(fps.points) as points
+    from public.fantasy_player_scores fps
+    where p_athlete_id is not null and fps.league_season_id = p_league_season_id and fps.athlete_id = p_athlete_id and fps.week < p_week
+    group by fps.week
+    union all
+    select fts.week, sum(fts.points) as points
+    from public.fantasy_team_scores fts
+    where p_athlete_id is null and p_real_team_id is not null and fts.league_season_id = p_league_season_id and fts.real_team_id = p_real_team_id and fts.week < p_week
+    group by fts.week
+  ), recent as (
+    select week, points from weekly order by week desc limit 3
+  )
+  select jsonb_build_object(
+    'basis', 'recent_average_v1',
+    'expected', (select round(avg(points), 2) from recent),
+    'games', (select count(*) from recent),
+    'weeks', (select coalesce(jsonb_agg(week order by week), '[]'::jsonb) from recent),
+    'season_total', (select coalesce(sum(points), 0) from weekly));
+$function$;
+
+-- AUTOMATIC CAPTAIN, step 2: the starter who is captain when none is named.
+-- Every starter of the franchise's lineup for the matchup's week is ranked by
+-- expected (highest first, none last), then season_total (highest first), then
+-- the asset id as text (ascending). Kickers and D/ST are eligible, as for a
+-- named captain. Returns null when the franchise has no starters, and for a
+-- caller who cannot read the league (it runs with the caller's rights).
+create or replace function public.chaos_auto_captain(p_matchup_id uuid, p_season_franchise_id uuid)
+returns jsonb
+language sql stable set search_path = public
+as $function$
+  with m as (
+    select mm.league_season_id, mm.week from public.matchups mm
+    where mm.id = p_matchup_id and p_season_franchise_id in (mm.home_season_franchise_id, mm.away_season_franchise_id)
+  ), starters as (
+    select l.athlete_id, l.real_team_id, public.chaos_captain_expected_points(m.league_season_id, m.week, l.athlete_id, l.real_team_id) as e
+    from m join public.lineups l on l.season_franchise_id = p_season_franchise_id and l.week = m.week and l.slot <> 'BENCH'
+    where l.athlete_id is not null or l.real_team_id is not null
+  ), ranked as (
+    select s.athlete_id, s.real_team_id, s.e,
+      row_number() over (order by (s.e->>'expected')::numeric desc nulls last, (s.e->>'season_total')::numeric desc, coalesce(s.athlete_id, s.real_team_id)::text asc) as rank
+    from starters s
+  )
+  select jsonb_build_object('athlete_id', r.athlete_id, 'real_team_id', r.real_team_id) || r.e
+    || jsonb_build_object('compared', (select jsonb_agg(jsonb_build_object('athlete_id', x.athlete_id, 'real_team_id', x.real_team_id, 'expected', x.e->'expected', 'games', x.e->'games', 'season_total', x.e->'season_total') order by x.rank) from ranked x))
+  from ranked r where r.rank = 1;
+$function$;
+
 -- One side of a matchup: base lineup total, adjustment lines, adjusted total.
 -- The base is the sum recompute_matchup has always used. With no revealed
 -- card (or a matchup that is not a Chaos Week game) card_code is null, there
@@ -290,6 +365,7 @@ declare
   v_points numeric;
   v_mult numeric;
   v_is_starter boolean;
+  v_auto jsonb;
 begin
   select * into v_m from matchups where id = p_matchup_id;
   if v_m.id is null then raise exception 'Matchup not found'; end if;
@@ -332,6 +408,21 @@ begin
         v_lines := v_lines || jsonb_build_object('effect', v_kind, 'athlete_id', v_sel.athlete_id, 'real_team_id', v_sel.real_team_id, 'points', round(v_points, 2));
       end if;
     end if;
+    -- AUTOMATIC CAPTAIN: no captain named, or the named one is no longer a
+    -- starter (that choice has stopped counting). A named captain who is in
+    -- the lineup always wins, whatever they score.
+    if v_kind = 'captain' and not (v_sel.id is not null and coalesce(v_is_starter, false)) then
+      v_auto := chaos_auto_captain(p_matchup_id, p_season_franchise_id);
+      if v_auto is not null then
+        if v_auto->>'athlete_id' is not null then
+          select coalesce(sum(fps.points),0) into v_points from fantasy_player_scores fps where fps.league_season_id=v_m.league_season_id and fps.athlete_id=(v_auto->>'athlete_id')::uuid and fps.week=v_m.week;
+        else
+          select coalesce(sum(fts.points),0) into v_points from fantasy_team_scores fts where fts.league_season_id=v_m.league_season_id and fts.real_team_id=(v_auto->>'real_team_id')::uuid and fts.week=v_m.week;
+        end if;
+        v_points := round(v_points * (coalesce((v_params->>'multiplier')::numeric, 2) - 1), 2);
+        v_lines := v_lines || (jsonb_build_object('effect', 'captain', 'athlete_id', v_auto->'athlete_id', 'real_team_id', v_auto->'real_team_id', 'points', v_points, 'automatic', true) || (v_auto - 'athlete_id' - 'real_team_id' - 'weeks'));
+      end if;
+    end if;
   elsif v_kind = 'twist' then
     v_mult := coalesce((v_params->>'multiplier')::numeric, 1) - 1;
     if v_params->>'scope' = 'position' then
@@ -372,6 +463,13 @@ revoke execute on function public.chaos_week_first_kickoff(uuid, integer) from p
 revoke execute on function public.chaos_lower_seed(uuid) from public, anon, authenticated;
 revoke execute on function public.chaos_card_deal_order(text, text[]) from public, anon, authenticated;
 revoke execute on function public.chaos_card_side_score(uuid, uuid) from public, anon, authenticated;
+-- The two automatic-captain functions run with the caller's rights and only
+-- read tables league members can already read, so signed-in managers may call
+-- them (the lineup and matchup pages show who the automatic captain would be).
+revoke execute on function public.chaos_captain_expected_points(uuid, integer, uuid, uuid) from public, anon;
+revoke execute on function public.chaos_auto_captain(uuid, uuid) from public, anon;
+grant execute on function public.chaos_captain_expected_points(uuid, integer, uuid, uuid) to authenticated, service_role;
+grant execute on function public.chaos_auto_captain(uuid, uuid) to authenticated, service_role;
 grant execute on function public.chaos_asset_game_started(uuid, integer, uuid, uuid) to service_role;
 grant execute on function public.chaos_week_first_kickoff(uuid, integer) to service_role;
 grant execute on function public.chaos_lower_seed(uuid) to service_role;
@@ -689,7 +787,7 @@ grant execute on function public.chaos_clause_decision(uuid, uuid, uuid) to serv
 
 -- ---------------------------------------------------------------------------
 -- 7. recompute_matchup: the text of 20261004010000. Changes are the lines that
---    mention v_cards, v_side_home, v_side_away or v_until.
+--    mention v_cards, v_side_home, v_side_away, v_until or v_grant.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.recompute_matchup(p_matchup_id uuid, p_finalize boolean DEFAULT false)
  RETURNS jsonb
@@ -699,7 +797,7 @@ CREATE OR REPLACE FUNCTION public.recompute_matchup(p_matchup_id uuid, p_finaliz
 AS $function$
 declare
   v_m matchups%rowtype; v_home numeric:=0; v_away numeric:=0; v_close jsonb; v_winner uuid; v_loser uuid; v_league uuid; v_clause jsonb;
-  v_cards jsonb; v_side_home jsonb; v_side_away jsonb; v_until timestamptz;   -- rule cards
+  v_cards jsonb; v_side_home jsonb; v_side_away jsonb; v_until timestamptz; v_grant text;   -- rule cards
 begin
   select * into v_m from matchups where id=p_matchup_id for update;
   if v_m.id is null then raise exception 'Matchup not found'; end if;
@@ -758,14 +856,15 @@ begin
       update standings set wins=wins+1,points_for=points_for+case when season_franchise_id=v_m.home_season_franchise_id then v_home else v_away end,points_against=points_against+case when season_franchise_id=v_m.home_season_franchise_id then v_away else v_home end,streak=case when streak>=0 then streak+1 else 1 end where league_season_id=v_m.league_season_id and season_franchise_id=v_winner;
       update standings set losses=losses+1,points_for=points_for+case when season_franchise_id=v_m.home_season_franchise_id then v_home else v_away end,points_against=points_against+case when season_franchise_id=v_m.home_season_franchise_id then v_away else v_home end,streak=case when streak<=0 then streak-1 else -1 end where league_season_id=v_m.league_season_id and season_franchise_id=v_loser;
     end if;
-    -- UPSET BOUNTY: the lower seed won a game played under that card. Recorded once; process_due_waivers honours it until effective_until.
-    if v_cards->>'kind'='bounty' and v_winner is not null and v_winner=chaos_lower_seed(v_m.id) then
+    -- BOUNTY: whoever won a game played under that card moves up the waiver order. The lower seed goes to the front ('first'); the higher seed moves up three places ('up_three'). A level game has no winner here and earns nothing. Recorded once; process_due_waivers honours it until effective_until.
+    if v_cards->>'kind'='bounty' and v_winner is not null and chaos_lower_seed(v_m.id) is not null then
+      v_grant:=case when v_winner=chaos_lower_seed(v_m.id) then 'first' else 'up_three' end;
       select max(rg.starts_at) into v_until from real_games rg where rg.competition_season_id=(select competition_season_id from league_seasons where id=v_m.league_season_id) and rg.week=v_m.week+1 and coalesce(rg.state::text,'unknown') not in ('canceled','postponed');
       if v_until is null or v_until<=now() then v_until:=now()+interval '7 days'; end if;
-      insert into chaos_bounty_grants(league_season_id,season_franchise_id,matchup_id,source_week,effective_from,effective_until) values(v_m.league_season_id,v_winner,v_m.id,v_m.week,now(),v_until) on conflict (matchup_id) do nothing;
-      v_cards:=v_cards||jsonb_build_object('bounty',jsonb_build_object('season_franchise_id',v_winner,'effective_until',v_until));
+      insert into chaos_bounty_grants(league_season_id,season_franchise_id,matchup_id,source_week,grant_kind,effective_from,effective_until) values(v_m.league_season_id,v_winner,v_m.id,v_m.week,v_grant,now(),v_until) on conflict (matchup_id) do nothing;
+      v_cards:=v_cards||jsonb_build_object('bounty',jsonb_build_object('season_franchise_id',v_winner,'grant',v_grant,'effective_until',v_until));
       update matchups set context=context||jsonb_build_object('chaos_cards',v_cards) where id=v_m.id;
-      insert into league_feed_events(league_id,season_id,event_type,body,payload) values(v_league,v_m.league_season_id,'chaos_bounty_granted','Upset Bounty earned',jsonb_build_object('matchup_id',v_m.id,'week',v_m.week,'season_franchise_id',v_winner,'effective_until',v_until));
+      insert into league_feed_events(league_id,season_id,event_type,body,payload) values(v_league,v_m.league_season_id,'chaos_bounty_granted','Bounty earned',jsonb_build_object('matchup_id',v_m.id,'week',v_m.week,'season_franchise_id',v_winner,'grant',v_grant,'effective_until',v_until));
     end if;
     perform award_matchup_achievements(v_m.id);
     insert into league_feed_events(league_id,season_id,event_type,body,payload) values(v_league,v_m.league_season_id,'matchup_final','Matchup final',jsonb_build_object('matchup_id',v_m.id,'home_points',v_home,'away_points',v_away,'winner_season_franchise_id',v_winner)||case when (v_close->>'override_applied')::boolean then jsonb_build_object('postponed_game_override',true) else '{}'::jsonb end||case when v_clause is not null then jsonb_build_object('chaos_clause',v_clause) else '{}'::jsonb end||case when v_cards is not null then jsonb_build_object('chaos_cards',v_cards) else '{}'::jsonb end);
@@ -981,8 +1080,77 @@ grant execute on function public.set_lineup_slot(
 ) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 9. process_due_waivers: the text of 20261003030000 plus the bounty sort key.
+-- 9. The BOUNTY waiver order, and process_due_waivers: the text of
+--    20261003030000 plus one sort key that is null unless a grant is in force.
 -- ---------------------------------------------------------------------------
+-- The league's whole waiver order while at least one bounty grant is in force
+-- at p_at. Returns NO ROWS when none is, and then nothing changes anywhere.
+--
+--   1. NORMAL order: every franchise of the league season by the rule
+--      process_due_waivers has always used (no games played first, by draft
+--      position descending; then winning percentage ascending; then points for
+--      ascending), with the franchise id as the last tie-break, because here a
+--      franchise has to be placed whether or not it has a claim.
+--   2. Franchises holding a 'first' grant (lower seeds that won a Bounty game)
+--      come first, in normal order among themselves.
+--   3. Everyone else follows in normal order. Then each franchise holding an
+--      'up_three' grant (higher seeds that won a Bounty game), taken in normal
+--      order, moves up three places within this second group, or to the top of
+--      it when fewer than three are ahead. It never passes a 'first' holder.
+create or replace function public.chaos_bounty_waiver_order(p_league_season_id uuid, p_at timestamptz default now())
+returns table(season_franchise_id uuid, normal_position integer, waiver_position integer, grant_kind text)
+language plpgsql stable set search_path = public
+as $function$
+declare
+  v_normal uuid[];
+  v_first uuid[];
+  v_up uuid[];
+  v_rest uuid[];
+  v_id uuid;
+  v_at integer;
+  v_to integer;
+begin
+  select array_agg(g.season_franchise_id) filter (where g.grant_kind = 'first'), array_agg(g.season_franchise_id) filter (where g.grant_kind = 'up_three')
+    into v_first, v_up
+  from chaos_bounty_grants g
+  where g.league_season_id = p_league_season_id and g.effective_from <= p_at and p_at < g.effective_until;
+  if v_first is null and v_up is null then return; end if;
+  v_first := coalesce(v_first, '{}'); v_up := coalesce(v_up, '{}');
+
+  select array_agg(sf.id order by
+      case when (s.wins+s.losses+s.ties)=0 then 0 else 1 end asc,
+      case when (s.wins+s.losses+s.ties)=0 then sf.draft_position end desc nulls last,
+      case when (s.wins+s.losses+s.ties)>0 then (s.wins + 0.5*s.ties)::numeric/(s.wins+s.losses+s.ties) end asc nulls last,
+      case when (s.wins+s.losses+s.ties)>0 then s.points_for end asc nulls last,
+      sf.id asc)
+    into v_normal
+  from season_franchises sf
+  join standings s on s.league_season_id = p_league_season_id and s.season_franchise_id = sf.id
+  where sf.league_season_id = p_league_season_id;
+  if v_normal is null then return; end if;
+
+  v_first := coalesce((select array_agg(t.x order by t.ord) from unnest(v_normal) with ordinality t(x, ord) where t.x = any(v_first)), '{}');
+  v_rest := coalesce((select array_agg(t.x order by t.ord) from unnest(v_normal) with ordinality t(x, ord) where t.x <> all(v_first)), '{}');
+  -- A franchise plays one Chaos Week game, so it cannot hold both kinds; 'first' would win if it ever did.
+  for v_id in select t.x from unnest(v_normal) with ordinality t(x, ord) where t.x = any(v_up) and t.x <> all(v_first) order by t.ord loop
+    v_at := array_position(v_rest, v_id);
+    v_to := greatest(1, v_at - 3);
+    if v_to < v_at then
+      v_rest := v_rest[1:v_to-1] || v_id || v_rest[v_to:v_at-1] || v_rest[v_at+1:];
+    end if;
+  end loop;
+
+  return query
+    select t.x, array_position(v_normal, t.x), t.ord::integer,
+      case when t.x = any(v_first) then 'first' when t.x = any(v_up) then 'up_three' end
+    from unnest(v_first || v_rest) with ordinality t(x, ord)
+    order by t.ord;
+end
+$function$;
+
+revoke execute on function public.chaos_bounty_waiver_order(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.chaos_bounty_waiver_order(uuid, timestamptz) to service_role;
+
 create or replace function public.process_due_waivers(p_league_season_id uuid)
 returns jsonb
 language plpgsql
@@ -1047,13 +1215,11 @@ begin
     for v_claim in
       with ranked as (
         select wc.*, row_number() over (order by
-          -- Chaos Week UPSET BOUNTY: a franchise with a grant in force goes first.
-          -- Several holders keep the normal order among themselves. No grant, no change.
-          case when exists (
-            select 1 from public.chaos_bounty_grants g
-            where g.league_season_id = p_league_season_id and g.season_franchise_id = wc.season_franchise_id
-              and g.effective_from <= now() and now() < g.effective_until
-          ) then 0 else 1 end asc,
+          -- Chaos Week BOUNTY: while a grant is in force the league's bounty order
+          -- decides (chaos_bounty_waiver_order). With no grant in force that
+          -- function returns no rows, this key is null for every claim, and the
+          -- keys below decide exactly as before.
+          bo.waiver_position asc nulls last,
           case when (s.wins+s.losses+s.ties)=0 then 0 else 1 end asc,
           case when (s.wins+s.losses+s.ties)=0 then sf.draft_position end desc nulls last,
           case when (s.wins+s.losses+s.ties)>0 then (s.wins + 0.5*s.ties)::numeric/(s.wins+s.losses+s.ties) end asc nulls last,
@@ -1065,6 +1231,8 @@ begin
         join public.standings s
           on s.league_season_id = p_league_season_id
          and s.season_franchise_id = wc.season_franchise_id
+        left join public.chaos_bounty_waiver_order(p_league_season_id) bo
+          on bo.season_franchise_id = wc.season_franchise_id
         where wc.waiver_hold_id = v_hold.id and wc.status = 'pending'
       )
       select * from ranked order by calculated_priority
