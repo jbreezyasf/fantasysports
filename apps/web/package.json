@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:a11y": "vitest run app/accessibility-automation"
@@ -18,11 +18,15 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "axe-core": "^4.13.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.27",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "jsdom": "^30.0.1",
     "typescript": "^5.9.2"
   }
