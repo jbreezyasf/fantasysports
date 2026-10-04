@@ -86,3 +86,65 @@ export async function advanceFantasySeasons({ db, leagueSeasons, enabled = secon
   }
   return { enabled: true, available, results, failures };
 }
+
+// ---------------------------------------------------------------------------
+// Chaos Week rule cards (docs/product/CHAOS_WEEK_RULE_CARDS.md).
+// ---------------------------------------------------------------------------
+export const CHAOS_WEEK = 13;
+const CHAOS_MIGRATION_HINT = 'apply supabase/migrations/20261004020000_chaos_week_rule_cards.sql, or unset CHAOS_CARDS_ENABLED';
+
+// OFF unless CHAOS_CARDS_ENABLED is exactly one of these.
+export function chaosCardsEnabled(env = process.env) {
+  return ['1', 'true', 'on', 'yes'].includes(String(env.CHAOS_CARDS_ENABLED ?? '').trim().toLowerCase());
+}
+
+const tableMissing = error => error?.code === '42P01' || error?.code === 'PGRST205' || /could not find the table|relation .* does not exist/i.test(String(error?.message ?? ''));
+
+// Deals one rule card to each open Chaos Week matchup of every league season
+// that has them and has not been dealt yet. The weekly job calls this right
+// after the season step, so cards are dealt in the run that generates Chaos
+// Week (and also when a commissioner generated the week by hand).
+//
+// - Disabled (the default): touches nothing and makes no database calls.
+// - The deal itself is made in the database by public.deal_chaos_week_cards
+//   (supabase/migrations/20261004020000_chaos_week_rule_cards.sql): it creates
+//   the seed, records every input and writes the feed event. This code only
+//   decides WHEN to ask; it never picks a card.
+// - Idempotent: a dealt league season is skipped, and the database function
+//   returns 'exists' if asked twice.
+// - Never deals after the week has kicked off (the database refuses; that is
+//   reported as skipped, not as a failure).
+// - Each league season is isolated; nothing is thrown.
+export async function dealChaosWeekCards({ db, leagueSeasons, enabled = chaosCardsEnabled(), log = console }) {
+  if (!enabled) return { enabled: false, results: [], failures: [] };
+  const results = []; const failures = []; let available = true;
+  const notApplied = error => { available = false; log.warn(JSON.stringify({ job: 'chaos-cards', warning: 'chaos-cards-migration-not-applied', message: error.message, action: CHAOS_MIGRATION_HINT })); };
+  for (const leagueSeason of leagueSeasons ?? []) {
+    if (!available) break;
+    try {
+      const { data: matchups, error: matchupsError } = await db.from('matchups').select('id,is_final,event_type').eq('league_season_id', leagueSeason.id).eq('week', CHAOS_WEEK);
+      if (matchupsError) throw new Error(matchupsError.message);
+      const chaos = (matchups ?? []).filter(row => row.event_type === 'chaos');
+      if (!chaos.length) { results.push({ leagueSeasonId: leagueSeason.id, status: 'skipped', reason: 'no Chaos Week matchups' }); continue; }
+      if (chaos.some(row => row.is_final)) { results.push({ leagueSeasonId: leagueSeason.id, status: 'skipped', reason: 'Chaos Week is already final' }); continue; }
+      const { data: deals, error: dealsError } = await db.from('chaos_card_deals').select('week').eq('league_season_id', leagueSeason.id).eq('week', CHAOS_WEEK);
+      if (dealsError) { if (tableMissing(dealsError)) { notApplied(dealsError); continue; } throw new Error(dealsError.message); }
+      if (deals?.length) { results.push({ leagueSeasonId: leagueSeason.id, status: 'skipped', reason: 'already dealt' }); continue; }
+      const { data, error } = await db.rpc('deal_chaos_week_cards', { p_league_season_id: leagueSeason.id, p_week: CHAOS_WEEK });
+      if (error) {
+        if (functionMissing(error)) { notApplied(error); continue; }
+        if (/already kicked off/i.test(String(error.message ?? ''))) { results.push({ leagueSeasonId: leagueSeason.id, status: 'skipped', reason: 'Chaos Week has kicked off; no cards are dealt' }); continue; }
+        throw new Error(error.message);
+      }
+      const cards = (data?.cards ?? []).map(card => ({ matchupId: card.matchup_id, cardCode: card.card_code }));
+      const result = data?.status === 'dealt' ? { leagueSeasonId: leagueSeason.id, status: 'dealt', cards } : { leagueSeasonId: leagueSeason.id, status: 'skipped', reason: 'already dealt' };
+      log.log(JSON.stringify({ job: 'chaos-cards', ...result }));
+      results.push(result);
+    } catch (error) {
+      const failure = { leagueSeasonId: leagueSeason.id, message: error instanceof Error ? error.message : String(error) };
+      failures.push(failure);
+      log.error(JSON.stringify({ job: 'chaos-cards', error: 'deal-failed', ...failure }));
+    }
+  }
+  return { enabled: true, available, results, failures };
+}

@@ -8,6 +8,8 @@ import { matchupRowLabel, matchupStatus } from './matchupAccessibility';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown, type ScoreDetail } from './scoreDetails';
 import { gameIsLive } from './matchupGameState';
 import { chaosClauseSentence, presentChaosClause } from '../../../lib/matchups/chaosClause';
+import { buildChaosAssets, chaosCardSurface, chaosCardsEnabled, chaosLowerSeedSide, chaosSelectionView, presentChaosScoreBuild, selectionKind, type ChaosDrawRow, type ChaosGame, type ChaosLineupRow, type ChaosRosterRow, type ChaosSelectionRow } from '../../../lib/matchups/chaosCards';
+import { ChaosCardPanel, type ChaosPanelSide } from './ChaosCardPanel';
 
 type FranchiseCard = {
   name?: string;
@@ -147,6 +149,58 @@ export default async function MatchupPage({
     userIsAway = ownedIds.has(away?.franchise_id ?? '');
   const userFranchiseId = userIsHome ? home?.franchise_id : userIsAway ? away?.franchise_id : null;
   const chaosClause = matchup.is_final && matchup.winner_season_franchise_id ? presentChaosClause(matchup.context) : null;
+  // Chaos Week rule cards. Nothing is queried or rendered unless CHAOS_CARDS_ENABLED is on,
+  // this is a Chaos Week game, and the database holds a revealed draw for it.
+  let chaosPanel: React.ReactNode = null;
+  if (chaosCardsEnabled() && matchup.event_type === 'chaos') {
+    const { data: draw } = await supabase.from('chaos_card_draws').select('matchup_id,card_code,revealed_at').eq('matchup_id', matchupId).maybeSingle();
+    const card = chaosCardSurface({ eventType: matchup.event_type, draw: draw as ChaosDrawRow | null });
+    if (card) {
+      const sides = [matchup.home_season_franchise_id, matchup.away_season_franchise_id];
+      const [{ data: selections }, { data: rosters }, { data: cardGames }] = await Promise.all([
+        supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at').eq('matchup_id', matchupId),
+        supabase.from('roster_entries').select('season_franchise_id,athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').in('season_franchise_id', sides).is('dropped_at', null).order('added_at'),
+        member?.competition_season_id ? supabase.from('real_games').select('home_team_id,away_team_id,starts_at,state').eq('competition_season_id', member.competition_season_id).eq('week', matchup.week) : Promise.resolve({ data: [] }),
+      ]);
+      const lowerSide = chaosLowerSeedSide(matchup.context);
+      const kind = selectionKind(card.kind);
+      const assetsFor = (seasonFranchiseId: string) => buildChaosAssets(((rosters ?? []) as unknown as Array<ChaosRosterRow & { season_franchise_id: string }>).filter((row) => row.season_franchise_id === seasonFranchiseId), ((lineups ?? []) as unknown as Array<ChaosLineupRow & { season_franchise_id: string }>).filter((row) => row.season_franchise_id === seasonFranchiseId));
+      const homeAssets = assetsFor(matchup.home_season_franchise_id);
+      const awayAssets = assetsFor(matchup.away_season_franchise_id);
+      const panelSide = (which: 'home' | 'away'): ChaosPanelSide => {
+        const seasonFranchiseId = which === 'home' ? matchup.home_season_franchise_id : matchup.away_season_franchise_id;
+        return {
+          seasonFranchiseId,
+          name: which === 'home' ? homeName : awayName,
+          isLowerSeed: lowerSide === which,
+          selection: kind
+            ? chaosSelectionView({
+                kind,
+                isLowerSeed: lowerSide === which,
+                ownAssets: which === 'home' ? homeAssets : awayAssets,
+                opponentAssets: which === 'home' ? awayAssets : homeAssets,
+                selection: ((selections ?? []) as ChaosSelectionRow[]).find((row) => row.season_franchise_id === seasonFranchiseId) ?? null,
+                games: (cardGames ?? []) as ChaosGame[],
+                matchupFinal: matchup.is_final,
+                now,
+              })
+            : null,
+        };
+      };
+      const userSide = userIsHome ? panelSide('home') : userIsAway ? panelSide('away') : null;
+      chaosPanel = (
+        <ChaosCardPanel
+          card={card}
+          home={panelSide('home')}
+          away={panelSide('away')}
+          build={presentChaosScoreBuild(matchup.context)}
+          assetNames={Object.fromEntries([...homeAssets, ...awayAssets].map((asset) => [asset.athleteId ?? asset.realTeamId ?? '', asset.label]))}
+          isFinal={matchup.is_final}
+          lineupHref={userFranchiseId && userSide?.selection?.status === 'open' ? `/franchises/${userFranchiseId}/team?week=${matchup.week}` : null}
+        />
+      );
+    }
+  }
   const chaosClauseWinner = chaosClause ? (chaosClause.winnerSide === 'home' ? homeName : awayName) : null;
   const summary = matchupStatus({
     decidedNote: chaosClause ? chaosClauseSentence(chaosClause, chaosClauseWinner) : null,
@@ -231,6 +285,7 @@ export default async function MatchupPage({
           {userFranchiseId && <a className="primary" href={`/franchises/${userFranchiseId}/team`}>Set Lineup</a>}
         </div>
       </section>
+      {chaosPanel}
       <section className="panel matchupStandingsPanel" aria-labelledby="matchup-standings-heading">
         <div className="lineupSectionHeading">
           <div><p className="eyebrow">LEAGUE STANDINGS</p><h2 id="matchup-standings-heading">Where this matchup stands</h2></div>

@@ -1,0 +1,61 @@
+/* Chaos Week rule cards. Only CSS and inline SVG; colours follow the existing dark shell (gold line on near-black). */
+.chaosCardPanel{max-width:1080px;margin-inline:auto}
+.chaosCardFace{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:start;padding:22px;border:1px solid #65583e;border-radius:14px;background:linear-gradient(135deg,#17140d 0%,#0b0d10 62%);color:#f5f1e8;overflow:hidden}
+.chaosCardFace::before{content:'';position:absolute;inset:0 auto 0 0;width:5px;background:linear-gradient(180deg,#f1d98a,#8a6f2b)}
+.chaosCardFace[data-card-kind='twist']::before{background:linear-gradient(180deg,#9fd8e6,#2f6d7c)}
+.chaosCardFace[data-card-kind='raid']::before{background:linear-gradient(180deg,#ffb7b7,#8a3a3a)}
+.chaosCardEmblem{width:56px;height:56px;color:#f1d98a;flex:none}
+.chaosCardFace[data-card-kind='twist'] .chaosCardEmblem{color:#b9e6f0}
+.chaosCardFace[data-card-kind='raid'] .chaosCardEmblem{color:#ffc9c9}
+.chaosCardFaceText{min-width:0}
+.chaosCardFaceText .eyebrow{margin:0 0 6px;color:#f1d98a}
+.chaosCardFaceText h2,.chaosCardFaceText h3{margin:0 0 10px;font-size:clamp(1.6rem,4vw,2.3rem);line-height:1.1;color:#fff;overflow-wrap:anywhere}
+.chaosCardFaceText h2::after,.chaosCardFaceText h3::after{display:none!important}
+.chaosCardRules{margin:0 0 10px;max-width:68ch;font-size:1rem;line-height:1.55;color:#f5f1e8}
+.chaosCardDealt{margin:0;font-size:.82rem;line-height:1.45;color:#cfc8b8}
+.chaosCardAction{margin-top:16px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.chaosCardBody{margin-top:18px;display:grid;gap:14px}
+.chaosCardBody h3{margin:8px 0 0;font-size:1.05rem;letter-spacing:.04em;color:#f5f1e8}
+.chaosSelectionList{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.chaosSelectionSide{padding:14px 16px;border:1px solid #3a3a3f;border-radius:12px;background:#0d0f12;min-width:0}
+.chaosSelectionTeam{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin:0 0 8px}
+.chaosSelectionTeam strong{color:#fff;font-size:1rem;overflow-wrap:anywhere}
+.chaosSelectionTeam span{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#cfc8b8}
+.chaosSelectionCurrent{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:0 0 6px}
+.chaosSelectionCurrent>span:first-child{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#f1d98a}
+.chaosSelectionCurrent strong{color:#fff;overflow-wrap:anywhere}
+.chaosSelectionNote{margin:0;font-size:.9rem;line-height:1.5;color:#d8d2c7}
+.chaosSelectionNote time{color:#fff;font-weight:700}
+.chaosBuildGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.chaosBuildTable{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #3a3a3f;border-radius:12px;background:#0d0f12;font-variant-numeric:tabular-nums}
+.chaosBuildTable caption{padding:10px 14px 4px;text-align:left;font-weight:800;color:#fff;overflow-wrap:anywhere}
+.chaosBuildTable th,.chaosBuildTable td{padding:9px 14px;border-top:1px solid #26262b;font-size:.92rem;color:#f5f1e8}
+.chaosBuildTable th{text-align:left;font-weight:600}
+.chaosBuildTable th small{display:block;font-weight:400;color:#cfc8b8;overflow-wrap:anywhere}
+.chaosBuildTable td{text-align:right;white-space:nowrap;font-weight:700}
+.chaosBuildLine td{color:#f1d98a}
+.chaosBuildTable tfoot th,.chaosBuildTable tfoot td{border-top:2px solid #65583e;font-size:1.02rem;font-weight:900;color:#fff}
+.chaosSelectionForm{display:grid;gap:14px}
+.chaosSelectionForm fieldset{margin:0;padding:14px 16px;border:1px solid #3a3a3f;border-radius:12px;background:#0d0f12;min-width:0}
+.chaosSelectionForm legend{padding:0 6px;font-weight:800;color:#fff}
+.chaosChoiceList{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
+.chaosChoice{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 12px;border:1px solid #3a3a3f;border-radius:8px;background:#101113;color:#f5f1e8;cursor:pointer;overflow-wrap:anywhere}
+.chaosChoice input[type='radio']{flex:none;width:22px;height:22px;margin:0;accent-color:#f1d98a}
+.chaosChoice:has(input:checked){border-color:#f1d98a;background:#1b170d}
+.chaosChoice:has(input:focus-visible){outline:3px solid #f2d9a1;outline-offset:3px}
+#main-content .chaosChoice input:focus-visible{outline:none}
+.chaosDeadlineLabel{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#f1d98a;margin-right:4px}
+.chaosSelectionForm .actions{display:flex;flex-wrap:wrap;gap:10px}
+.chaosSelectionForm .actions button{min-height:44px;min-width:44px}
+.chaosRaidedNotice{padding:12px 16px;border:1px solid #7b3333;border-radius:12px;background:#170d0d;color:#ffd9d9}
+.chaosRaidedNotice p{margin:0 0 6px}
+.chaosRaidedNotice ul{margin:0;padding-left:20px;color:#fff}
+@media(max-width:720px){
+  .chaosCardFace{grid-template-columns:1fr;padding:18px 16px 18px 20px}
+  .chaosSelectionList,.chaosBuildGrid{grid-template-columns:1fr}
+  .chaosChoiceList{grid-template-columns:1fr}
+  .chaosCardAction,.chaosSelectionForm .actions button{width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  .chaosCardPanel *,.chaosCardPanel *::before,.chaosCardPanel *::after{animation:none!important;transition:none!important}
+}

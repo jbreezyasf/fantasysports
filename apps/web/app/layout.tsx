@@ -9,6 +9,7 @@ import './forms-gate5.css';
 import './stadium-gate5.css';
 import './ops.css';
 import './product-shell.css';
+import './chaos-cards.css';
 import ScreenReaderAnnouncer from './components/ScreenReaderAnnouncer';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import { LocaleProvider } from './components/LocaleProvider';
