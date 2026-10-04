@@ -99,6 +99,8 @@ export function chaosCardsEnabled(env = process.env) {
 }
 
 const tableMissing = error => error?.code === '42P01' || error?.code === 'PGRST205' || /could not find the table|relation .* does not exist/i.test(String(error?.message ?? ''));
+const columnMissing = error => error?.code === '42703' || error?.code === 'PGRST204' || /column .* does not exist|could not find the .* column/i.test(String(error?.message ?? ''));
+const NOT_OPTED_IN = 'rule cards are not enabled for this league season';
 
 const NOT_PLAYED = new Set(['canceled', 'postponed']);
 const NEW_YORK = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -161,6 +163,11 @@ async function chaosDealAlert({ db, leagueSeasonId, now, reason }) {
 // Week (and also when a commissioner generated the week by hand).
 //
 // - Disabled (the default): touches nothing and makes no database calls.
+// - PER-LEAGUE-SEASON OPT-IN (owner decision 2026-10-04): with the flag on, a
+//   league season is still only dealt when league_seasons.chaos_cards_enabled
+//   is true. It is false by default and only an operator sets it. A league
+//   season that is not opted in costs one read, is reported as skipped, and
+//   never raises the deadline alert. The database function checks it again.
 // - The deal itself is made in the database by public.deal_chaos_week_cards
 //   (supabase/migrations/20261004020000_chaos_week_rule_cards.sql): it creates
 //   the seed, records every input and writes the feed event. This code only
@@ -170,8 +177,8 @@ async function chaosDealAlert({ db, leagueSeasonId, now, reason }) {
 // - Never deals after the week has kicked off (the database refuses; that is
 //   reported as skipped, not as a failure).
 // - Each league season is isolated; nothing is thrown.
-// - DEAL DEADLINE ALERT: when a league season still has open Chaos Week
-//   matchups and no deal after this run's attempt, and it is past Tuesday
+// - DEAL DEADLINE ALERT: when an OPTED-IN league season still has open Chaos
+//   Week matchups and no deal after this run's attempt, and it is past Tuesday
 //   12:00 America/New_York before the first Week 13 kickoff, one structured
 //   error line is logged for it ({ job: 'chaos-cards', error:
 //   'deal-deadline-missed', leagueSeasonId, hoursUntilFirstKickoff, ... }) and
@@ -185,6 +192,15 @@ export async function dealChaosWeekCards({ db, leagueSeasons, enabled = chaosCar
     // Set when this league season has open Chaos Week matchups and still no deal.
     let undealt = null;
     try {
+      // PER-LEAGUE-SEASON OPT-IN (league_seasons.chaos_cards_enabled, default false). Required in addition to the flag:
+      // a league season that is not opted in is not read any further, is never dealt, and never raises the deadline alert.
+      const { data: optIn, error: optInError } = await db.from('league_seasons').select('chaos_cards_enabled').eq('id', leagueSeason.id);
+      if (optInError) {
+        // The column comes with the rule cards migration: without it no league season can be opted in.
+        if (columnMissing(optInError)) { notApplied(optInError); continue; }
+        throw new Error(optInError.message);
+      }
+      if (optIn?.[0]?.chaos_cards_enabled !== true) { if (available) results.push({ leagueSeasonId: leagueSeason.id, status: 'skipped', reason: NOT_OPTED_IN }); continue; }
       const { data: matchups, error: matchupsError } = await db.from('matchups').select('id,is_final,event_type').eq('league_season_id', leagueSeason.id).eq('week', CHAOS_WEEK);
       if (matchupsError) throw new Error(matchupsError.message);
       const chaos = (matchups ?? []).filter(row => row.event_type === 'chaos');
@@ -200,6 +216,8 @@ export async function dealChaosWeekCards({ db, leagueSeasons, enabled = chaosCar
         else {
           const { data, error } = await db.rpc('deal_chaos_week_cards', { p_league_season_id: leagueSeason.id, p_week: CHAOS_WEEK });
           if (error && functionMissing(error)) { notApplied(error); undealt = 'the rule cards migration is not applied'; }
+          // The opt-in was withdrawn between the read above and the deal: the database refuses; not a failure, and no alert.
+          else if (error && /not enabled for this league season/i.test(String(error.message ?? ''))) results.push({ leagueSeasonId: leagueSeason.id, status: 'skipped', reason: NOT_OPTED_IN });
           else if (error && /already kicked off/i.test(String(error.message ?? ''))) { results.push({ leagueSeasonId: leagueSeason.id, status: 'skipped', reason: 'Chaos Week has kicked off; no cards are dealt' }); undealt = 'Chaos Week kicked off before any cards were dealt'; }
           else if (error) { undealt = 'the deal failed'; throw new Error(error.message); }
           else {

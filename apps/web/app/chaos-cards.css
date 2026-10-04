@@ -61,3 +61,10 @@
 @media(prefers-reduced-motion:reduce){
   .chaosCardPanel *,.chaosCardPanel *::before,.chaosCardPanel *::after{animation:none!important;transition:none!important}
 }
+
+/* Void selections and the raid penalty (2026-10-04). */
+.chaosVoidNote{padding:10px 12px;border-left:3px solid #c98a8a;border-radius:0 8px 8px 0;background:#170d0d}
+.chaosVoidNote strong{color:#fff;overflow-wrap:anywhere;text-decoration:line-through}
+.chaosVoidNote .statusBadge{margin:0 4px}
+.chaosPenaltyNote{padding:10px 12px;border-left:3px solid #e2a23a;border-radius:0 8px 8px 0;background:#1a140a;color:#ffe9c2}
+.chaosRaidedNotice[data-chaos-penalty]{border-color:#7b5a22;background:#1a140a;color:#ffe9c2}

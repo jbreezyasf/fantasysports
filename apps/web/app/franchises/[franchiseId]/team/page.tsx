@@ -7,7 +7,7 @@ import { LineupMoveForm } from './LineupMoveForm';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown } from '../../../matchups/[matchupId]/scoreDetails';
 import { currentLineupWeek, hasExplicitWeek, resolveLineupWeek } from '../../../../lib/fantasy/currentWeek';
 import { gameHasLocked, lineupGameByTeam, lineupLockExplanation } from './lineupLocks';
-import { buildChaosAssets, chaosCardSurface, chaosCardsEnabled, chaosLineupBlockedIds, chaosLowerSeedSide, chaosSelectionView, selectionKind, type ChaosDrawRow, type ChaosGame, type ChaosLineupRow, type ChaosRosterRow, type ChaosSelectionRow } from '../../../../lib/matchups/chaosCards';
+import { buildChaosAssets, chaosAssetLabels, chaosCardSurface, chaosCardsEnabled, chaosLineupBlockedIds, chaosLowerSeedSide, chaosPenaltyRaidedId, chaosSelectionView, chaosUnlistedSelectionIds, selectionKind, type ChaosDrawRow, type ChaosGame, type ChaosLineupRow, type ChaosRosterRow, type ChaosSelectionRow } from '../../../../lib/matchups/chaosCards';
 import { ChaosCardControls } from './ChaosCardControls';
 
 const slots = [
@@ -122,18 +122,27 @@ export default async function TeamPage({
       const lowerSide = chaosLowerSeedSide(chaosMatchup.context);
       const isLowerSeed = lowerSide === (isHome ? 'home' : 'away');
       const kind = selectionKind(card.kind);
-      const [{ data: selections }, { data: opponentRoster }, { data: opponentLineup }, { data: autoCaptain }] = kind
+      const [{ data: selections }, { data: opponentRoster }, { data: opponentLineup }, { data: autoPick }] = kind
         ? await Promise.all([
-            supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at,source,details').eq('matchup_id', chaosMatchup.id),
+            supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at,source,details,voided_at,void_reason').eq('matchup_id', chaosMatchup.id),
             kind === 'raid' ? supabase.from('roster_entries').select('athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').eq('season_franchise_id', opponentId).is('dropped_at', null).order('added_at') : Promise.resolve({ data: [] }),
             kind === 'raid' ? supabase.from('lineups').select('slot,athlete_id,real_team_id').eq('season_franchise_id', opponentId).eq('week', week) : Promise.resolve({ data: [] }),
-            // The automatic captain comes from the same database function the score uses, so it follows every lineup change.
-            kind === 'captain' ? supabase.rpc('chaos_auto_captain', { p_matchup_id: chaosMatchup.id, p_season_franchise_id: seasonFranchise.id }) : Promise.resolve({ data: null }),
+            // The automatic selection (captain, Wild Slot player, raid) comes from the same database function the score uses, so it follows every lineup and roster change. Only the lower seed has a raid.
+            kind !== 'raid' || isLowerSeed ? supabase.rpc('chaos_auto_pick', { p_matchup_id: chaosMatchup.id, p_season_franchise_id: seasonFranchise.id, p_kind: kind }) : Promise.resolve({ data: null }),
           ])
         : [{ data: [] }, { data: [] }, { data: [] }, { data: null }];
       const ownAssets = buildChaosAssets((roster ?? []) as unknown as ChaosRosterRow[], (lineup ?? []) as ChaosLineupRow[]);
+      const opponentAssets = buildChaosAssets((opponentRoster ?? []) as unknown as ChaosRosterRow[], (opponentLineup ?? []) as ChaosLineupRow[]);
       const selectionRows = (selections ?? []) as ChaosSelectionRow[];
-      for (const id of chaosLineupBlockedIds({ kind: card.kind, seasonFranchiseId: seasonFranchise.id, selections: selectionRows, raiderSeasonFranchiseId: lowerSide ? (lowerSide === 'home' ? chaosMatchup.home_season_franchise_id : chaosMatchup.away_season_franchise_id) : null })) chaosBlocked.add(id);
+      // A selected player who has since left the roster (a void pick) is not in the rosters above: look the name up.
+      const unlisted = chaosUnlistedSelectionIds(selectionRows, [...ownAssets, ...opponentAssets]);
+      const [{ data: unlistedAthletes }, { data: unlistedTeams }] = await Promise.all([
+        unlisted.athleteIds.length ? supabase.from('athletes').select('id,display_name,position,real_teams(abbreviation)').in('id', unlisted.athleteIds) : Promise.resolve({ data: [] }),
+        unlisted.teamIds.length ? supabase.from('real_teams').select('id,display_name,abbreviation').in('id', unlisted.teamIds) : Promise.resolve({ data: [] }),
+      ]);
+      const raiderSeasonFranchiseId = lowerSide ? (lowerSide === 'home' ? chaosMatchup.home_season_franchise_id : chaosMatchup.away_season_franchise_id) : null;
+      for (const id of chaosLineupBlockedIds({ kind: card.kind, seasonFranchiseId: seasonFranchise.id, selections: selectionRows, raiderSeasonFranchiseId })) chaosBlocked.add(id);
+      const penaltyRaidedId = chaosPenaltyRaidedId({ kind: card.kind, seasonFranchiseId: seasonFranchise.id, selections: selectionRows, raiderSeasonFranchiseId });
       chaosControls = (
         <ChaosCardControls
           card={card}
@@ -146,16 +155,19 @@ export default async function TeamPage({
                   kind,
                   isLowerSeed,
                   ownAssets,
-                  opponentAssets: buildChaosAssets((opponentRoster ?? []) as unknown as ChaosRosterRow[], (opponentLineup ?? []) as ChaosLineupRow[]),
+                  opponentAssets,
                   selection: selectionRows.find((row) => row.season_franchise_id === seasonFranchise.id) ?? null,
                   games: (weekGames ?? []) as ChaosGame[],
                   matchupFinal: chaosMatchup.is_final,
                   now: Date.now(),
-                  autoCaptain,
+                  autoCaptain: kind === 'captain' ? autoPick : null,
+                  autoPick: kind === 'captain' ? null : autoPick,
+                  assetLabels: chaosAssetLabels((unlistedAthletes ?? []) as never, (unlistedTeams ?? []) as never),
                 })
               : null
           }
           raided={kind === 'raid' && !isLowerSeed ? ownAssets.filter((asset) => chaosBlocked.has(asset.athleteId ?? asset.realTeamId ?? '')) : []}
+          raidedPenalty={penaltyRaidedId ? ownAssets.filter((asset) => (asset.athleteId ?? asset.realTeamId) === penaltyRaidedId) : []}
         />
       );
     }

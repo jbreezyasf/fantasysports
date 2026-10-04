@@ -12,7 +12,8 @@ import { expectNoAxeViolations } from '../../accessibility-automation/axeTestUti
 import { ChaosCardPanel, type ChaosPanelSide } from './ChaosCardPanel';
 import { ChaosCardControls } from '../../franchises/[franchiseId]/team/ChaosCardControls';
 import { setChaosCardSelection } from '../../team/chaosCardActions';
-import { CHAOS_CARD_CATALOG, chaosSelectionView, presentChaosScoreBuild, type ChaosAsset, type ChaosGame } from '../../../lib/matchups/chaosCards';
+import { CHAOS_CARD_CATALOG, chaosCardAllStrings, chaosSelectionView, presentChaosScoreBuild, type ChaosAsset, type ChaosGame } from '../../../lib/matchups/chaosCards';
+import { translateMessage } from '../../components/LocaleProvider';
 
 const games: ChaosGame[] = [
   { home_team_id: 't1', away_team_id: 't2', starts_at: '2026-12-04T01:15:00Z', state: 'scheduled' },
@@ -216,6 +217,178 @@ describe('Chaos Week selection controls on the lineup page', () => {
     expect(twist).not.toContain('<form');
     expect(twist).toContain('This card needs no selection.');
     await expectNoAxeViolations(twist);
+  });
+});
+
+// Automatic Wild Slot, automatic raid, the raid penalty and void selections (owner decisions of 2026-10-04, third round).
+describe('automatic Wild Slot and raid, void selections and the raid penalty', () => {
+  const AFTER = Date.parse('2026-12-04T02:00:00Z');
+  const AFTER_ALL = Date.parse('2026-12-06T19:00:00Z');
+  const DROPPED = { voided_at: '2026-12-02T15:00:00+00:00', void_reason: 'dropped' };
+  const labels = { gone: 'Kit Marlowe • RB • AAA' };
+  // What chaos_auto_pick returns (the database ranks; the page only shows it).
+  const wildReply = { athlete_id: 'hb1', real_team_id: null, expected: 30, games: 3, locked_at: null };
+  const raidReply = { athlete_id: 'hb1', real_team_id: null, expected: 30, games: 3, locked_at: null, penalty: false };
+  const penaltyReply = { athlete_id: 'hq', real_team_id: null, expected: 20, games: 3, locked_at: null, penalty: true };
+  type Row = { athlete_id: string; source?: string; locked_at?: string; details?: unknown; voided_at?: string; void_reason?: string };
+  const pickView = (kind: 'wild_slot' | 'raid', side: 'home' | 'away', options: { now?: number; row?: Row | null; auto?: unknown } = {}) =>
+    chaosSelectionView({
+      kind,
+      isLowerSeed: side === 'away',
+      ownAssets: side === 'home' ? homeAssets : awayAssets,
+      opponentAssets: side === 'home' ? awayAssets : homeAssets,
+      selection: options.row ? { season_franchise_id: side, card_code: kind.toUpperCase(), real_team_id: null, ...options.row } : null,
+      games,
+      matchupFinal: false,
+      now: options.now ?? BEFORE,
+      autoPick: options.auto ?? null,
+      assetLabels: labels,
+    });
+  const controls = (card: 'WILD_SLOT' | 'RAID', selection: ReturnType<typeof pickView>, extra: { raided?: ChaosAsset[]; raidedPenalty?: ChaosAsset[] } = {}) =>
+    renderToStaticMarkup(<ChaosCardControls card={CHAOS_CARD_CATALOG[card]} matchupId="m1" seasonFranchiseId="sf1" franchiseId="f1" view={selection} raided={extra.raided ?? []} raidedPenalty={extra.raidedPenalty} />);
+  const panel = (card: 'WILD_SLOT' | 'RAID', home: ReturnType<typeof pickView>, away: ReturnType<typeof pickView>, build: ReturnType<typeof presentChaosScoreBuild> = null) =>
+    renderToStaticMarkup(<ChaosCardPanel card={CHAOS_CARD_CATALOG[card]} home={{ seasonFranchiseId: 'home', name: 'High Volts', isLowerSeed: false, selection: home }} away={{ seasonFranchiseId: 'away', name: 'Night Shift', isLowerSeed: true, selection: away }} build={build} assetNames={{ ...names, ...labels }} isFinal={false} lineupHref={null} />);
+
+  it('WILD SLOT, lineup page: "If you do not choose, the system will pick <name>", with the reason, tied to the radio group', async () => {
+    const html = controls('WILD_SLOT', pickView('wild_slot', 'home', { auto: wildReply }));
+    expect(html).toMatch(/<div class="chaosAutoCaptain" id="([^"]+)-auto" data-auto-captain="pending" data-auto-pick="wild_slot"><p class="chaosSelectionNote"><span>If you do not choose, the system will pick<\/span> <strong data-no-translate="true">Dre Halloran • WR • CCC<\/strong><\/p>/);
+    expect(html).toContain('<span>Chosen automatically: the player outside the starting lineup with the highest average fantasy points per game over their last three scored weeks before Week 13.</span>');
+    expect(html).toContain('<span>Average points per game</span> <strong data-no-translate="true">30.00</strong>');
+    const autoId = /id="([^"]+-auto)"/.exec(html)?.[1];
+    expect(html).toContain(`<fieldset aria-describedby="${autoId} ${autoId?.replace(/-auto$/, '-deadline')}">`);
+    expect(html).toContain('<legend>Choose your Wild Slot player</legend>');
+    expect(html).toContain('No Wild Slot player named yet.');
+    expect(html).toMatch(/<button class="primary" type="submit"[^>]*>Use Wild Slot<\/button>/);
+    expect(html).not.toMatch(/No extra points\.<|data-chaos-void|data-chaos-penalty/);
+    await expectNoAxeViolations(html);
+    // A named pick replaces the note.
+    expect(controls('WILD_SLOT', pickView('wild_slot', 'home', { auto: wildReply, row: { athlete_id: 'hb1' } }))).not.toContain('chaosAutoCaptain');
+    // No eligible non-starter: said in words, no automatic pick.
+    const none = controls('WILD_SLOT', pickView('wild_slot', 'home', { auto: null }));
+    expect(none).toContain('No eligible player outside the starting lineup, so there is no automatic Wild Slot player and no extra points.');
+    expect(none).not.toContain('chaosAutoCaptain');
+    await expectNoAxeViolations(none);
+  });
+
+  it('WILD SLOT, lineup page: a void pick is shown as void with "choose again", and the form is still there', async () => {
+    const html = controls('WILD_SLOT', pickView('wild_slot', 'home', { row: { athlete_id: 'gone', ...DROPPED }, auto: wildReply }));
+    expect(html).toMatch(/<p class="chaosSelectionNote chaosVoidNote" role="note" data-chaos-void="wild_slot"><strong data-no-translate="true">Kit Marlowe • RB • AAA<\/strong> <span class="statusBadge is-final">No longer counts<\/span> <span>This Wild Slot player left the roster before their game kicked off, so the pick no longer counts.<\/span> <span>Choose again. If you do not, the automatic pick applies.<\/span><\/p>/);
+    expect(html).toContain('<strong>Not made</strong>');
+    expect(html).toContain('<span class="statusBadge is-available">Open for changes</span>');
+    expect(html).toContain('If you do not choose, the system will pick');
+    expect(html).toContain('value="athlete:hb1"');
+    expect(html).not.toContain('value="athlete:gone"');
+    expect(html).not.toContain('Clear selection');
+    await expectNoAxeViolations(html);
+  });
+
+  it('WILD SLOT, lineup page: locked at kickoff, the automatic pick is shown and there is nothing to choose, recorded or not', async () => {
+    for (const state of ['due', 'recorded'] as const) {
+      const html = controls('WILD_SLOT', pickView('wild_slot', 'home', state === 'due' ? { now: AFTER_ALL, auto: { ...wildReply, locked_at: '2026-12-06T18:00:00+00:00' } } : { now: AFTER_ALL, row: { athlete_id: 'hb1', source: 'automatic', locked_at: '2026-12-06T18:00:00+00:00', details: { expected: 30, games: 3 } } }));
+      expect(html, state).toMatch(/data-auto-captain="locked" data-auto-pick="wild_slot"><p class="chaosSelectionNote"><span>Automatic Wild Slot player:<\/span> <strong data-no-translate="true">Dre Halloran • WR • CCC<\/strong> <span>\(locked at kickoff\)<\/span><\/p>/);
+      expect(html, state).toContain('<span class="statusBadge is-locked">Locked</span>');
+      expect(html, state).toContain('No Wild Slot player was named before this player&#x27;s game kicked off, so the automatic pick is fixed for the week.');
+      expect(html, state).not.toMatch(/<form|<fieldset|type="radio"|Use Wild Slot|Clear selection|If you do not choose/);
+      await expectNoAxeViolations(html);
+    }
+  });
+
+  it('RAID, lineup page of the lower seed: shows the raid the system would make, and the normal bench picker', async () => {
+    const html = controls('RAID', pickView('raid', 'away', { auto: raidReply }));
+    expect(html).toMatch(/data-auto-captain="pending" data-auto-pick="raid"><p class="chaosSelectionNote"><span>If you do not choose, the system will pick<\/span> <strong data-no-translate="true">Dre Halloran • WR • CCC<\/strong><\/p>/);
+    expect(html).toContain('<span>Chosen automatically: the player on the higher seed&#x27;s bench with the highest average fantasy points per game over their last three scored weeks before Week 13.</span>');
+    expect(html).toContain('<legend>Choose one player from your opponent&#x27;s bench</legend>');
+    expect(html).toContain('No raid made yet.');
+    expect(html).toContain('value="athlete:hb1"');
+    expect(html).not.toContain('value="athlete:hq"');
+    expect(html).not.toMatch(/data-chaos-penalty|Nothing changes/);
+    await expectNoAxeViolations(html);
+  });
+
+  it('RAID PENALTY, lineup page of the lower seed: the picker offers exactly the one starter and says why', async () => {
+    const html = controls('RAID', pickView('raid', 'away', { auto: penaltyReply }));
+    expect(html.match(/type="radio"/g)).toHaveLength(1);
+    const radio = /<label class="chaosChoice">(<input type="radio"[^>]*\/>)<span data-no-translate="true">Avery Stone • QB • AAA<\/span><\/label>/.exec(html)?.[1] ?? '';
+    expect(radio).toContain('value="athlete:hq"');
+    expect(radio, 'the one choice is preselected').toContain('checked=""');
+    expect(html).not.toContain('value="athlete:hb1"');
+    expect(html).toContain('<p class="chaosSelectionNote chaosPenaltyNote" role="note" data-chaos-penalty="true">The higher seed has no eligible bench player, so the raid takes its best-ranked starter instead. The lower seed adds that starter&#x27;s points. The higher seed keeps the starter in its lineup and still scores them.</p>');
+    expect(html).toContain('<legend>Raid your opponent&#x27;s best-ranked starter</legend>');
+    expect(html).toContain('<p class="chaosSelectionNote">This is the only player you can raid.</p>');
+    expect(html).toContain('<span>Chosen automatically: the higher seed&#x27;s starter with the highest average fantasy points per game over their last three scored weeks before Week 13.</span>');
+    expect(html).toMatch(/<button class="primary" type="submit"[^>]*>Raid this player<\/button>/);
+    await expectNoAxeViolations(html);
+    // Once made, the penalty raid is final and still explained.
+    const made = controls('RAID', pickView('raid', 'away', { row: { athlete_id: 'hq', source: 'named', details: { penalty: true } } }));
+    expect(made).not.toContain('<form');
+    expect(made).toContain('Your raid is made and cannot be changed.');
+    expect(made).toContain('data-chaos-penalty="true"');
+    await expectNoAxeViolations(made);
+  });
+
+  it('RAID, lineup page of the lower seed: a void raid can be chosen again before the deadline; after it the system raid is shown', async () => {
+    const open = controls('RAID', pickView('raid', 'away', { row: { athlete_id: 'gone', ...DROPPED }, auto: raidReply }));
+    expect(open).toMatch(/data-chaos-void="raid"><strong data-no-translate="true">Kit Marlowe • RB • AAA<\/strong> <span class="statusBadge is-final">No longer counts<\/span> <span>The raided player left the higher seed&#x27;s roster before their game kicked off, so the raid no longer counts.<\/span> <span>Choose again before the deadline. If you do not, the system makes the raid at the deadline.<\/span><\/p>/);
+    expect(open).toContain('value="athlete:hb1"');
+    expect(open).toContain('If you do not choose, the system will pick');
+    await expectNoAxeViolations(open);
+    for (const state of ['due', 'recorded'] as const) {
+      const locked = controls('RAID', pickView('raid', 'away', state === 'due' ? { now: AFTER, auto: { ...raidReply, locked_at: LOCK } } : { now: AFTER, row: { athlete_id: 'hb1', source: 'automatic', locked_at: LOCK, details: { expected: 30, games: 3, penalty: false } } }));
+      expect(locked, state).toMatch(/data-auto-captain="locked" data-auto-pick="raid"><p class="chaosSelectionNote"><span>Automatic raid:<\/span> <strong data-no-translate="true">Dre Halloran • WR • CCC<\/strong> <span>\(made by the system\)<\/span><\/p>/);
+      expect(locked, state).toContain('No raid by the lower seed was standing once the deadline had passed, so the system made the raid. It cannot be changed.');
+      expect(locked, state).not.toMatch(/<form|type="radio"|Raid this player|If you do not choose/);
+      await expectNoAxeViolations(locked);
+    }
+  });
+
+  it('RAID, lineup page of the higher seed: a penalty raid has its own notice; the starter is not shown as locked out', async () => {
+    const html = controls('RAID', pickView('raid', 'home'), { raidedPenalty: [homeAssets[0]] });
+    expect(html).toMatch(/<div class="chaosRaidedNotice" role="note" data-chaos-penalty="true"><p>You had no eligible bench player, so the raid took this starter\. They stay in your lineup and still score for you\. Your opponent adds their points too\.<\/p><ul><li data-no-translate="true">Avery Stone • QB • AAA<\/li><\/ul><\/div>/);
+    expect(html).not.toContain('cannot start for you this week');
+    expect(html).toContain('Only the lower seed raids.');
+    expect(html).not.toMatch(/chaosAutoCaptain|chaosPenaltyNote/);
+    await expectNoAxeViolations(html);
+  });
+
+  it('matchup page: both sides see the automatic Wild Slot players, a void pick, and the labelled automatic line on the score build-up', async () => {
+    const build = presentChaosScoreBuild({
+      card_code: 'WILD_SLOT',
+      home: { base: 56.5, total: 71.5, adjustments: [{ effect: 'wild_slot', athlete_id: 'hb1', real_team_id: null, points: 15, automatic: true, expected: 30, games: 3 }] },
+      away: { base: 42, total: 42, adjustments: [] },
+    });
+    const html = panel('WILD_SLOT', pickView('wild_slot', 'home', { auto: wildReply }), pickView('wild_slot', 'away', { row: { athlete_id: 'gone', ...DROPPED }, auto: null }), build);
+    expect(html).toMatch(/data-auto-pick="wild_slot"><p class="chaosSelectionNote"><span>If no Wild Slot player is named, the system will pick<\/span> <strong data-no-translate="true">Dre Halloran • WR • CCC<\/strong><\/p>/);
+    expect(html).toMatch(/data-chaos-void="wild_slot"><strong data-no-translate="true">Kit Marlowe • RB • AAA<\/strong> <span class="statusBadge is-final">No longer counts<\/span> <span>This Wild Slot player left the roster before their game kicked off, so the pick no longer counts\.<\/span><\/p>/);
+    expect(html).not.toContain('Choose again.');
+    expect(html).toContain('No eligible player outside the starting lineup, so there is no automatic Wild Slot player and no extra points.');
+    expect(html).toMatch(/<th scope="row"><span>Automatic Wild Slot player<\/span><small data-no-translate="true">Dre Halloran • WR • CCC<\/small><\/th><td data-no-translate="true">\+15\.00<\/td>/);
+    await expectNoAxeViolations(html);
+  });
+
+  it('matchup page: the automatic raid, the penalty explanation, and "Automatic penalty raid" / "Penalty raid" on the score build-up', async () => {
+    const pending = panel('RAID', pickView('raid', 'home'), pickView('raid', 'away', { auto: penaltyReply }));
+    expect(pending).toMatch(/data-auto-pick="raid"><p class="chaosSelectionNote"><span>If no raid is made by the deadline, the system will raid<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong><\/p>/);
+    expect(pending).toContain('data-chaos-penalty="true"');
+    expect(pending).toContain('Only the lower seed raids.');
+    await expectNoAxeViolations(pending);
+    const autoBuild = presentChaosScoreBuild({ card_code: 'RAID', home: { base: 56.5, total: 56.5, adjustments: [] }, away: { base: 42, total: 62, adjustments: [{ effect: 'raid', athlete_id: 'hq', real_team_id: null, points: 20, automatic: true, penalty: true, expected: 20, games: 3 }] } });
+    const made = panel('RAID', pickView('raid', 'home'), pickView('raid', 'away', { now: AFTER, row: { athlete_id: 'hq', source: 'automatic', locked_at: LOCK, details: { expected: 20, games: 3, penalty: true } } }), autoBuild);
+    expect(made).toMatch(/data-auto-captain="locked" data-auto-pick="raid"><p class="chaosSelectionNote"><span>Automatic raid:<\/span> <strong data-no-translate="true">Avery Stone • QB • AAA<\/strong> <span>\(made by the system\)<\/span><\/p>/);
+    expect(made).toContain('data-chaos-penalty="true"');
+    expect(made).toMatch(/<th scope="row"><span>Automatic penalty raid<\/span><small data-no-translate="true">Avery Stone • QB • AAA<\/small><\/th><td data-no-translate="true">\+20\.00<\/td>/);
+    await expectNoAxeViolations(made);
+    const named = presentChaosScoreBuild({ card_code: 'RAID', home: { base: 56.5, total: 56.5, adjustments: [] }, away: { base: 42, total: 62, adjustments: [{ effect: 'raid', athlete_id: 'hq', real_team_id: null, points: 20, penalty: true }] } });
+    expect(panel('RAID', pickView('raid', 'home'), pickView('raid', 'away', { row: { athlete_id: 'hq', source: 'named', details: { penalty: true } } }), named)).toMatch(/<span>Penalty raid<\/span><small data-no-translate="true">Avery Stone • QB • AAA<\/small>/);
+    const auto = presentChaosScoreBuild({ card_code: 'RAID', home: { base: 56.5, total: 56.5, adjustments: [] }, away: { base: 42, total: 57, adjustments: [{ effect: 'raid', athlete_id: 'hb1', real_team_id: null, points: 15, automatic: true, penalty: false }] } });
+    expect(panel('RAID', pickView('raid', 'home'), pickView('raid', 'away', { now: AFTER, row: { athlete_id: 'hb1', source: 'automatic', locked_at: LOCK, details: { penalty: false } } }), auto)).toMatch(/<span>Automatic raid<\/span><small data-no-translate="true">Dre Halloran • WR • CCC<\/small>/);
+  });
+
+  it('every sentence these states show has a Spanish catalog entry', () => {
+    const shown = ['If you do not choose, the system will pick', 'If no Wild Slot player is named, the system will pick', 'If no raid is made by the deadline, the system will raid', 'Automatic Wild Slot player:', 'Automatic raid:', '(made by the system)', 'No longer counts', 'This is the only player you can raid.', "Raid your opponent's best-ranked starter", 'No Wild Slot player named yet.', 'No raid made yet.', 'Choose again. If you do not, the automatic pick applies.', 'Choose again before the deadline. If you do not, the system makes the raid at the deadline.'];
+    for (const text of shown) {
+      expect(chaosCardAllStrings(), text).toContain(text);
+      expect(translateMessage(text), text).not.toBe(text);
+    }
   });
 });
 

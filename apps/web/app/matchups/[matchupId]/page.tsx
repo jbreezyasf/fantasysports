@@ -8,7 +8,7 @@ import { matchupRowLabel, matchupStatus } from './matchupAccessibility';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown, type ScoreDetail } from './scoreDetails';
 import { gameIsLive } from './matchupGameState';
 import { chaosClauseSentence, presentChaosClause } from '../../../lib/matchups/chaosClause';
-import { buildChaosAssets, chaosCardSurface, chaosCardsEnabled, chaosLowerSeedSide, chaosSelectionView, presentChaosScoreBuild, selectionKind, type ChaosDrawRow, type ChaosGame, type ChaosLineupRow, type ChaosRosterRow, type ChaosSelectionRow } from '../../../lib/matchups/chaosCards';
+import { buildChaosAssets, chaosAssetLabels, chaosCardSurface, chaosCardsEnabled, chaosLowerSeedSide, chaosSelectionView, chaosUnlistedSelectionIds, presentChaosScoreBuild, selectionKind, type ChaosDrawRow, type ChaosGame, type ChaosLineupRow, type ChaosRosterRow, type ChaosSelectionRow } from '../../../lib/matchups/chaosCards';
 import { ChaosCardPanel, type ChaosPanelSide } from './ChaosCardPanel';
 
 type FranchiseCard = {
@@ -157,20 +157,27 @@ export default async function MatchupPage({
     const card = chaosCardSurface({ eventType: matchup.event_type, draw: draw as ChaosDrawRow | null });
     if (card) {
       const sides = [matchup.home_season_franchise_id, matchup.away_season_franchise_id];
-      const captainCard = card.kind === 'captain';
-      // The automatic captain comes from the same database function the score uses (chaos_auto_captain).
+      const kind = selectionKind(card.kind);
+      // The automatic selection (captain, Wild Slot player, raid) comes from the same database function the score uses (chaos_auto_pick). It answers nothing for the higher seed under RAID.
+      const autoFor = (seasonFranchiseId: string) => (kind ? supabase.rpc('chaos_auto_pick', { p_matchup_id: matchupId, p_season_franchise_id: seasonFranchiseId, p_kind: kind }) : Promise.resolve({ data: null }));
       const [{ data: selections }, { data: rosters }, { data: cardGames }, { data: homeAuto }, { data: awayAuto }] = await Promise.all([
-        supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at,source,details').eq('matchup_id', matchupId),
+        supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at,source,details,voided_at,void_reason').eq('matchup_id', matchupId),
         supabase.from('roster_entries').select('season_franchise_id,athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').in('season_franchise_id', sides).is('dropped_at', null).order('added_at'),
         member?.competition_season_id ? supabase.from('real_games').select('home_team_id,away_team_id,starts_at,state').eq('competition_season_id', member.competition_season_id).eq('week', matchup.week) : Promise.resolve({ data: [] }),
-        captainCard ? supabase.rpc('chaos_auto_captain', { p_matchup_id: matchupId, p_season_franchise_id: matchup.home_season_franchise_id }) : Promise.resolve({ data: null }),
-        captainCard ? supabase.rpc('chaos_auto_captain', { p_matchup_id: matchupId, p_season_franchise_id: matchup.away_season_franchise_id }) : Promise.resolve({ data: null }),
+        autoFor(matchup.home_season_franchise_id),
+        autoFor(matchup.away_season_franchise_id),
       ]);
       const lowerSide = chaosLowerSeedSide(matchup.context);
-      const kind = selectionKind(card.kind);
       const assetsFor = (seasonFranchiseId: string) => buildChaosAssets(((rosters ?? []) as unknown as Array<ChaosRosterRow & { season_franchise_id: string }>).filter((row) => row.season_franchise_id === seasonFranchiseId), ((lineups ?? []) as unknown as Array<ChaosLineupRow & { season_franchise_id: string }>).filter((row) => row.season_franchise_id === seasonFranchiseId));
       const homeAssets = assetsFor(matchup.home_season_franchise_id);
       const awayAssets = assetsFor(matchup.away_season_franchise_id);
+      // A selected player who has since left the roster (a void pick, or one dropped after the week's games) is not in the rosters above: look the name up.
+      const unlisted = chaosUnlistedSelectionIds((selections ?? []) as ChaosSelectionRow[], [...homeAssets, ...awayAssets]);
+      const [{ data: unlistedAthletes }, { data: unlistedTeams }] = await Promise.all([
+        unlisted.athleteIds.length ? supabase.from('athletes').select('id,display_name,position,real_teams(abbreviation)').in('id', unlisted.athleteIds) : Promise.resolve({ data: [] }),
+        unlisted.teamIds.length ? supabase.from('real_teams').select('id,display_name,abbreviation').in('id', unlisted.teamIds) : Promise.resolve({ data: [] }),
+      ]);
+      const assetLabels = chaosAssetLabels((unlistedAthletes ?? []) as never, (unlistedTeams ?? []) as never);
       const panelSide = (which: 'home' | 'away'): ChaosPanelSide => {
         const seasonFranchiseId = which === 'home' ? matchup.home_season_franchise_id : matchup.away_season_franchise_id;
         return {
@@ -187,7 +194,9 @@ export default async function MatchupPage({
                 games: (cardGames ?? []) as ChaosGame[],
                 matchupFinal: matchup.is_final,
                 now,
-                autoCaptain: which === 'home' ? homeAuto : awayAuto,
+                autoCaptain: kind === 'captain' ? (which === 'home' ? homeAuto : awayAuto) : null,
+                autoPick: kind === 'captain' ? null : which === 'home' ? homeAuto : awayAuto,
+                assetLabels,
               })
             : null,
         };
@@ -199,7 +208,7 @@ export default async function MatchupPage({
           home={panelSide('home')}
           away={panelSide('away')}
           build={presentChaosScoreBuild(matchup.context)}
-          assetNames={Object.fromEntries([...homeAssets, ...awayAssets].map((asset) => [asset.athleteId ?? asset.realTeamId ?? '', asset.label]))}
+          assetNames={{ ...assetLabels, ...Object.fromEntries([...homeAssets, ...awayAssets].map((asset) => [asset.athleteId ?? asset.realTeamId ?? '', asset.label])) }}
           isFinal={matchup.is_final}
           lineupHref={userFranchiseId && userSide?.selection?.status === 'open' ? `/franchises/${userFranchiseId}/team?week=${matchup.week}` : null}
         />

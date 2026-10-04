@@ -17,7 +17,9 @@ function fakeDb({ seasons, missing = null, kickedOff = new Set(), failFor = new 
         calls.reads += 1;
         const season = seasons[filters.league_season_id];
         if (table === 'chaos_card_deals' && missing === 'table') return Promise.resolve({ data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.chaos_card_deals' in the schema cache" } }).then(resolve, reject);
-        if (table === 'league_seasons') return Promise.resolve({ data: seasons[filters.id] ? [{ competition_season_id: 'cs' }] : [], error: null }).then(resolve, reject);
+        if (table === 'league_seasons' && missing === 'column') return Promise.resolve({ data: null, error: { code: '42703', message: 'column league_seasons.chaos_cards_enabled does not exist' } }).then(resolve, reject);
+        // A league season is opted in unless the test says `optedIn: false` (the database default is false; see the opt-in tests below).
+        if (table === 'league_seasons') return Promise.resolve({ data: seasons[filters.id] ? [{ competition_season_id: 'cs', chaos_cards_enabled: seasons[filters.id].optedIn !== false }] : [], error: null }).then(resolve, reject);
         if (table === 'real_games') return Promise.resolve(gamesError ? { data: null, error: { message: gamesError } } : { data: filters.competition_season_id === 'cs' && filters.week === CHAOS_WEEK ? games : [], error: null }).then(resolve, reject);
         const data = table === 'matchups' ? (season?.matchups ?? []).filter(m => m.week === filters.week) : season?.dealt ? [{ week: CHAOS_WEEK }] : [];
         return Promise.resolve({ data, error: null }).then(resolve, reject);
@@ -28,6 +30,7 @@ function fakeDb({ seasons, missing = null, kickedOff = new Set(), failFor = new 
   return { calls, seasons, from, rpc: async (name, args) => {
     calls.rpc.push(`${name}:${args.p_league_season_id}:${args.p_week}`);
     if (missing === 'function') return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.deal_chaos_week_cards(p_league_season_id, p_week) in the schema cache' } };
+    if (seasons[args.p_league_season_id]?.optedOutInDatabase) return { data: null, error: { message: 'Rule cards are not enabled for this league season' } };
     if (kickedOff.has(args.p_league_season_id)) return { data: null, error: { message: 'Week 13 has already kicked off; rule cards can no longer be dealt' } };
     if (failFor.has(args.p_league_season_id)) return { data: null, error: { message: 'Chaos Week matchups must be open and carry both seeds before cards are dealt' } };
     const season = seasons[args.p_league_season_id];
@@ -122,6 +125,51 @@ for (const missing of ['table', 'function']) {
     assert.equal(db.calls.rpc.length, missing === 'function' ? 1 : 0);
   });
 }
+
+// PER-LEAGUE-SEASON OPT-IN (owner decision 2026-10-04): the flag alone deals nothing.
+test('opt-in off, flag on: no deal, no alert, one read; an opted-in league season in the same run is still dealt', async () => {
+  const db = fakeDb({ seasons: { off: { matchups: chaosWeek(), optedIn: false }, on: { matchups: chaosWeek() } }, games: week13Games }); const log = quiet();
+  const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['off', 'on']), enabled: true, log, now: AFTER_DEADLINE });
+  assert.deepEqual(outcome.results.map(r => [r.leagueSeasonId, r.status, r.reason]), [['off', 'skipped', 'rule cards are not enabled for this league season'], ['on', 'dealt', undefined]]);
+  assert.deepEqual(db.calls.rpc, ['deal_chaos_week_cards:on:13'], 'the deal function is never called for the league season that is not opted in');
+  assert.equal(db.seasons.off.dealt, undefined);
+  assert.deepEqual(outcome.alerts, [], 'past the deal deadline, with open Chaos Week matchups and no deal: still NO alert for a league season that is not opted in');
+  assert.deepEqual([outcome.failures, log.lines.error, log.lines.warn], [[], [], []]);
+  const only = fakeDb({ seasons: { off: { matchups: chaosWeek(), optedIn: false } }, games: week13Games });
+  await dealChaosWeekCards({ db: only, leagueSeasons: leagues(['off']), enabled: true, log: quiet(), now: AFTER_DEADLINE });
+  assert.deepEqual(only.calls, { rpc: [], reads: 1 }, 'one read (the opt-in) and nothing else: no matchups, no deals, no games');
+});
+
+test('opt-in: the alert fires for an opted-in league season and not for the others, in the same run', async () => {
+  const db = fakeDb({ seasons: { off: { matchups: chaosWeek(), optedIn: false }, on: { matchups: chaosWeek() } }, failFor: new Set(['off', 'on']), games: week13Games }); const log = quiet();
+  const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['off', 'on']), enabled: true, log, now: AFTER_DEADLINE });
+  assert.deepEqual(outcome.alerts.map(a => [a.leagueSeasonId, a.reason]), [['on', 'the deal failed']]);
+  assert.deepEqual(log.lines.error.filter(line => line.error === 'deal-deadline-missed').map(line => line.leagueSeasonId), ['on']);
+  assert.deepEqual(outcome.failures.map(f => f.leagueSeasonId), ['on']);
+});
+
+test('opt-in withdrawn between the read and the deal: the database refuses; reported as skipped, no failure, no alert', async () => {
+  const db = fakeDb({ seasons: { A: { matchups: chaosWeek(), optedOutInDatabase: true } }, games: week13Games }); const log = quiet();
+  const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A']), enabled: true, log, now: AFTER_DEADLINE });
+  assert.deepEqual([outcome.results, outcome.failures, outcome.alerts], [[{ leagueSeasonId: 'A', status: 'skipped', reason: 'rule cards are not enabled for this league season' }], [], []]);
+});
+
+test('opt-in column missing (migration not applied): warns once, nothing is dealt, no alert, no failure', async () => {
+  const db = fakeDb({ seasons: { A: { matchups: chaosWeek() }, B: { matchups: chaosWeek() } }, missing: 'column', games: week13Games }); const log = quiet();
+  const outcome = await dealChaosWeekCards({ db, leagueSeasons: leagues(['A', 'B']), enabled: true, log, now: AFTER_DEADLINE });
+  assert.deepEqual(outcome, { enabled: true, available: false, results: [], failures: [], alerts: [] });
+  assert.deepEqual(log.lines.warn.map(line => line.warning), ['chaos-cards-migration-not-applied']);
+  assert.deepEqual(db.calls.rpc, []);
+});
+
+test('the opt-in is read from league_seasons.chaos_cards_enabled and must be exactly true', async () => {
+  const source = await readFile('scripts/advance-fantasy-season.mjs', 'utf8');
+  assert.match(source, /db\.from\('league_seasons'\)\.select\('chaos_cards_enabled'\)\.eq\('id', leagueSeason\.id\)/);
+  assert.match(source, /chaos_cards_enabled !== true/);
+  const migration = await readFile('supabase/migrations/20261004020000_chaos_week_rule_cards.sql', 'utf8');
+  assert.match(migration, /add column if not exists chaos_cards_enabled boolean not null default false/);
+  assert.doesNotMatch(migration, /set\s+chaos_cards_enabled\s*=\s*true/i, 'the migration opts no league season in');
+});
 
 test('the deal deadline is Tuesday 12:00 America/New_York before the first Week 13 kickoff, in winter and summer time', () => {
   assert.equal(chaosDealDeadline(FIRST_KICKOFF), DEADLINE);

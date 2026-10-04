@@ -1,5 +1,5 @@
 import React from 'react';
-import { CHAOS_CARD_STRINGS, type ChaosAutoCaptain, type ChaosCardKind, type ChaosCardText } from '../../lib/matchups/chaosCards';
+import { CHAOS_CARD_STRINGS, type ChaosAutoCaptain, type ChaosAutoPick, type ChaosCardKind, type ChaosCardText } from '../../lib/matchups/chaosCards';
 
 // Original Big Exec glyphs, drawn inline. Decorative: the card's name and rules carry the meaning.
 function Emblem({ kind }: { kind: ChaosCardKind }) {
@@ -70,19 +70,39 @@ export function ChaosCardFace({ card, headingId, headingLevel = 2, children }: {
  * The name and the numbers stay outside the translatable sentences.
  */
 export function ChaosAutoCaptainNote({ auto, own, id }: { auto: ChaosAutoCaptain; own: boolean; id?: string }) {
+  return <ChaosAutoPickNote kind="captain" auto={auto} own={own} id={id} />;
+}
+
+// The sentences of the automatic-selection note, per card. Each is a static string with a Spanish catalog entry.
+const AUTO_PICK_TEXT = {
+  captain: { locked: CHAOS_CARD_STRINGS.autoCaptainLocked, own: CHAOS_CARD_STRINGS.autoCaptainIfNone, other: CHAOS_CARD_STRINGS.autoCaptainIfNoneOther, suffix: CHAOS_CARD_STRINGS.autoCaptainLockedSuffix, reason: CHAOS_CARD_STRINGS.autoCaptainReason, noHistory: CHAOS_CARD_STRINGS.autoCaptainNoHistory },
+  wild_slot: { locked: CHAOS_CARD_STRINGS.autoWildLocked, own: CHAOS_CARD_STRINGS.autoPickIfNone, other: CHAOS_CARD_STRINGS.autoWildIfNoneOther, suffix: CHAOS_CARD_STRINGS.autoCaptainLockedSuffix, reason: CHAOS_CARD_STRINGS.autoWildReason, noHistory: CHAOS_CARD_STRINGS.autoWildNoHistory },
+  raid: { locked: CHAOS_CARD_STRINGS.autoRaidLocked, own: CHAOS_CARD_STRINGS.autoPickIfNone, other: CHAOS_CARD_STRINGS.autoRaidIfNoneOther, suffix: CHAOS_CARD_STRINGS.autoRaidLockedSuffix, reason: CHAOS_CARD_STRINGS.autoRaidReason, noHistory: CHAOS_CARD_STRINGS.autoRaidNoHistory },
+} as const;
+
+/**
+ * The selection the system makes when the manager makes none (captain, Wild
+ * Slot player or raid), and why: "If you do not choose, the system will pick
+ * ..." before it is due, "Automatic ...: ..." once it is fixed. The database
+ * chose it (chaos_auto_pick); this only shows it. The name and the numbers stay
+ * outside the translatable sentences.
+ */
+export function ChaosAutoPickNote({ kind, auto, own, id }: { kind: 'captain' | 'wild_slot' | 'raid'; auto: ChaosAutoPick; own: boolean; id?: string }) {
+  const text = AUTO_PICK_TEXT[kind];
+  const reason = auto.penalty ? (auto.expected === null ? CHAOS_CARD_STRINGS.autoPenaltyNoHistory : CHAOS_CARD_STRINGS.autoPenaltyReason) : auto.expected === null ? text.noHistory : text.reason;
   return (
-    <div className="chaosAutoCaptain" id={id} data-auto-captain={auto.locked ? 'locked' : 'pending'}>
+    <div className="chaosAutoCaptain" id={id} data-auto-captain={auto.locked ? 'locked' : 'pending'} {...(kind === 'captain' ? {} : { 'data-auto-pick': kind })}>
       <p className="chaosSelectionNote">
-        <span>{auto.locked ? CHAOS_CARD_STRINGS.autoCaptainLocked : own ? CHAOS_CARD_STRINGS.autoCaptainIfNone : CHAOS_CARD_STRINGS.autoCaptainIfNoneOther}</span> <strong data-no-translate>{auto.asset.label}</strong>
+        <span>{auto.locked ? text.locked : own ? text.own : text.other}</span> <strong data-no-translate>{auto.asset.label}</strong>
         {auto.locked && (
           <>
             {' '}
-            <span>{CHAOS_CARD_STRINGS.autoCaptainLockedSuffix}</span>
+            <span>{text.suffix}</span>
           </>
         )}
       </p>
       <p className="chaosSelectionNote">
-        <span>{auto.expected === null ? CHAOS_CARD_STRINGS.autoCaptainNoHistory : CHAOS_CARD_STRINGS.autoCaptainReason}</span>
+        <span>{reason}</span>
         {auto.expected !== null && (
           <>
             {' '}
@@ -93,6 +113,30 @@ export function ChaosAutoCaptainNote({ auto, own, id }: { auto: ChaosAutoCaptain
         )}
       </p>
     </div>
+  );
+}
+
+/** A Wild Slot pick or a raid that no longer counts because its player left the roster before kickoff. `own`: the manager can still choose again. */
+export function ChaosVoidNote({ kind, asset, chooseAgain }: { kind: 'wild_slot' | 'raid'; asset: { label: string }; chooseAgain: boolean }) {
+  return (
+    <p className="chaosSelectionNote chaosVoidNote" role="note" data-chaos-void={kind}>
+      <strong data-no-translate>{asset.label}</strong> <span className="statusBadge is-final">{CHAOS_CARD_STRINGS.voidLabel}</span> <span>{kind === 'raid' ? CHAOS_CARD_STRINGS.voidRaid : CHAOS_CARD_STRINGS.voidWild}</span>
+      {chooseAgain && (
+        <>
+          {' '}
+          <span>{kind === 'raid' ? CHAOS_CARD_STRINGS.voidRaidChoose : CHAOS_CARD_STRINGS.voidWildChoose}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
+/** The raid penalty, in words: why a starter is being raided and what it does to each side. */
+export function ChaosPenaltyNote() {
+  return (
+    <p className="chaosSelectionNote chaosPenaltyNote" role="note" data-chaos-penalty="true">
+      {CHAOS_CARD_STRINGS.raidPenalty}
+    </p>
   );
 }
 

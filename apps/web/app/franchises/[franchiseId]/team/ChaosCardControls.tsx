@@ -2,7 +2,7 @@
 
 import React, { useActionState, useEffect, useId, useRef } from 'react';
 import { setChaosCardSelection, type ChaosCardActionState } from '../../../team/chaosCardActions';
-import { ChaosAutoCaptainNote, ChaosCardFace, ChaosDeadlineTime } from '../../../components/ChaosCardFace';
+import { ChaosAutoPickNote, ChaosCardFace, ChaosDeadlineTime, ChaosPenaltyNote, ChaosVoidNote } from '../../../components/ChaosCardFace';
 import { useLocale } from '../../../components/LocaleProvider';
 import { announceToScreenReader } from '../../../components/ScreenReaderAnnouncer';
 import { CHAOS_CARD_STRINGS, CHAOS_SELECTION_TEXT, selectionKind, type ChaosAsset, type ChaosCardText, type ChaosSelectionView } from '../../../../lib/matchups/chaosCards';
@@ -18,6 +18,8 @@ type Props = {
   view: ChaosSelectionView | null;
   /** Players on this roster that the opponent raided (RAID, higher seed). */
   raided: ChaosAsset[];
+  /** The starter a PENALTY raid took from this roster (RAID, higher seed with no eligible bench player). It stays in the lineup. */
+  raidedPenalty?: ChaosAsset[];
 };
 
 const assetValue = (asset: ChaosAsset) => (asset.athleteId ? `athlete:${asset.athleteId}` : `team:${asset.realTeamId}`);
@@ -27,7 +29,7 @@ const assetValue = (asset: ChaosAsset) => (asset.athleteId ? `athlete:${asset.at
  * A plain form: radio buttons and a submit button, so it works with a keyboard,
  * a switch, a screen reader and touch, and never needs dragging.
  */
-export function ChaosCardControls({ card, matchupId, seasonFranchiseId, franchiseId, view, raided }: Props) {
+export function ChaosCardControls({ card, matchupId, seasonFranchiseId, franchiseId, view, raided, raidedPenalty }: Props) {
   const [state, action, pending] = useActionState(setChaosCardSelection, initialState);
   const { t } = useLocale();
   const id = useId();
@@ -65,8 +67,11 @@ export function ChaosCardControls({ card, matchupId, seasonFranchiseId, franchis
               </p>
             )}
             {view.status !== 'not_eligible' && !view.current && <p className="chaosSelectionNote">{text.none}</p>}
+            {view.voided && kind !== 'captain' && kind && <ChaosVoidNote kind={kind} asset={view.voided} chooseAgain={view.status === 'open'} />}
             {view.message && <p className="chaosSelectionNote">{view.message}</p>}
-            {view.autoCaptain && <ChaosAutoCaptainNote auto={view.autoCaptain} own id={`${id}-auto`} />}
+            {view.autoPick && kind && <ChaosAutoPickNote kind={kind} auto={view.autoPick} own id={`${id}-auto`} />}
+            {kind === 'wild_slot' && !view.current && !view.autoPick && view.status === 'open' && <p className="chaosSelectionNote">{CHAOS_CARD_STRINGS.autoWildNone}</p>}
+            {view.penalty && <ChaosPenaltyNote />}
 
             {view.status === 'open' && (
               <form action={action} className="chaosSelectionForm">
@@ -78,8 +83,9 @@ export function ChaosCardControls({ card, matchupId, seasonFranchiseId, franchis
                 {view.candidates.map((asset) => (
                   <input type="hidden" key={asset.key} name={`label:${assetValue(asset)}`} value={asset.label} />
                 ))}
-                <fieldset aria-describedby={view.autoCaptain ? `${id}-auto ${id}-deadline` : `${id}-deadline`}>
-                  <legend>{text.legend}</legend>
+                <fieldset aria-describedby={view.autoPick ? `${id}-auto ${id}-deadline` : `${id}-deadline`}>
+                  <legend>{view.penalty ? CHAOS_CARD_STRINGS.raidPenaltyLegend : text.legend}</legend>
+                  {view.penalty && <p className="chaosSelectionNote">{CHAOS_CARD_STRINGS.raidPenaltyOnly}</p>}
                   <p className="chaosSelectionNote" id={`${id}-deadline`}>
                     <span className="chaosDeadlineLabel">{CHAOS_CARD_STRINGS.deadline}</span> <span>{text.deadline}</span>
                     {view.deadlineAt && (
@@ -135,6 +141,18 @@ export function ChaosCardControls({ card, matchupId, seasonFranchiseId, franchis
             <p>{CHAOS_CARD_STRINGS.raidedNotice}</p>
             <ul>
               {raided.map((asset) => (
+                <li key={asset.key} data-no-translate>
+                  {asset.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {!!raidedPenalty?.length && (
+          <div className="chaosRaidedNotice" role="note" data-chaos-penalty="true">
+            <p>{CHAOS_CARD_STRINGS.raidedPenaltyNotice}</p>
+            <ul>
+              {raidedPenalty.map((asset) => (
                 <li key={asset.key} data-no-translate>
                   {asset.label}
                 </li>

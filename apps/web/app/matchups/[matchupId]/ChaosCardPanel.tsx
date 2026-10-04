@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChaosAutoCaptainNote, ChaosCardFace, ChaosDeadlineTime } from '../../components/ChaosCardFace';
+import { ChaosAutoPickNote, ChaosCardFace, ChaosDeadlineTime, ChaosPenaltyNote, ChaosVoidNote } from '../../components/ChaosCardFace';
 import { CHAOS_CARD_STRINGS, CHAOS_SELECTION_TEXT, selectionKind, signedPoints, type ChaosCardText, type ChaosScoreBuild, type ChaosSelectionView, type ChaosSideBuild } from '../../../lib/matchups/chaosCards';
 
 export type ChaosPanelSide = {
@@ -43,8 +43,11 @@ function SelectionSummary({ side, kind }: { side: ChaosPanelSide; kind: 'captain
             <span className={`statusBadge ${statusClass(view.status)}`}>{view.statusLabel}</span>
           </p>
           {!view.current && <p className="chaosSelectionNote">{text.none}</p>}
+          {view.voided && kind !== 'captain' && <ChaosVoidNote kind={kind} asset={view.voided} chooseAgain={false} />}
           {view.message && <p className="chaosSelectionNote">{view.message}</p>}
-          {view.autoCaptain && <ChaosAutoCaptainNote auto={view.autoCaptain} own={false} />}
+          {view.autoPick && <ChaosAutoPickNote kind={kind} auto={view.autoPick} own={false} />}
+          {kind === 'wild_slot' && !view.current && !view.autoPick && view.status === 'open' && <p className="chaosSelectionNote">{CHAOS_CARD_STRINGS.autoWildNone}</p>}
+          {view.penalty && <ChaosPenaltyNote />}
           {view.status === 'open' && (
             <p className="chaosSelectionNote">
               <span className="chaosDeadlineLabel">{CHAOS_CARD_STRINGS.deadline}</span> <span>{text.deadline}</span>

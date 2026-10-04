@@ -42,13 +42,13 @@ export const CHAOS_CARD_CATALOG: Record<ChaosCardCode, ChaosCardText> = {
     code: 'WILD_SLOT',
     kind: 'wild_slot',
     name: 'Wild Slot',
-    rules: "Each manager may name one extra player from their active roster, at any position, who is not already starting. That player's Week 13 points are added to the team total. Choose before that player's game kicks off.",
+    rules: "Each manager may name one extra player from their active roster, at any position, who is not already starting. That player's Week 13 points are added to the team total. Choose before that player's game kicks off. If no player is named, the non-starting player with the highest recent scoring average is used automatically and is locked in at that player's kickoff.",
   },
   RAID: {
     code: 'RAID',
     kind: 'raid',
     name: 'Raid',
-    rules: "The lower seed picks one player from the higher seed's bench before the first Week 13 kickoff. That player's Week 13 points are added to the lower seed's total. The player stays on the higher seed's roster but cannot start for them in Week 13.",
+    rules: "The lower seed picks one player from the higher seed's bench before the first Week 13 kickoff. That player's Week 13 points are added to the lower seed's total. The player stays on the higher seed's roster but cannot start for them in Week 13. If no raid is made by the deadline, the bench player with the highest recent scoring average is raided automatically. If the higher seed has no eligible bench player, the raid takes its best-ranked starter instead.",
   },
   BOUNTY: {
     code: 'BOUNTY',
@@ -112,6 +112,35 @@ export const CHAOS_CARD_STRINGS = {
   noCandidates: 'No eligible players right now.',
   raidOnlyLowerSeed: 'Only the lower seed raids. The higher seed has nothing to choose.',
   raidedNotice: 'Your opponent raided this player. They stay on your roster but cannot start for you this week.',
+  // Automatic Wild Slot and automatic raid (owner decisions of 2026-10-04, third round).
+  autoPickIfNone: 'If you do not choose, the system will pick',
+  autoWildIfNoneOther: 'If no Wild Slot player is named, the system will pick',
+  autoRaidIfNoneOther: 'If no raid is made by the deadline, the system will raid',
+  autoWildLocked: 'Automatic Wild Slot player:',
+  autoRaidLocked: 'Automatic raid:',
+  autoRaidLockedSuffix: '(made by the system)',
+  autoWildLockedReason: "No Wild Slot player was named before this player's game kicked off, so the automatic pick is fixed for the week.",
+  autoRaidLockedReason: 'No raid by the lower seed was standing once the deadline had passed, so the system made the raid. It cannot be changed.',
+  autoWildReason: 'Chosen automatically: the player outside the starting lineup with the highest average fantasy points per game over their last three scored weeks before Week 13.',
+  autoWildNoHistory: 'Chosen automatically: no eligible player outside the starting lineup has a score before Week 13, so the first one in a fixed order is used.',
+  autoRaidReason: "Chosen automatically: the player on the higher seed's bench with the highest average fantasy points per game over their last three scored weeks before Week 13.",
+  autoRaidNoHistory: "Chosen automatically: no eligible player on the higher seed's bench has a score before Week 13, so the first one in a fixed order is used.",
+  autoPenaltyReason: "Chosen automatically: the higher seed's starter with the highest average fantasy points per game over their last three scored weeks before Week 13.",
+  autoPenaltyNoHistory: "Chosen automatically: none of the higher seed's starters has a score before Week 13, so the first one in a fixed order is used.",
+  autoWildNone: 'No eligible player outside the starting lineup, so there is no automatic Wild Slot player and no extra points.',
+  autoWild: 'Automatic Wild Slot player',
+  autoRaid: 'Automatic raid',
+  penaltyRaid: 'Penalty raid',
+  autoPenaltyRaid: 'Automatic penalty raid',
+  raidPenalty: "The higher seed has no eligible bench player, so the raid takes its best-ranked starter instead. The lower seed adds that starter's points. The higher seed keeps the starter in its lineup and still scores them.",
+  raidPenaltyOnly: 'This is the only player you can raid.',
+  raidPenaltyLegend: "Raid your opponent's best-ranked starter",
+  raidedPenaltyNotice: 'You had no eligible bench player, so the raid took this starter. They stay in your lineup and still score for you. Your opponent adds their points too.',
+  voidLabel: 'No longer counts',
+  voidWild: 'This Wild Slot player left the roster before their game kicked off, so the pick no longer counts.',
+  voidRaid: "The raided player left the higher seed's roster before their game kicked off, so the raid no longer counts.",
+  voidWildChoose: 'Choose again. If you do not, the automatic pick applies.',
+  voidRaidChoose: 'Choose again before the deadline. If you do not, the system makes the raid at the deadline.',
 } as const;
 
 type SelectionText = { legend: string; submit: string; current: string; none: string; deadline: string; lockedReason: string; saved: string; cleared: string; adjustment: string };
@@ -133,7 +162,7 @@ export const CHAOS_SELECTION_TEXT: Record<'captain' | 'wild_slot' | 'raid', Sele
     legend: 'Choose your Wild Slot player',
     submit: 'Use Wild Slot',
     current: 'Wild Slot',
-    none: 'No Wild Slot player named. No extra points.',
+    none: 'No Wild Slot player named yet.',
     deadline: "Before that player's game kicks off",
     lockedReason: "Your Wild Slot player's game has started. The pick can no longer be changed.",
     saved: 'Wild Slot saved.',
@@ -144,7 +173,7 @@ export const CHAOS_SELECTION_TEXT: Record<'captain' | 'wild_slot' | 'raid', Sele
     legend: "Choose one player from your opponent's bench",
     submit: 'Raid this player',
     current: 'Raid',
-    none: 'No raid made. Nothing changes.',
+    none: 'No raid made yet.',
     deadline: 'Before the first Week 13 kickoff. A raid cannot be changed once made.',
     lockedReason: 'Your raid is made and cannot be changed.',
     saved: 'Raid made.',
@@ -198,15 +227,20 @@ const finite = (value: unknown): number | null => {
   return null;
 };
 
-/** `automatic` is true for a captain nobody named (chosen by the database, see chaos_auto_captain). */
-export type ChaosAdjustmentLine = { effect: 'captain' | 'wild_slot' | 'raid' | 'twist'; label: string; athleteId: string | null; realTeamId: string | null; points: number; automatic: boolean; expected: number | null; games: number | null };
+/**
+ * `automatic` is true for a captain, Wild Slot player or raid nobody named (chosen by the database, see chaos_auto_pick).
+ * `penalty` is true for a raid that took a starter because the higher seed had no eligible bench player.
+ */
+export type ChaosAdjustmentLine = { effect: 'captain' | 'wild_slot' | 'raid' | 'twist'; label: string; athleteId: string | null; realTeamId: string | null; points: number; automatic: boolean; penalty: boolean; expected: number | null; games: number | null };
 export type ChaosSideBuild = { base: number; lines: ChaosAdjustmentLine[]; total: number };
 /** grant: 'first' when the lower seed won (front of the waiver order), 'up_three' when the higher seed won. */
 export type ChaosBountyGrant = { seasonFranchiseId: string; grant: 'first' | 'up_three'; effectiveUntil: string | null };
 export type ChaosScoreBuild = { cardCode: ChaosCardCode; home: ChaosSideBuild; away: ChaosSideBuild; bounty: ChaosBountyGrant | null };
 
-export function adjustmentLabel(effect: string, automatic = false): string {
+export function adjustmentLabel(effect: string, automatic = false, penalty = false): string {
   if (effect === 'captain' && automatic) return CHAOS_CARD_STRINGS.autoCaptain;
+  if (effect === 'wild_slot' && automatic) return CHAOS_CARD_STRINGS.autoWild;
+  if (effect === 'raid' && (automatic || penalty)) return automatic ? (penalty ? CHAOS_CARD_STRINGS.autoPenaltyRaid : CHAOS_CARD_STRINGS.autoRaid) : CHAOS_CARD_STRINGS.penaltyRaid;
   if (effect === 'captain' || effect === 'wild_slot' || effect === 'raid') return CHAOS_SELECTION_TEXT[effect].adjustment;
   return CHAOS_TWIST_ADJUSTMENT;
 }
@@ -223,8 +257,9 @@ function side(value: unknown): ChaosSideBuild | null {
     const points = finite(line?.points);
     const effect = line?.effect;
     if (!line || points === null || (effect !== 'captain' && effect !== 'wild_slot' && effect !== 'raid' && effect !== 'twist')) return null;
-    const automatic = effect === 'captain' && line.automatic === true;
-    lines.push({ effect, label: adjustmentLabel(effect, automatic), athleteId: typeof line.athlete_id === 'string' ? line.athlete_id : null, realTeamId: typeof line.real_team_id === 'string' ? line.real_team_id : null, points, automatic, expected: automatic ? finite(line.expected) : null, games: automatic ? finite(line.games) : null });
+    const automatic = effect !== 'twist' && line.automatic === true;
+    const penalty = effect === 'raid' && line.penalty === true;
+    lines.push({ effect, label: adjustmentLabel(effect, automatic, penalty), athleteId: typeof line.athlete_id === 'string' ? line.athlete_id : null, realTeamId: typeof line.real_team_id === 'string' ? line.real_team_id : null, points, automatic, penalty, expected: automatic ? finite(line.expected) : null, games: automatic ? finite(line.games) : null });
   }
   // Never show a build-up that does not add up to the stored total.
   if (Math.abs(base + lines.reduce((sum, line) => sum + line.points, 0) - total) > 0.005) return null;
@@ -278,33 +313,51 @@ export function weekGamesOver(games: ChaosGame[]) {
 }
 
 export type ChaosAsset = { key: string; athleteId: string | null; realTeamId: string | null; teamId: string | null; label: string; isStarter: boolean };
-/** source 'automatic': the automatic captain, recorded by the database once that player's game had kicked off; details holds the averages compared. */
-export type ChaosSelectionRow = { season_franchise_id: string; card_code: string; athlete_id: string | null; real_team_id: string | null; locked_at?: string | null; source?: string | null; details?: unknown };
+/**
+ * source 'automatic': the automatic captain, Wild Slot player or raid, recorded by the database once it was due; details holds the averages compared.
+ * details.penalty: a raid that took a starter. voided_at: the Wild Slot pick or raided player left the roster before kickoff, so the row no longer counts.
+ */
+export type ChaosSelectionRow = { season_franchise_id: string; card_code: string; athlete_id: string | null; real_team_id: string | null; locked_at?: string | null; source?: string | null; details?: unknown; voided_at?: string | null; void_reason?: string | null };
 
 /**
- * The captain the database will use when none is named: the reply of the
- * chaos_auto_captain RPC, matched to an asset. This module never ranks
- * starters itself, so the page cannot disagree with the score.
+ * The selection the database will make when the manager makes none: the reply
+ * of the chaos_auto_pick RPC (chaos_auto_captain for a captain), matched to an
+ * asset. This module never ranks players itself, so the page cannot disagree
+ * with the score.
  */
-export type ChaosAutoCaptain = {
+export type ChaosAutoPick = {
   asset: ChaosAsset;
   /** Average fantasy points per game the choice is based on; null when the player has no earlier score. */
   expected: number | null;
   games: number;
-  /** True once this player's game has kicked off: the captain is fixed for the week and nobody can be named. False while it is only a preview. */
+  /** True once the pick is due (the player's kickoff; for a raid, the first kickoff of the week): it is fixed for the week and nothing can be chosen. False while it is only a preview. */
   locked: boolean;
+  /** RAID only: the higher seed has no eligible bench player, so this is its best-ranked starter. */
+  penalty: boolean;
 };
+export type ChaosAutoCaptain = ChaosAutoPick;
 
-/** Reads the chaos_auto_captain reply. Null when there is none, it is malformed, or it names an asset that is not one of the starters given. */
-export function presentAutoCaptain(source: unknown, starters: ChaosAsset[]): ChaosAutoCaptain | null {
+/**
+ * Reads the chaos_auto_pick reply. Null when there is none, it is malformed, or it names an asset the pool does not allow:
+ * a captain must be one of the starters given; a Wild Slot player must be a non-starter; a raid takes a non-starter of the
+ * opponent, or one of its starters only when the reply says penalty.
+ */
+export function presentAutoPick(kind: 'captain' | 'wild_slot' | 'raid', source: unknown, pool: ChaosAsset[]): ChaosAutoPick | null {
   const row = record(source);
   if (!row) return null;
   const athleteId = typeof row.athlete_id === 'string' ? row.athlete_id : null;
   const realTeamId = typeof row.real_team_id === 'string' ? row.real_team_id : null;
   if (!athleteId && !realTeamId) return null;
-  const asset = starters.find((item) => item.isStarter && (athleteId ? item.athleteId === athleteId : item.realTeamId === realTeamId));
+  const penalty = kind === 'raid' && row.penalty === true;
+  const wantStarter = kind === 'captain' || penalty;
+  const asset = pool.find((item) => item.isStarter === wantStarter && (athleteId ? item.athleteId === athleteId : item.realTeamId === realTeamId));
   if (!asset) return null;
-  return { asset, expected: finite(row.expected), games: finite(row.games) ?? 0, locked: typeof row.locked_at === 'string' && row.locked_at !== '' };
+  return { asset, expected: finite(row.expected), games: finite(row.games) ?? 0, locked: typeof row.locked_at === 'string' && row.locked_at !== '', penalty };
+}
+
+/** Reads the chaos_auto_captain reply. Null when there is none, it is malformed, or it names an asset that is not one of the starters given. */
+export function presentAutoCaptain(source: unknown, starters: ChaosAsset[]): ChaosAutoCaptain | null {
+  return presentAutoPick('captain', source, starters);
 }
 
 export type ChaosSelectionView = {
@@ -322,6 +375,12 @@ export type ChaosSelectionView = {
   deadlineAt: string | null;
   /** CAPTAIN only, and only while no named captain counts: the automatic captain, as a preview (locked: false) or fixed for the week (locked: true). */
   autoCaptain: ChaosAutoCaptain | null;
+  /** Any selection card, and only while no selection of the manager's own counts: the automatic selection, as a preview or fixed. For CAPTAIN it is autoCaptain. */
+  autoPick: ChaosAutoPick | null;
+  /** WILD SLOT and RAID: the selection that became void because its player left the roster before kickoff. `current` is then null. */
+  voided: ChaosAsset | null;
+  /** RAID: the raid on offer, or the raid made, takes a starter because the higher seed has no eligible bench player. */
+  penalty: boolean;
 };
 
 /**
@@ -340,20 +399,30 @@ export function chaosSelectionView(input: {
   now: number;
   /** The chaos_auto_captain reply for this franchise (CAPTAIN only). */
   autoCaptain?: unknown;
+  /** The chaos_auto_pick reply for this franchise (WILD SLOT: its own roster; RAID: the raid the system would make, lower seed only). */
+  autoPick?: unknown;
+  /** Display names by athlete or team id, for a selected player who is no longer on the roster given (a void pick, or one dropped after the week's games). */
+  assetLabels?: Record<string, string>;
 }): ChaosSelectionView {
   const text = CHAOS_SELECTION_TEXT[input.kind];
   const pool = input.kind === 'raid' ? input.opponentAssets : input.ownAssets;
   const matches = (asset: ChaosAsset) => (input.selection?.athlete_id ? asset.athleteId === input.selection.athlete_id : !!input.selection?.real_team_id && asset.realTeamId === input.selection.real_team_id);
-  const current = input.selection ? (pool.find(matches) ?? { key: input.selection.athlete_id ?? input.selection.real_team_id ?? 'selection', athleteId: input.selection.athlete_id, realTeamId: input.selection.real_team_id, teamId: input.selection.real_team_id, label: 'Selected player', isStarter: false }) : null;
+  const selectedId = input.selection?.athlete_id ?? input.selection?.real_team_id ?? '';
+  const selected = input.selection ? (pool.find(matches) ?? { key: selectedId || 'selection', athleteId: input.selection.athlete_id, realTeamId: input.selection.real_team_id, teamId: input.selection.real_team_id, label: input.assetLabels?.[selectedId] ?? 'Selected player', isStarter: false }) : null;
+  // A VOID selection (WILD SLOT, RAID): its player left the roster before kickoff. It is shown as void and is not the current selection.
+  const voided = input.kind !== 'captain' && selected && typeof input.selection?.voided_at === 'string' && input.selection.voided_at !== '' ? selected : null;
+  const current = voided ? null : selected;
   const started = (asset: ChaosAsset) => teamGameStarted(asset.teamId, input.games, input.now);
   const weekOver = input.matchupFinal || weekGamesOver(input.games);
   const first = firstKickoff(input.games);
-  // The automatic captain: read from the recorded row when there is one, otherwise from the chaos_auto_captain reply (a preview, or a lock that scoring has not recorded yet).
+  // The automatic selection: read from the recorded row when there is one, otherwise from the database reply (a preview, or a pick that is due and that scoring has not recorded yet).
   const details = record(input.selection?.details);
-  const recordedAuto = input.kind === 'captain' && !!current && current.isStarter && input.selection?.source === 'automatic';
-  const auto: ChaosAutoCaptain | null =
-    input.kind !== 'captain' ? null : recordedAuto && current ? { asset: current, expected: finite(details?.expected), games: finite(details?.games) ?? 0, locked: true } : current?.isStarter ? null : presentAutoCaptain(input.autoCaptain, input.ownAssets);
-  const base = { kind: input.kind, current, deadlineText: text.deadline, deadlineAt: input.kind === 'raid' ? first : current ? teamKickoff(current.teamId, input.games) : null };
+  const recordedPenalty = input.kind === 'raid' && !!current && details?.penalty === true;
+  const recordedAuto = !!current && input.selection?.source === 'automatic' && (input.kind !== 'captain' || current.isStarter);
+  const recorded: ChaosAutoPick | null = recordedAuto && current ? { asset: current, expected: finite(details?.expected), games: finite(details?.games) ?? 0, locked: true, penalty: recordedPenalty } : null;
+  const autoCaptain: ChaosAutoCaptain | null = input.kind !== 'captain' ? null : (recorded ?? (current?.isStarter ? null : presentAutoCaptain(input.autoCaptain, input.ownAssets)));
+  const auto: ChaosAutoPick | null = input.kind === 'captain' ? autoCaptain : (recorded ?? (current ? null : presentAutoPick(input.kind, input.autoPick, pool)));
+  const base = { kind: input.kind, current, voided, deadlineText: text.deadline, deadlineAt: input.kind === 'raid' ? first : current ? teamKickoff(current.teamId, input.games) : null };
   const view = (status: ChaosSelectionView['status'], message: string | null, candidates: ChaosAsset[], canClear: boolean, currentCounts: boolean): ChaosSelectionView => ({
     ...base,
     status,
@@ -362,22 +431,27 @@ export function chaosSelectionView(input: {
     candidates,
     canClear,
     currentCounts,
-    autoCaptain: auto,
+    autoCaptain,
+    autoPick: status === 'not_eligible' ? null : auto,
+    penalty: status !== 'not_eligible' && (recordedPenalty || !!auto?.penalty),
   });
 
   if (input.kind === 'raid') {
     if (!input.isLowerSeed) return view('not_eligible', CHAOS_CARD_STRINGS.raidOnlyLowerSeed, [], false, false);
-    if (current) return view('locked', text.lockedReason, [], false, true);
+    // A raid that stands is final, whether the manager made it or the system did.
+    if (current) return view(weekOver ? 'closed' : 'locked', recorded ? CHAOS_CARD_STRINGS.autoRaidLockedReason : text.lockedReason, [], false, true);
     if (weekOver) return view('closed', CHAOS_WEEK_CLOSED, [], false, false);
-    if (!first || Date.parse(first) <= input.now) return view('closed', CHAOS_RAID_DEADLINE_PASSED, [], false, false);
-    return view('open', null, pool.filter((asset) => !asset.isStarter && !started(asset)), false, false);
+    // After the deadline the system makes the raid; the database reply says which (scoring records it on its next run).
+    if (!first || Date.parse(first) <= input.now) return auto ? view('locked', CHAOS_CARD_STRINGS.autoRaidLockedReason, [], false, false) : view('closed', CHAOS_RAID_DEADLINE_PASSED, [], false, false);
+    // PENALTY: with no eligible bench player to raid, the only raid on offer is the higher seed's best-ranked starter.
+    return view('open', null, auto?.penalty ? [auto.asset] : pool.filter((asset) => !asset.isStarter && !started(asset)), false, false);
   }
 
   const currentCounts = !!current && (input.kind === 'captain' ? current.isStarter : !current.isStarter);
   // A captain who was moved to the bench no longer counts and may be replaced.
   const currentFixed = !!current && started(current) && (input.kind === 'wild_slot' || current.isStarter);
-  // The captain locks at kickoff, named or automatic: once the automatic captain has kicked off there is nothing left to choose.
-  if (auto?.locked) return view(weekOver ? 'closed' : 'locked', CHAOS_CARD_STRINGS.autoCaptainLockedReason, [], false, recordedAuto);
+  // The automatic captain and the automatic Wild Slot lock at kickoff: once that player has kicked off there is nothing left to choose.
+  if (auto?.locked) return view(weekOver ? 'closed' : 'locked', input.kind === 'captain' ? CHAOS_CARD_STRINGS.autoCaptainLockedReason : CHAOS_CARD_STRINGS.autoWildLockedReason, [], false, recordedAuto);
   if (weekOver) return view('closed', current ? null : CHAOS_WEEK_CLOSED, [], false, currentCounts);
   if (currentFixed) return view('locked', text.lockedReason, [], false, currentCounts);
   const candidates = pool.filter((asset) => (input.kind === 'captain' ? asset.isStarter : !asset.isStarter) && !started(asset) && !(current && matches(asset) && currentCounts));
@@ -412,6 +486,24 @@ export function buildChaosAssets(roster: ChaosRosterRow[], lineup: ChaosLineupRo
   return [...assets.filter((asset) => asset.isStarter), ...assets.filter((asset) => !asset.isStarter)];
 }
 
+/** Selected athletes and teams that are not among the assets given: players who have left the roster since they were selected. The page looks their names up. */
+export function chaosUnlistedSelectionIds(selections: ChaosSelectionRow[], assets: ChaosAsset[]): { athleteIds: string[]; teamIds: string[] } {
+  const athletes = new Set(assets.map((asset) => asset.athleteId).filter(Boolean));
+  const teams = new Set(assets.map((asset) => asset.realTeamId).filter(Boolean));
+  return {
+    athleteIds: [...new Set(selections.map((row) => row.athlete_id).filter((id): id is string => !!id && !athletes.has(id)))],
+    teamIds: [...new Set(selections.filter((row) => !row.athlete_id).map((row) => row.real_team_id).filter((id): id is string => !!id && !teams.has(id)))],
+  };
+}
+
+/** Display names by id for athletes and teams read directly (not through a roster), in the format buildChaosAssets uses. */
+export function chaosAssetLabels(athletes: Array<{ id: string } & AthleteRef>, teams: Array<{ id: string } & TeamRef>): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const athlete of athletes) labels[athlete.id] = [athlete.display_name ?? 'Athlete', athlete.position, first(athlete.real_teams)?.abbreviation ?? 'FA'].filter(Boolean).join(' • ');
+  for (const team of teams) labels[team.id] = `${team.abbreviation ?? team.display_name ?? 'Team'} D/ST`;
+  return labels;
+}
+
 /** Which side is the lower seed (the larger seed number recorded by generate_chaos_week). Null when the seeds are missing or equal. */
 export function chaosLowerSeedSide(context: unknown): 'home' | 'away' | null {
   const row = record(context);
@@ -421,14 +513,24 @@ export function chaosLowerSeedSide(context: unknown): 'home' | 'away' | null {
   return home > away ? 'home' : 'away';
 }
 
-/** Ids (athlete or team) this franchise may not move into its Week 13 lineup: players raided from it, and its own Wild Slot pick. */
+/**
+ * Ids (athlete or team) this franchise may not move into its Week 13 lineup: players raided from it, and its own Wild Slot pick.
+ * As set_lineup_slot: a void selection blocks nothing, and a PENALTY raid does not lock the starter it took (the higher seed keeps starting him).
+ */
 export function chaosLineupBlockedIds(input: { kind: ChaosCardKind; seasonFranchiseId: string; selections: ChaosSelectionRow[]; raiderSeasonFranchiseId: string | null }): string[] {
   const ids: string[] = [];
   for (const selection of input.selections) {
     const id = selection.athlete_id ?? selection.real_team_id;
-    if (!id) continue;
-    if (input.kind === 'raid' && selection.season_franchise_id === input.raiderSeasonFranchiseId && input.raiderSeasonFranchiseId !== input.seasonFranchiseId) ids.push(id);
+    if (!id || selection.voided_at) continue;
+    if (input.kind === 'raid' && selection.season_franchise_id === input.raiderSeasonFranchiseId && input.raiderSeasonFranchiseId !== input.seasonFranchiseId && record(selection.details)?.penalty !== true) ids.push(id);
     if (input.kind === 'wild_slot' && selection.season_franchise_id === input.seasonFranchiseId) ids.push(id);
   }
   return ids;
+}
+
+/** The id of the starter a PENALTY raid took from this franchise (the higher seed), or null. It stays in the lineup and is shown with its own notice. */
+export function chaosPenaltyRaidedId(input: { kind: ChaosCardKind; seasonFranchiseId: string; selections: ChaosSelectionRow[]; raiderSeasonFranchiseId: string | null }): string | null {
+  if (input.kind !== 'raid' || !input.raiderSeasonFranchiseId || input.raiderSeasonFranchiseId === input.seasonFranchiseId) return null;
+  const raid = input.selections.find((selection) => selection.season_franchise_id === input.raiderSeasonFranchiseId && !selection.voided_at && record(selection.details)?.penalty === true);
+  return raid ? (raid.athlete_id ?? raid.real_team_id) : null;
 }

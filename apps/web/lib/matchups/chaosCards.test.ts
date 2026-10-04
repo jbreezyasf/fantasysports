@@ -10,14 +10,18 @@ import {
   CHAOS_WEEK_CLOSED,
   adjustmentLabel,
   buildChaosAssets,
+  chaosAssetLabels,
   chaosCardAllStrings,
   chaosCardSurface,
   chaosCardsEnabled,
   chaosLineupBlockedIds,
   chaosLowerSeedSide,
+  chaosPenaltyRaidedId,
   chaosSelectionView,
+  chaosUnlistedSelectionIds,
   firstKickoff,
   presentAutoCaptain,
+  presentAutoPick,
   presentChaosScoreBuild,
   selectionKind,
   signedPoints,
@@ -103,6 +107,16 @@ describe('card catalog', () => {
     expect(chaosCardAllStrings().some((text) => /no bonus/i.test(text))).toBe(false);
   });
 
+  it('says in the Wild Slot and Raid rules what happens when nobody chooses, and the raid penalty (changed 2026-10-04)', () => {
+    expect(CHAOS_CARD_CATALOG.WILD_SLOT.rules).toContain("If no player is named, the non-starting player with the highest recent scoring average is used automatically and is locked in at that player's kickoff.");
+    expect(translateMessage(CHAOS_CARD_CATALOG.WILD_SLOT.rules)).toContain('se usa automáticamente al jugador no titular con el mejor promedio reciente de puntos');
+    expect(CHAOS_CARD_CATALOG.RAID.rules).toMatch(/If no raid is made by the deadline, the bench player with the highest recent scoring average is raided automatically\. If the higher seed has no eligible bench player, the raid takes its best-ranked starter instead\.$/);
+    expect(translateMessage(CHAOS_CARD_CATALOG.RAID.rules)).toMatch(/se asalta automáticamente al jugador de la banca.*el asalto se lleva a su titular mejor clasificado\.$/);
+    // The old "nothing happens" wording is gone.
+    expect(chaosCardAllStrings().some((text) => /Nothing changes|No extra points\.$/.test(text) && !/no automatic Wild Slot player/.test(text))).toBe(false);
+    expect(CHAOS_CARD_STRINGS.raidPenalty).toContain('The higher seed keeps the starter in its lineup and still scores them.');
+  });
+
   it('knows which cards take a selection', () => {
     expect(Object.values(CHAOS_CARD_CATALOG).filter((card) => selectionKind(card.kind)).map((card) => card.code)).toEqual(['CAPTAIN', 'WILD_SLOT', 'RAID']);
     expect(selectionKind(null)).toBeNull();
@@ -125,7 +139,7 @@ describe('score build-up from matchups.context', () => {
   it('reads base, each line and total for both sides', () => {
     const build = presentChaosScoreBuild(context);
     expect(build?.cardCode).toBe('CAPTAIN');
-    expect(build?.home).toEqual({ base: 56.5, total: 76.5, lines: [{ effect: 'captain', label: 'Captain bonus', athleteId: 'a1', realTeamId: null, points: 20, automatic: false, expected: null, games: null }] });
+    expect(build?.home).toEqual({ base: 56.5, total: 76.5, lines: [{ effect: 'captain', label: 'Captain bonus', athleteId: 'a1', realTeamId: null, points: 20, automatic: false, penalty: false, expected: null, games: null }] });
     expect(build?.away).toEqual({ base: 42, total: 42, lines: [] });
     expect(build?.bounty).toBeNull();
     expect(presentChaosScoreBuild(context.chaos_cards)?.home.total).toBe(76.5);
@@ -162,11 +176,28 @@ describe('score build-up from matchups.context', () => {
       home: { base: 56.5, total: 76.5, adjustments: [{ effect: 'captain', athlete_id: 'a1', real_team_id: null, points: 20, automatic: true, basis: 'recent_average_v1', expected: 20, games: 3, season_total: 100, compared: [{ athlete_id: 'a1', real_team_id: null, expected: 20, games: 3, season_total: 100 }] }] },
       away: { base: 42, total: 41, adjustments: [{ effect: 'captain', athlete_id: null, real_team_id: 't2', points: -1, automatic: true, basis: 'recent_average_v1', expected: null, games: 0, season_total: 0, compared: [] }] },
     });
-    expect(build?.home.lines[0]).toEqual({ effect: 'captain', label: 'Automatic captain', athleteId: 'a1', realTeamId: null, points: 20, automatic: true, expected: 20, games: 3 });
+    expect(build?.home.lines[0]).toEqual({ effect: 'captain', label: 'Automatic captain', athleteId: 'a1', realTeamId: null, points: 20, automatic: true, penalty: false, expected: 20, games: 3 });
     expect(build?.away.lines[0]).toMatchObject({ label: 'Automatic captain', realTeamId: 't2', points: -1, automatic: true, expected: null, games: 0 });
-    // Only a captain line can be automatic.
-    expect(presentChaosScoreBuild({ card_code: 'WILD_SLOT', home: { base: 1, total: 2, adjustments: [{ effect: 'wild_slot', athlete_id: 'x', points: 1, automatic: true }] }, away: { base: 1, total: 1, adjustments: [] } })?.home.lines[0]).toMatchObject({ label: 'Wild Slot player', automatic: false });
     expect([adjustmentLabel('captain', true), adjustmentLabel('captain'), adjustmentLabel('twist', true)]).toEqual(['Automatic captain', 'Captain bonus', 'Card twist']);
+  });
+
+  it('labels automatic Wild Slot and raid lines, and penalty raids, on the build-up (changed 2026-10-04: not only a captain line can be automatic)', () => {
+    const wild = presentChaosScoreBuild({
+      card_code: 'WILD_SLOT',
+      home: { base: 56.5, total: 62.5, adjustments: [{ effect: 'wild_slot', athlete_id: 'hb2', real_team_id: null, points: 6, automatic: true, locked_at: '2026-12-04T01:15:00+00:00', basis: 'recent_average_v1', expected: 12, games: 3, season_total: 36, compared: [], replaced: { athlete_id: 'hb1', reason: 'dropped' } }] },
+      away: { base: 42, total: 55, adjustments: [{ effect: 'wild_slot', athlete_id: 'ab1', real_team_id: null, points: 13 }] },
+    });
+    expect(wild?.home.lines[0]).toEqual({ effect: 'wild_slot', label: 'Automatic Wild Slot player', athleteId: 'hb2', realTeamId: null, points: 6, automatic: true, penalty: false, expected: 12, games: 3 });
+    expect(wild?.away.lines[0]).toMatchObject({ label: 'Wild Slot player', automatic: false, penalty: false, expected: null });
+    const raid = (line: Record<string, unknown>) => presentChaosScoreBuild({ card_code: 'RAID', home: { base: 56.5, total: 56.5, adjustments: [] }, away: { base: 42, total: 62, adjustments: [{ effect: 'raid', athlete_id: 'hq', real_team_id: null, points: 20, ...line }] } })?.away.lines[0];
+    expect(raid({})).toMatchObject({ label: 'Raided player', automatic: false, penalty: false });
+    expect(raid({ automatic: true, penalty: false, expected: 30, games: 3 })).toMatchObject({ label: 'Automatic raid', automatic: true, penalty: false, expected: 30, games: 3 });
+    expect(raid({ penalty: true })).toMatchObject({ label: 'Penalty raid', automatic: false, penalty: true });
+    expect(raid({ automatic: true, penalty: true, expected: 20, games: 3 })).toMatchObject({ label: 'Automatic penalty raid', automatic: true, penalty: true });
+    // A twist line is never automatic, and only a raid line can be a penalty.
+    expect(presentChaosScoreBuild({ card_code: 'TWIST_K_TRIPLE', home: { base: 1, total: 2, adjustments: [{ effect: 'twist', athlete_id: 'x', points: 1, automatic: true, penalty: true }] }, away: { base: 1, total: 1, adjustments: [] } })?.home.lines[0]).toMatchObject({ label: 'Card twist', automatic: false, penalty: false });
+    expect([adjustmentLabel('wild_slot', true), adjustmentLabel('raid', true), adjustmentLabel('raid', false, true), adjustmentLabel('raid', true, true), adjustmentLabel('captain', false, true), adjustmentLabel('wild_slot', false, true)]).toEqual(['Automatic Wild Slot player', 'Automatic raid', 'Penalty raid', 'Automatic penalty raid', 'Captain bonus', 'Wild Slot player']);
+    for (const label of ['Automatic Wild Slot player', 'Automatic raid', 'Penalty raid', 'Automatic penalty raid']) expect(translateMessage(label), label).not.toBe(label);
   });
 
   it('formats signed points and labels each effect', () => {
@@ -250,10 +281,10 @@ describe('automatic captain', () => {
   const reply = { athlete_id: 'qb', real_team_id: null, basis: 'recent_average_v1', expected: 20, games: 3, weeks: [10, 11, 12], season_total: 100, compared: [] };
 
   it('reads the database reply and matches it to a starter; anything else is ignored', () => {
-    expect(presentAutoCaptain(reply, own)).toEqual({ asset: own[0], expected: 20, games: 3, locked: false });
+    expect(presentAutoCaptain(reply, own)).toEqual({ asset: own[0], expected: 20, games: 3, locked: false, penalty: false });
     expect(presentAutoCaptain({ ...reply, locked_at: '2026-12-04T01:15:00+00:00' }, own)?.locked).toBe(true);
     expect(presentAutoCaptain({ ...reply, expected: '18.50' }, own)?.expected).toBe(18.5);
-    expect(presentAutoCaptain({ ...reply, expected: null, games: 0 }, own)).toEqual({ asset: own[0], expected: null, games: 0, locked: false });
+    expect(presentAutoCaptain({ ...reply, expected: null, games: 0 }, own)).toEqual({ asset: own[0], expected: null, games: 0, locked: false, penalty: false });
     expect(presentAutoCaptain({ athlete_id: null, real_team_id: 't9', expected: 7, games: 3 }, [{ key: 'team:t9', athleteId: null, realTeamId: 't9', teamId: 't9', label: 'ZZZ D/ST', isStarter: true }])?.asset.label).toBe('ZZZ D/ST');
     expect(presentAutoCaptain(null, own)).toBeNull();
     expect(presentAutoCaptain({}, own)).toBeNull();
@@ -263,7 +294,7 @@ describe('automatic captain', () => {
 
   it('before its kickoff it is a preview and the manager can still choose', () => {
     const before = chaosSelectionView({ ...base, kind: 'captain', autoCaptain: reply });
-    expect(before.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, locked: false });
+    expect(before.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, locked: false, penalty: false });
     expect(before).toMatchObject({ status: 'open', current: null });
     expect(before.candidates.map((item) => item.athleteId)).toEqual(['qb', 'te']);
     // A later game has kicked off for someone else, but the database still reports a preview: the choice stays open.
@@ -277,7 +308,7 @@ describe('automatic captain', () => {
     expect(due).toMatchObject({ status: 'locked', statusLabel: 'Locked', canClear: false, candidates: [], message: CHAOS_CARD_STRINGS.autoCaptainLockedReason, autoCaptain: { asset: { athleteId: 'qb' }, locked: true } });
     const recorded = chaosSelectionView({ ...base, kind: 'captain', now: AFTER_FIRST, selection: { ...pick('qb', 'CAPTAIN'), source: 'automatic', locked_at: '2026-12-04T01:15:00+00:00', details: { expected: 20, games: 3, basis: 'recent_average_v1' } } });
     expect(recorded).toMatchObject({ status: 'locked', canClear: false, candidates: [], currentCounts: true, message: CHAOS_CARD_STRINGS.autoCaptainLockedReason });
-    expect(recorded.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, locked: true });
+    expect(recorded.autoCaptain).toEqual({ asset: own[0], expected: 20, games: 3, locked: true, penalty: false });
     expect(recorded.current?.athleteId).toBe('qb');
     const over = chaosSelectionView({ ...base, kind: 'captain', matchupFinal: true, selection: { ...pick('qb', 'CAPTAIN'), source: 'automatic', details: { expected: 20, games: 3 } } });
     expect(over).toMatchObject({ status: 'closed', statusLabel: 'Final', autoCaptain: { locked: true } });
@@ -309,6 +340,118 @@ describe('WILD SLOT selection view', () => {
   it('locks at the pick’s kickoff', () => {
     expect(chaosSelectionView({ ...base, kind: 'wild_slot', selection: pick('rb-bench', 'WILD_SLOT') })).toMatchObject({ status: 'open', canClear: true, currentCounts: true });
     expect(chaosSelectionView({ ...base, kind: 'wild_slot', selection: pick('rb-bench', 'WILD_SLOT'), now: AFTER_FIRST })).toMatchObject({ status: 'locked', message: CHAOS_SELECTION_TEXT.wild_slot.lockedReason });
+  });
+});
+
+describe('automatic Wild Slot (owner decision 2026-10-04)', () => {
+  // The reply of chaos_auto_pick(matchup, franchise, 'wild_slot'); this module only presents it.
+  const reply = { athlete_id: 'wr-bench', real_team_id: null, basis: 'recent_average_v1', expected: 30, games: 3, season_total: 90, locked_at: null, compared: [] };
+  const LOCK = '2026-12-06T18:00:00+00:00';
+  const AFTER_ALL = Date.parse('2026-12-06T19:00:00Z');
+
+  it('reads the database reply and matches it to a NON-starter of the roster given; a starter or an unknown player is ignored', () => {
+    expect(presentAutoPick('wild_slot', reply, own)).toEqual({ asset: own[2], expected: 30, games: 3, locked: false, penalty: false });
+    expect(presentAutoPick('wild_slot', { ...reply, athlete_id: 'qb' }, own)).toBeNull();
+    expect(presentAutoPick('wild_slot', { ...reply, athlete_id: 'unknown' }, own)).toBeNull();
+    expect(presentAutoPick('wild_slot', { ...reply, penalty: true }, own)?.penalty).toBe(false);
+    expect(presentAutoPick('wild_slot', null, own)).toBeNull();
+  });
+
+  it('before its kickoff it is a preview and the manager can still choose', () => {
+    const view = chaosSelectionView({ ...base, kind: 'wild_slot', autoPick: reply });
+    expect(view).toMatchObject({ status: 'open', current: null, voided: null, penalty: false, autoCaptain: null, autoPick: { asset: { athleteId: 'wr-bench' }, expected: 30, games: 3, locked: false } });
+    expect(view.candidates.map((item) => item.athleteId)).toEqual(['wr-bench', 'rb-bench']);
+    // After the first kickoff the database still reports a preview (the better-ranked player has not kicked off): the choice stays open.
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', autoPick: reply, now: AFTER_FIRST })).toMatchObject({ status: 'open', autoPick: { locked: false } });
+  });
+
+  it('LOCKS at kickoff: once the database reports the lock there is nothing to choose, recorded or not', () => {
+    const due = chaosSelectionView({ ...base, kind: 'wild_slot', autoPick: { ...reply, locked_at: LOCK }, now: AFTER_ALL });
+    expect(due).toMatchObject({ status: 'locked', statusLabel: 'Locked', canClear: false, candidates: [], current: null, message: CHAOS_CARD_STRINGS.autoWildLockedReason, autoPick: { asset: { athleteId: 'wr-bench' }, locked: true } });
+    const recorded = chaosSelectionView({ ...base, kind: 'wild_slot', now: AFTER_ALL, autoPick: null, selection: { ...pick('wr-bench', 'WILD_SLOT'), source: 'automatic', locked_at: LOCK, details: { expected: 30, games: 3, basis: 'recent_average_v1' } } });
+    expect(recorded).toMatchObject({ status: 'locked', canClear: false, candidates: [], currentCounts: true, message: CHAOS_CARD_STRINGS.autoWildLockedReason });
+    expect(recorded.autoPick).toEqual({ asset: own[2], expected: 30, games: 3, locked: true, penalty: false });
+    expect(recorded.current?.athleteId).toBe('wr-bench');
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', matchupFinal: true, selection: { ...pick('wr-bench', 'WILD_SLOT'), source: 'automatic', details: { expected: 30, games: 3 } } })).toMatchObject({ status: 'closed', statusLabel: 'Final', autoPick: { locked: true } });
+  });
+
+  it('gives way to a named pick that counts', () => {
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', autoPick: reply, selection: pick('rb-bench', 'WILD_SLOT') })).toMatchObject({ status: 'open', autoPick: null, currentCounts: true });
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', autoPick: reply, selection: { ...pick('rb-bench', 'WILD_SLOT'), source: 'named' }, now: AFTER_FIRST })).toMatchObject({ status: 'locked', autoPick: null, message: CHAOS_SELECTION_TEXT.wild_slot.lockedReason });
+  });
+
+  it('with no eligible non-starter there is no automatic pick', () => {
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', autoPick: null })).toMatchObject({ status: 'open', autoPick: null, current: null });
+  });
+});
+
+describe('void selections (owner decision 2026-10-04)', () => {
+  const dropped = { voided_at: '2026-12-02T15:00:00+00:00', void_reason: 'dropped' };
+
+  it('WILD SLOT: a pick whose player left the roster before kickoff is shown as void and the manager chooses again', () => {
+    const view = chaosSelectionView({ ...base, kind: 'wild_slot', selection: { ...pick('gone', 'WILD_SLOT'), ...dropped }, autoPick: { athlete_id: 'wr-bench', real_team_id: null, expected: 30, games: 3 }, assetLabels: { gone: 'Dropped Player • WR • CCC' } });
+    expect(view).toMatchObject({ status: 'open', current: null, currentCounts: false, canClear: false, voided: { athleteId: 'gone', label: 'Dropped Player • WR • CCC' }, autoPick: { asset: { athleteId: 'wr-bench' }, locked: false } });
+    expect(view.candidates.map((item) => item.athleteId)).toEqual(['wr-bench', 'rb-bench']);
+    // Without a looked-up name the placeholder is used; a void pick never locks the choice, even after its former kickoff.
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', selection: { ...pick('gone', 'WILD_SLOT'), ...dropped }, now: AFTER_FIRST })).toMatchObject({ status: 'open', voided: { label: 'Selected player' } });
+    // If the automatic pick has locked in the meantime, the void row is still shown as void and nothing can be chosen.
+    expect(chaosSelectionView({ ...base, kind: 'wild_slot', selection: { ...pick('gone', 'WILD_SLOT'), ...dropped }, autoPick: { athlete_id: 'rb-bench', real_team_id: null, expected: 12, games: 3, locked_at: '2026-12-04T01:15:00+00:00' }, now: AFTER_FIRST })).toMatchObject({ status: 'locked', voided: { athleteId: 'gone' }, candidates: [], autoPick: { locked: true } });
+  });
+
+  it('RAID: a void raid is open again before the deadline, and replaced by the system after it', () => {
+    const before = chaosSelectionView({ ...base, kind: 'raid', isLowerSeed: true, selection: { ...pick('gone', 'RAID'), ...dropped }, autoPick: { athlete_id: 'opp-wr-bench', real_team_id: null, expected: 30, games: 3, penalty: false } });
+    expect(before).toMatchObject({ status: 'open', current: null, voided: { athleteId: 'gone' }, penalty: false, autoPick: { asset: { athleteId: 'opp-wr-bench' }, locked: false } });
+    expect(before.candidates.map((item) => item.athleteId)).toEqual(['opp-wr-bench', 'opp-rb-bench']);
+    const after = chaosSelectionView({ ...base, kind: 'raid', isLowerSeed: true, now: AFTER_FIRST, selection: { ...pick('gone', 'RAID'), ...dropped }, autoPick: { athlete_id: 'opp-wr-bench', real_team_id: null, expected: 30, games: 3, penalty: false, locked_at: '2026-12-04T01:15:00+00:00' } });
+    expect(after).toMatchObject({ status: 'locked', candidates: [], voided: { athleteId: 'gone' }, message: CHAOS_CARD_STRINGS.autoRaidLockedReason, autoPick: { locked: true } });
+  });
+
+  it('a captain row is never treated as void by this flag (a benched captain is handled by the lineup)', () => {
+    expect(chaosSelectionView({ ...base, kind: 'captain', selection: { ...pick('qb', 'CAPTAIN'), ...dropped } })).toMatchObject({ voided: null, current: { athleteId: 'qb' }, currentCounts: true });
+  });
+});
+
+describe('automatic raid and the raid penalty (owner decision 2026-10-04)', () => {
+  // The reply of chaos_auto_pick(matchup, raider, 'raid').
+  const reply = { athlete_id: 'opp-wr-bench', real_team_id: null, basis: 'recent_average_v1', expected: 30, games: 3, season_total: 90, locked_at: null, penalty: false, deadline: '2026-12-04T01:15:00+00:00', compared: [] };
+  const penalty = { ...reply, athlete_id: 'opp-qb', expected: 20, penalty: true };
+  const raider = { ...base, kind: 'raid' as const, isLowerSeed: true };
+
+  it('reads the reply against the OPPONENT roster: a bench player normally, a starter only when the reply says penalty', () => {
+    expect(presentAutoPick('raid', reply, opponent)).toEqual({ asset: opponent[1], expected: 30, games: 3, locked: false, penalty: false });
+    expect(presentAutoPick('raid', penalty, opponent)).toEqual({ asset: opponent[0], expected: 20, games: 3, locked: false, penalty: true });
+    expect(presentAutoPick('raid', { ...reply, athlete_id: 'opp-qb' }, opponent)).toBeNull();
+    expect(presentAutoPick('raid', { ...penalty, athlete_id: 'opp-wr-bench' }, opponent)).toBeNull();
+    expect(presentAutoPick('raid', reply, own)).toBeNull();
+  });
+
+  it('before the deadline: shows the raid the system would make, and the lower seed can still choose any bench player', () => {
+    const view = chaosSelectionView({ ...raider, autoPick: reply });
+    expect(view).toMatchObject({ status: 'open', penalty: false, autoPick: { asset: { athleteId: 'opp-wr-bench' }, locked: false, penalty: false }, deadlineAt: '2026-12-04T01:15:00Z' });
+    expect(view.candidates.map((item) => item.athleteId)).toEqual(['opp-wr-bench', 'opp-rb-bench']);
+    expect(chaosSelectionView({ ...base, kind: 'raid', isLowerSeed: false, autoPick: reply })).toMatchObject({ status: 'not_eligible', autoPick: null, penalty: false });
+  });
+
+  it('PENALTY: with no eligible bench player the picker offers exactly the one starter, and says so', () => {
+    const view = chaosSelectionView({ ...raider, autoPick: penalty });
+    expect(view).toMatchObject({ status: 'open', penalty: true, autoPick: { asset: { athleteId: 'opp-qb' }, penalty: true, locked: false } });
+    expect(view.candidates.map((item) => item.athleteId)).toEqual(['opp-qb']);
+    // Even if the opponent's roster still lists bench players (on a bye, so not eligible), only the starter is offered.
+    expect(view.candidates).toHaveLength(1);
+    const made = chaosSelectionView({ ...raider, selection: { ...pick('opp-qb', 'RAID'), source: 'named', details: { penalty: true } } });
+    expect(made).toMatchObject({ status: 'locked', penalty: true, currentCounts: true, autoPick: null, message: CHAOS_SELECTION_TEXT.raid.lockedReason, current: { athleteId: 'opp-qb' } });
+  });
+
+  it('after the deadline the system makes the raid: due (not yet recorded) and recorded read the same', () => {
+    const due = chaosSelectionView({ ...raider, now: AFTER_FIRST, autoPick: { ...reply, locked_at: reply.deadline } });
+    expect(due).toMatchObject({ status: 'locked', candidates: [], message: CHAOS_CARD_STRINGS.autoRaidLockedReason, autoPick: { asset: { athleteId: 'opp-wr-bench' }, locked: true, penalty: false } });
+    const recorded = chaosSelectionView({ ...raider, now: AFTER_FIRST, selection: { ...pick('opp-wr-bench', 'RAID'), source: 'automatic', locked_at: reply.deadline, details: { expected: 30, games: 3, penalty: false } } });
+    expect(recorded).toMatchObject({ status: 'locked', currentCounts: true, message: CHAOS_CARD_STRINGS.autoRaidLockedReason, penalty: false });
+    expect(recorded.autoPick).toEqual({ asset: opponent[1], expected: 30, games: 3, locked: true, penalty: false });
+    const recordedPenalty = chaosSelectionView({ ...raider, now: AFTER_FIRST, selection: { ...pick('opp-qb', 'RAID'), source: 'automatic', locked_at: reply.deadline, details: { expected: 20, games: 3, penalty: true } } });
+    expect(recordedPenalty).toMatchObject({ status: 'locked', penalty: true, autoPick: { asset: { athleteId: 'opp-qb' }, locked: true, penalty: true } });
+    // No reply at all after the deadline (nobody to raid): closed, as before.
+    expect(chaosSelectionView({ ...raider, now: AFTER_FIRST, autoPick: null })).toMatchObject({ status: 'closed', message: CHAOS_RAID_DEADLINE_PASSED });
   });
 });
 
@@ -362,5 +505,25 @@ describe('roster helpers', () => {
     const wild = [pick('w', 'WILD_SLOT', 'sf-a'), pick('v', 'WILD_SLOT', 'sf-b')];
     expect(chaosLineupBlockedIds({ kind: 'wild_slot', seasonFranchiseId: 'sf-a', selections: wild, raiderSeasonFranchiseId: null })).toEqual(['w']);
     expect(chaosLineupBlockedIds({ kind: 'captain', seasonFranchiseId: 'sf-a', selections: [pick('c', 'CAPTAIN', 'sf-a')], raiderSeasonFranchiseId: null })).toEqual([]);
+  });
+
+  it('a void selection blocks nothing, and a penalty raid does not lock the starter it took', () => {
+    const voidRaid = [{ ...pick('x', 'RAID', 'sf-low'), voided_at: '2026-12-02T15:00:00+00:00', void_reason: 'dropped' }];
+    expect(chaosLineupBlockedIds({ kind: 'raid', seasonFranchiseId: 'sf-high', selections: voidRaid, raiderSeasonFranchiseId: 'sf-low' })).toEqual([]);
+    expect(chaosLineupBlockedIds({ kind: 'wild_slot', seasonFranchiseId: 'sf-a', selections: [{ ...pick('w', 'WILD_SLOT', 'sf-a'), voided_at: '2026-12-02T15:00:00+00:00' }], raiderSeasonFranchiseId: null })).toEqual([]);
+    const penaltyRaid = [{ ...pick('starter', 'RAID', 'sf-low'), details: { penalty: true } }];
+    expect(chaosLineupBlockedIds({ kind: 'raid', seasonFranchiseId: 'sf-high', selections: penaltyRaid, raiderSeasonFranchiseId: 'sf-low' })).toEqual([]);
+    expect(chaosPenaltyRaidedId({ kind: 'raid', seasonFranchiseId: 'sf-high', selections: penaltyRaid, raiderSeasonFranchiseId: 'sf-low' })).toBe('starter');
+    expect(chaosPenaltyRaidedId({ kind: 'raid', seasonFranchiseId: 'sf-low', selections: penaltyRaid, raiderSeasonFranchiseId: 'sf-low' })).toBeNull();
+    expect(chaosPenaltyRaidedId({ kind: 'raid', seasonFranchiseId: 'sf-high', selections: [pick('x', 'RAID', 'sf-low')], raiderSeasonFranchiseId: 'sf-low' })).toBeNull();
+    expect(chaosPenaltyRaidedId({ kind: 'raid', seasonFranchiseId: 'sf-high', selections: [{ ...penaltyRaid[0], voided_at: '2026-12-02T15:00:00+00:00' }], raiderSeasonFranchiseId: 'sf-low' })).toBeNull();
+  });
+
+  it('finds selected players who are no longer on a roster, and labels them from direct lookups', () => {
+    const rows = [pick('qb', 'RAID'), pick('gone', 'RAID'), { season_franchise_id: 'sf', card_code: 'RAID', athlete_id: null, real_team_id: 't-gone' }, pick('gone', 'RAID')];
+    expect(chaosUnlistedSelectionIds(rows, own)).toEqual({ athleteIds: ['gone'], teamIds: ['t-gone'] });
+    expect(chaosUnlistedSelectionIds([], own)).toEqual({ athleteIds: [], teamIds: [] });
+    expect(chaosAssetLabels([{ id: 'gone', display_name: 'Dropped Player', position: 'WR', real_teams: { abbreviation: 'CCC' } }, { id: 'fa', display_name: 'No Team', position: 'RB', real_teams: null }], [{ id: 't-gone', abbreviation: 'ZZZ' }]))
+      .toEqual({ gone: 'Dropped Player • WR • CCC', fa: 'No Team • RB • FA', 't-gone': 'ZZZ D/ST' });
   });
 });
