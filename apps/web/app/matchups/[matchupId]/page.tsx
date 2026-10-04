@@ -7,6 +7,7 @@ import MatchupLiveRefresh from './MatchupLiveRefresh';
 import { matchupRowLabel, matchupStatus } from './matchupAccessibility';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown, type ScoreDetail } from './scoreDetails';
 import { gameIsLive } from './matchupGameState';
+import { chaosClauseSentence, presentChaosClause } from '../../../lib/matchups/chaosClause';
 
 type FranchiseCard = {
   name?: string;
@@ -45,7 +46,7 @@ export default async function MatchupPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
-  const { data: matchup } = await supabase.from('matchups').select('id,league_season_id,week,event_type,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,winner_season_franchise_id').eq('id', matchupId).maybeSingle();
+  const { data: matchup } = await supabase.from('matchups').select('id,league_season_id,week,event_type,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,winner_season_franchise_id,context').eq('id', matchupId).maybeSingle();
   if (!matchup) notFound();
   const { data: sf } = await supabase.from('season_franchises').select('id,franchise_id,franchises(name,abbreviation,primary_color,secondary_color,avatar_key)').eq('league_season_id', matchup.league_season_id);
   const home = sf?.find((x) => x.id === matchup.home_season_franchise_id),
@@ -145,7 +146,10 @@ export default async function MatchupPage({
   const userIsHome = ownedIds.has(home?.franchise_id ?? ''),
     userIsAway = ownedIds.has(away?.franchise_id ?? '');
   const userFranchiseId = userIsHome ? home?.franchise_id : userIsAway ? away?.franchise_id : null;
+  const chaosClause = matchup.is_final && matchup.winner_season_franchise_id ? presentChaosClause(matchup.context) : null;
+  const chaosClauseWinner = chaosClause ? (chaosClause.winnerSide === 'home' ? homeName : awayName) : null;
   const summary = matchupStatus({
+    decidedNote: chaosClause ? chaosClauseSentence(chaosClause, chaosClauseWinner) : null,
     userTeam: userIsHome ? homeName : userIsAway ? awayName : null,
     opponentTeam: userIsHome ? awayName : userIsAway ? homeName : null,
     userScore: userIsHome ? homeScore : userIsAway ? awayScore : null,
@@ -190,6 +194,15 @@ export default async function MatchupPage({
             <p>{awayName}</p>
           </div>
         </div>
+        {chaosClause && (
+          <p className="chaosClauseNote" role="note">
+            <strong>{chaosClause.title}</strong>
+            <span>{chaosClause.basisLabel}</span>
+            <span data-no-translate>
+              {chaosClauseWinner} {chaosClause.basis === 'postseason_seed' ? `#${chaosClause.winnerValue} – #${chaosClause.loserValue}` : `${chaosClause.winnerValue} – ${chaosClause.loserValue}`}
+            </span>
+          </p>
+        )}
         {query.error && (
           <p className="errorNotice" role="alert">
             {query.error}
