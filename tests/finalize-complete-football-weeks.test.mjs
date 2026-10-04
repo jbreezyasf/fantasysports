@@ -29,12 +29,13 @@ test('carry-forward keeps filled slots, copies defenses, and fills an empty week
 });
 
 // Minimal stand-in for the Supabase query builder used by the job.
-function fakeDb({games,matchups,lineups,franchises,failRecomputeFor=new Set()}){
+function fakeDb({games,matchups,lineups,franchises,overrides=[],failRecomputeFor=new Set()}){
   const calls={recompute:[],publish:[],inserted:[]};
   const query=(table)=>{
     const filters=[];
     const run=()=>{
-      const source={real_games:games,matchups,lineups,season_franchises:franchises}[table]??[];
+      const source={real_games:games,matchups,lineups,season_franchises:franchises,fantasy_week_close_overrides:overrides}[table]??[];
+      if(table==='fantasy_week_close_overrides'&&overrides===null)return {data:null,error:{message:'relation "public.fantasy_week_close_overrides" does not exist'}};
       return {data:source.filter(row=>filters.every(f=>f(row))),error:null};
     };
     const api={
@@ -95,4 +96,64 @@ test('one league failing does not stop the others, and the run still reports fai
     error=>{assert.match(error.message,/week 2 league season A: boom/);assert.equal(error.failures.length,1);return true;}
   );
   assert.deepEqual(db.calls.recompute,['mB2'],'league B still closed');
+});
+
+import {weekCloseStatus} from '../scripts/finalize-complete-football-weeks.mjs';
+
+// The same truth table is asserted against the SQL rule in
+// supabase/tests/week_close_terminal_game_rule.sql.
+const past='2026-09-20T17:00:00Z', at=new Date('2026-09-23T12:00:00Z');
+const week=(...states)=>states.map(state=>({state,starts_at:past}));
+
+test('a canceled game does not block the week; every non-terminal state does',()=>{
+  assert.equal(isWeekComplete(week('final','canceled'),at),true);
+  assert.equal(isWeekComplete(week('canceled'),at),true);
+  for(const state of ['scheduled','in_progress','delayed','suspended','unknown'])assert.equal(isWeekComplete(week('final',state),at),false,state);
+  assert.equal(isWeekComplete([],at),false,'a week with no games is never complete');
+});
+
+test('a postponed game blocks the week until an operator override exists',()=>{
+  assert.equal(isWeekComplete(week('final','postponed'),at),false);
+  assert.deepEqual(weekCloseStatus(week('final','postponed'),at,{postponedOverride:true}),{games:2,notStarted:0,unfinished:0,postponed:1,override:true,overrideApplied:true,complete:true});
+  // A postponed game is often re-dated into the future; that must not matter once overridden.
+  assert.equal(isWeekComplete([{state:'final',starts_at:past},{state:'postponed',starts_at:'2026-12-01T00:00:00Z'}],at,{postponedOverride:true}),true);
+});
+
+test('the override only waives postponed games',()=>{
+  assert.equal(isWeekComplete(week('final','postponed','in_progress'),at,{postponedOverride:true}),false);
+  assert.equal(isWeekComplete(week('postponed'),at,{postponedOverride:true}),false,'a week of only postponed games never closes');
+  assert.equal(weekCloseStatus(week('final','final'),at,{postponedOverride:true}).overrideApplied,false);
+});
+
+const postponedSeason=overrides=>({
+  games:[{competition_season_id:'cs',week:1,state:'final',starts_at:'2026-09-10T00:00:00Z'},{competition_season_id:'cs',week:1,state:'postponed',starts_at:'2026-09-13T00:00:00Z'},{competition_season_id:'cs',week:2,state:'scheduled',starts_at:'2026-09-17T00:00:00Z'}],
+  franchises:[{id:'a1',league_season_id:'A'}],matchups:[{id:'mA1',league_season_id:'A',week:1,is_final:false}],lineups:[],overrides,
+});
+const run=db=>finalizeCompleteFootballWeeks({db,competitionSeasonId:'cs',leagueSeasons:[{id:'A'}],throughWeek:1,now:new Date('2026-09-16T12:00:00Z')});
+const captureWarnings=async fn=>{const seen=[];const original=console.warn;console.warn=line=>seen.push(JSON.parse(line));try{return [await fn(),seen];}finally{console.warn=original;}};
+
+test('job: a postponed game leaves the week open and says why',async()=>{
+  const db=fakeDb(postponedSeason([]));
+  const [results,warnings]=await captureWarnings(()=>run(db));
+  assert.deepEqual(results,[{week:1,status:'open',blockedByPostponedGames:1}]);
+  assert.deepEqual(db.calls.recompute,[]);
+  assert.equal(warnings[0].warning,'postponed-game-blocks-week-close');
+});
+
+test('job: the operator override closes the week and is logged and reported',async()=>{
+  const db=fakeDb(postponedSeason([{competition_season_id:'cs',week:1,reason:'game moved to week 9',created_by:'juanita'}]));
+  const [results,warnings]=await captureWarnings(()=>run(db));
+  assert.deepEqual(db.calls.recompute,['mA1']);
+  assert.deepEqual(results[0].postponedGameOverride,{postponed:1,reason:'game moved to week 9',createdBy:'juanita'});
+  assert.ok(warnings.some(w=>w.warning==='postponed-game-override-applied'&&w.reason==='game moved to week 9'));
+});
+
+test('job: an override for another week, or an unreadable override table, changes nothing',async()=>{
+  const other=fakeDb(postponedSeason([{competition_season_id:'cs',week:2,reason:'x',created_by:'y'}]));
+  assert.equal((await captureWarnings(()=>run(other)))[0][0].status,'open');
+  const missing=fakeDb(postponedSeason(null));
+  const [results,warnings]=await captureWarnings(()=>run(missing));
+  assert.equal(results[0].status,'open');
+  assert.equal(warnings[0].warning,'postponed-override-unavailable');
+  assert.deepEqual(missing.calls.recompute,[]);
 });
