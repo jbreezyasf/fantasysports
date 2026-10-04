@@ -16,7 +16,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   const invite = Array.isArray(inviteRows) ? inviteRows[0] : null;
 
   if (inviteLookupError) {
-    return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>We couldn't load this invite.</h1><p className="lede">The invitation service is temporarily unavailable. Please try the link again in a moment or ask your commissioner to resend it.</p></section></main>;
+    return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>We couldn&apos;t load this invite.</h1><p className="lede">The invitation service is temporarily unavailable. Please try the link again in a moment or ask your commissioner to resend it.</p></section></main>;
   }
 
   if (!invite) {
@@ -36,7 +36,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   });
 
   if (matchError) {
-    return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>We couldn't verify your account.</h1><p className="lede">Please try this invitation again in a moment.</p></section></main>;
+    return <main><section className="panel"><p className="eyebrow">INVITE STATUS</p><h1>We couldn&apos;t verify your account.</h1><p className="lede">Please try this invitation again in a moment.</p></section></main>;
   }
 
   if (inviteKind !== 'share' && !inviteMatchesUser) {
@@ -65,9 +65,9 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   return (
     <main>
       <section className="panel">
-        <p className="eyebrow">YOU'VE BEEN INVITED</p>
+        <p className="eyebrow">YOU&apos;VE BEEN INVITED</p>
         <h1>Claim your franchise.</h1>
-        <p className="lede">You're joining <strong>{leagueName ?? 'this league'}</strong>. Create the franchise identity that will carry your record, rivalry history, achievements and future championship banners.</p>
+        <p className="lede">You&apos;re joining <strong>{leagueName ?? 'this league'}</strong>. Create the franchise identity that will carry your record, rivalry history, achievements and future championship banners.</p>
         {query.error && <p className="errorNotice" role="alert">{query.error}</p>}
         <form className="authForm" action={acceptLeagueInvite}>
           <input type="hidden" name="invite_token" value={token} />

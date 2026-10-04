@@ -74,7 +74,7 @@ export function prepareVoiceWaiverClaim(input: {
     drop = dropMatches[0];
   }
 
-  let faabBid: number | null = input.rules.faabEnabled ? input.faabBid ?? null : null;
+  const faabBid: number | null = input.rules.faabEnabled ? input.faabBid ?? null : null;
   if (input.rules.faabEnabled) {
     if (faabBid == null || !Number.isFinite(faabBid) || faabBid < 0) return { ok: false as const, code: 'invalid_faab', message: 'Enter a valid FAAB bid before I prepare the waiver claim.' };
     if (input.rules.faabBalance != null && faabBid > input.rules.faabBalance) return { ok: false as const, code: 'invalid_faab', message: `That FAAB bid exceeds your verified budget of ${input.rules.faabBalance}.` };
