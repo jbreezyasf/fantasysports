@@ -728,6 +728,9 @@ begin
       v_cards:=jsonb_build_object('version',1,'card_code',v_side_home->>'card_code','kind',v_side_home->>'kind','home',v_side_home-'card_code'-'kind','away',v_side_away-'card_code'-'kind');
       if v_m.context->'chaos_cards' ? 'bounty' then v_cards:=v_cards||jsonb_build_object('bounty',v_m.context->'chaos_cards'->'bounty'); end if;
       if not v_m.is_final then update chaos_card_selections s set locked_at=now() where s.matchup_id=v_m.id and s.locked_at is null and chaos_asset_game_started(v_m.league_season_id,v_m.week,s.athlete_id,s.real_team_id); end if;
+    elsif v_m.context ? 'chaos_cards' and not v_m.is_final then
+      -- A deal that was withdrawn (or hidden) before the game finished: drop the stale build-up.
+      update matchups set context=context-'chaos_cards' where id=v_m.id;
     end if;
   end if;
   update matchups set home_points=v_home,away_points=v_away where id=v_m.id;

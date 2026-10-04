@@ -447,6 +447,25 @@ select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_ca
 select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections), 'captain: clearing removes the selection row');
 rollback;
 
+-- A postponed game never locks a selection and adds nothing. A withdrawn deal leaves no trace on an open game.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'CAPTAIN');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hte')) = '', 'postponed: the captain plays in the T3-T4 game');
+update public.real_games set state = 'postponed', starts_at = now() - interval '1 hour' where week = 13 and home_team_id = :'t3';
+delete from public.fantasy_player_scores where week = 13 and athlete_id = :'hte';
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[48.50, 42.00] and pg_temp.cards(:'g')->'home' = jsonb_build_object('base', 48.50, 'adjustments', jsonb_build_array(jsonb_build_object('effect', 'captain', 'athlete_id', :'hte', 'real_team_id', null, 'points', 0.00)), 'total', 48.50)
+  and (select locked_at is null from public.chaos_card_selections where season_franchise_id = :'h'), 'POSTPONED: a captain whose game is postponed has no score, adds 0.00, and is not locked');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) = '', 'POSTPONED: the captain can still be changed to a starter whose game has not kicked off');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[68.50, 42.00], 'postponed: new captain counts (48.50 + 20.00)');
+delete from public.chaos_card_deals;
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_draws) and (select count(*) = 0 from public.chaos_card_selections), 'withdrawn deal: deleting the deal row removes its draws and selections');
+select pg_temp.recompute(:'g', false, false) as withdrawn \gset
+select pg_temp.expect(pg_temp.points(:'g') = array[48.50, 42.00] and pg_temp.cards(:'g') is null and (:'withdrawn'::jsonb->'new') = (:'withdrawn'::jsonb->'old'), 'withdrawn deal: the next recompute scores the lineup total, removes the stale build-up, and returns what the pre-cards function returns');
+rollback;
+
 -- ---------------------------------------------------------------------------
 -- 4. WILD SLOT.
 -- ---------------------------------------------------------------------------
