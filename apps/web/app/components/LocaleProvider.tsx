@@ -1,5 +1,6 @@
 'use client';
 
+import { notificationSpanish } from '../settings/notifications/strings';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 export type AppLocale = 'en' | 'es-419';
@@ -176,7 +177,8 @@ const spanish: Record<string, string> = {
   'Waiver recommendations prioritize recent production, provider projections, and availability.': 'Las recomendaciones de waivers priorizan la producción reciente, las proyecciones del proveedor y la disponibilidad.',
   'Players are ranked by health and verified recent fantasy production while the next provider rankings update completes.': 'Los jugadores se clasifican por salud y producción fantasy reciente verificada mientras se completa la próxima actualización de rankings.',
   'One identity. Every league. A franchise history designed to outlive the week.':
-    'Una identidad. Cada liga. Una historia de franquicia diseñada para durar mucho más que una semana.',
+    'Una identidad. Cada liga. Una historia de franquicia diseñada para durar mucho más que una semana.',  // Notification settings (app/settings/notifications/strings.ts).
+  ...notificationSpanish,
 };
 
 type LocaleContextValue = {

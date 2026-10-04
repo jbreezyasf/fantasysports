@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useLocale } from './LocaleProvider';
 
 const DISMISSED_KEY = 'big-exec-pwa-install-dismissed';
+export const SHOW_INSTALL_PROMPT_EVENT = 'big-exec:show-install-prompt';
 const DISMISS_FOR_MS = 7 * 24 * 60 * 60 * 1000;
 
 type InstallChoice = { outcome: 'accepted' | 'dismissed'; platform: string };
@@ -36,6 +37,7 @@ export default function PwaInstallPrompt() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosHelp, setShowIosHelp] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [requested, setRequested] = useState(false);
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -44,7 +46,19 @@ export default function PwaInstallPrompt() {
       });
     }
 
-    if (isStandalone() || isInstallPromptDismissed(localStorage.getItem(DISMISSED_KEY))) return;
+    // The notification settings page links here: "Show install steps" re-opens this card even
+    // after "Not now", because push on iPhone and iPad needs the Home Screen app.
+    const showOnRequest = () => {
+      if (isStandalone()) return;
+      localStorage.removeItem(DISMISSED_KEY);
+      if (isIosBrowser()) setShowIosHelp(true);
+      setRequested(true);
+      setVisible(true);
+    };
+    window.addEventListener(SHOW_INSTALL_PROMPT_EVENT, showOnRequest);
+    const removeRequestListener = () => window.removeEventListener(SHOW_INSTALL_PROMPT_EVENT, showOnRequest);
+
+    if (isStandalone() || isInstallPromptDismissed(localStorage.getItem(DISMISSED_KEY))) return removeRequestListener;
 
     if (isIosBrowser()) {
       setShowIosHelp(true);
@@ -65,6 +79,7 @@ export default function PwaInstallPrompt() {
     window.addEventListener('beforeinstallprompt', capturePrompt);
     window.addEventListener('appinstalled', installed);
     return () => {
+      removeRequestListener();
       window.removeEventListener('beforeinstallprompt', capturePrompt);
       window.removeEventListener('appinstalled', installed);
     };
@@ -83,14 +98,14 @@ export default function PwaInstallPrompt() {
     setInstallEvent(null);
   };
 
-  if (!visible || gameplayRoute || (!installEvent && !showIosHelp)) return null;
+  if (!visible || gameplayRoute || (!installEvent && !showIosHelp && !requested)) return null;
 
   return (
-    <aside className="pwaInstallPrompt" aria-labelledby="pwa-install-title" aria-live="polite">
+    <aside id="pwa-install-prompt" className="pwaInstallPrompt" aria-labelledby="pwa-install-title" aria-live="polite">
       <Image src="/icons/icon-192.png" width={54} height={54} alt="" />
       <div className="pwaInstallCopy">
         <strong id="pwa-install-title">{t('Install Big Exec')}</strong>
-        <p>{showIosHelp
+        <p>{showIosHelp || !installEvent
           ? t('Tap Share, then choose Add to Home Screen.')
           : t('Add Big Exec to your home screen for faster game-day access.')}</p>
       </div>
