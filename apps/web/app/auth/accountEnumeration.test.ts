@@ -7,6 +7,16 @@ const state = vi.hoisted(() => ({
   resetResult: { error: null as null | { message: string } }
 }));
 
+// The auth actions read request headers for rate limiting. These tests run
+// outside a request scope, and the limiter fails open without its table.
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ 'x-forwarded-for': '203.0.113.7' }),
+}));
+vi.mock('../../lib/security/rateLimit', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../lib/security/rateLimit')>()),
+  checkRateLimits: vi.fn(async () => ({ allowed: true })),
+}));
+
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => { throw new Error(`REDIRECT:${url}`); }
 }));
