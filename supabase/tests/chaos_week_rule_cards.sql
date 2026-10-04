@@ -201,12 +201,30 @@ $$ select array[home_points, away_points] from public.matchups where id = p_matc
 -- Fixture surgery: which card a matchup holds (the deal itself is tested separately).
 create function pg_temp.force_card(p_matchup uuid, p_code text) returns void language sql as
 $$ update public.chaos_card_draws set card_code = p_code where matchup_id = p_matchup $$;
-create function pg_temp.deal() returns jsonb language sql as
-$$ select public.deal_chaos_week_cards((select ls from ids), 13) $$;
+-- The operator opts the league season in (docs/product/CHAOS_WEEK_RULE_CARDS.md,
+-- section 5), then the system deals. Section 2b tests the deal WITHOUT the opt-in.
+create function pg_temp.deal() returns jsonb language plpgsql as $$
+begin
+  update public.league_seasons set chaos_cards_enabled = true where id = (select ls from ids);
+  return public.deal_chaos_week_cards((select ls from ids), 13);
+end $$;
+-- THE CLOCK. now() does not move inside a test transaction, so a kickoff is
+-- simulated by moving the game's start into the past. The automatic rule keeps
+-- a mark of the time it was last evaluated (chaos_card_auto_marks) and ignores
+-- kickoffs at or before it; a mark written "now" by an earlier step of the same
+-- scenario would wrongly sit AFTER the simulated kickoff. So the helpers that
+-- move a kickoff into the past move every later mark to just before that
+-- kickoff: exactly the state of a real week in which the rule was last
+-- evaluated before the game started. Scenarios that test the mark itself use
+-- pg_temp.kickoff_keeping_marks.
+create function pg_temp.rewind_marks(p_before timestamptz) returns void language sql as
+$$ update public.chaos_card_auto_marks set evaluated_through = p_before - interval '1 second' where evaluated_through >= p_before $$;
 create function pg_temp.kickoff(p_home_team uuid) returns void language sql as
-$$ update public.real_games set starts_at = now() - interval '1 hour', state = 'in_progress' where week = 13 and home_team_id = p_home_team $$;
+$$ update public.real_games set starts_at = now() - interval '1 hour', state = 'in_progress' where week = 13 and home_team_id = p_home_team;
+   select pg_temp.rewind_marks(now() - interval '1 hour') $$;
 create function pg_temp.finish_week13() returns void language sql as
-$$ update public.real_games set starts_at = now() - interval '5 hours', state = 'final' where week = 13 $$;
+$$ update public.real_games set starts_at = now() - interval '5 hours', state = 'final' where week = 13;
+   select pg_temp.rewind_marks(now() - interval '5 hours') $$;
 
 -- ---------------------------------------------------------------------------
 -- Base: Weeks 1-12 final and Week 13 created, every recompute compared.
@@ -286,6 +304,24 @@ begin;
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) = 'No rule card has been dealt to this matchup', 'no card: a selection is refused');
 select pg_temp.expect((pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 2, %L, null)', :'h', 'RB', :'hb2'))) = '', 'no card: set_lineup_slot still moves a bench player into the lineup');
 select pg_temp.expect((select count(*) = 1 from public.lineups where season_franchise_id = :'h' and week = 13 and athlete_id = :'hb2' and slot = 'RB' and slot_index = 2), 'no card: the lineup row is written');
+-- The triggers on lineups and roster_entries find nothing to do without a selection card.
+select pg_temp.kickoff(:'t1');
+update public.roster_entries set dropped_at = now() where season_franchise_id = :'h' and athlete_id = :'hb1';
+insert into public.roster_entries(season_franchise_id, athlete_id, acquired_via) values (:'h', :'fa', 'free_agent');
+delete from public.lineups where season_franchise_id = :'h' and week = 13 and athlete_id = :'hte';
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections) and (select count(*) = 0 from public.chaos_card_auto_marks) and (select count(*) = 0 from public.league_feed_events where event_type = 'chaos_raid'),
+  'no card: lineup and roster changes after a kickoff (drop, add, lineup delete) record no selection, no evaluation mark and no feed event');
+rollback;
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(d.matchup_id, 'TWIST_TE_DOUBLE') from public.chaos_card_draws d;
+select pg_temp.force_card(:'g', 'BOUNTY');
+select pg_temp.kickoff(:'t1');
+update public.roster_entries set dropped_at = now() where season_franchise_id = :'h' and athlete_id = :'hb1';
+insert into public.roster_entries(season_franchise_id, athlete_id, acquired_via) values (:'h', :'fa', 'free_agent');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'TE')) = '' and public.recompute_matchup(:'g', false) is not null
+  and (select count(*) = 0 from public.chaos_card_selections) and (select count(*) = 0 from public.chaos_card_auto_marks),
+  'cards that take no selection (Bounty, twists): lineup and roster changes and scoring record no selection and no evaluation mark');
 rollback;
 begin;
 select pg_temp.finish_week13();
@@ -307,7 +343,39 @@ select pg_temp.expect(public.chaos_card_deal_order('big-exec-audit-seed-0002', (
 select pg_temp.expect(public.chaos_card_deal_order('s', array['B','A','C']) = public.chaos_card_deal_order('s', array['C','B','A']), 'deal order: does not depend on the order the deck is passed in');
 select pg_temp.expect((select count(*) = 10 and count(*) filter (where kind = 'twist') = 6 and bool_and(length(name_es) > 0 and length(rules_es) > 0 and length(rules_en) > 0) from public.chaos_cards), 'deck: 10 active cards (4 named cards, 6 scoring twists), each with English and Spanish name and rules');
 
+-- ---------------------------------------------------------------------------
+-- 2b. PER-LEAGUE-SEASON OPT-IN (owner decision 2026-10-04). The application
+--     flag is not visible to the database; "flag on" here means the system path
+--     asks for the deal, which is all the flag does. Without the opt-in the
+--     deal is refused, nothing is written, and scoring is what it was.
+-- ---------------------------------------------------------------------------
 begin;
+select pg_temp.expect((select chaos_cards_enabled is false from public.league_seasons where id = :'ls') and (select column_default = 'false' and is_nullable = 'NO' from information_schema.columns where table_name = 'league_seasons' and column_name = 'chaos_cards_enabled'),
+  'OPT-IN: league_seasons.chaos_cards_enabled exists, is not null, defaults to false, and the migration opted nobody in');
+select pg_temp.expect(pg_temp.error_of(format('select public.deal_chaos_week_cards(%L, 13)', :'ls')) = 'Rule cards are not enabled for this league season', 'OPT-IN OFF: the system deal is REFUSED for a league season that is not opted in');
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_deals) and (select count(*) = 0 from public.chaos_card_draws) and (select count(*) = 0 from public.league_feed_events where event_type = 'chaos_cards_dealt') and public.audit_chaos_week_deal(:'ls', 13) = '{"dealt":false}'::jsonb,
+  'OPT-IN OFF: no deal row, no draw, no feed event');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb1')) = 'No rule card has been dealt to this matchup'
+  and public.chaos_auto_pick(:'g', :'h', 'wild_slot') is not null and public.chaos_lock_auto_selection(:'g', :'h') is null and (select count(*) = 0 from public.chaos_card_selections) and (select count(*) = 0 from public.chaos_card_auto_marks),
+  'OPT-IN OFF: no selection can be made, and nothing is ever recorded or marked for the game');
+select pg_temp.finish_week13();
+select pg_temp.expect(pg_temp.close_week(13) = 5 and pg_temp.points(:'g') = array[56.50, 42.00] and (select bool_and(not (context ? 'chaos_cards')) from public.matchups where week = 13),
+  'OPT-IN OFF: UNCHANGED SCORING. All five Chaos Week games close with old and new recompute_matchup agreeing on every return value and every row; 56.50 to 42.00; nothing about rule cards is written');
+rollback;
+begin;
+-- Another league season being opted in changes nothing for this one.
+insert into public.league_seasons(id, league_id, competition_season_id, roster_config, chaos_cards_enabled) values ('00000000-0000-0000-0000-0000000000b2', gen_random_uuid(), (select cs from ids), '{}'::jsonb, true);
+select pg_temp.expect(pg_temp.error_of(format('select public.deal_chaos_week_cards(%L, 13)', :'ls')) = 'Rule cards are not enabled for this league season'
+  and pg_temp.error_of('select public.deal_chaos_week_cards(''00000000-0000-0000-0000-0000000000b2'', 13)') = 'No Chaos Week matchups in week 13', 'OPT-IN is per league season: opting in one league season does not open another');
+update public.league_seasons set chaos_cards_enabled = true where id = :'ls';
+select pg_temp.expect(public.deal_chaos_week_cards(:'ls', 13)->>'status' = 'dealt', 'OPT-IN ON: the same call deals');
+update public.league_seasons set chaos_cards_enabled = false where id = :'ls';
+select pg_temp.expect(pg_temp.error_of(format('select public.deal_chaos_week_cards(%L, 13)', :'ls')) = 'Rule cards are not enabled for this league season' and (select count(*) = 5 from public.chaos_card_draws),
+  'OPT-IN withdrawn after the deal: the deal function refuses again (it does not even report the existing deal); the cards already dealt are untouched');
+rollback;
+
+begin;
+update public.league_seasons set chaos_cards_enabled = true where id = :'ls';
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.deal_chaos_week_cards(%L, 13)', :'ls')) = 'System use only', 'deal: a signed-in user cannot deal');
 select pg_temp.expect(pg_temp.error_of(format('select public.deal_chaos_week_cards(%L, 12)', :'ls')) = 'No Chaos Week matchups in week 12', 'deal: refused for a week that is not Chaos Week');
 savepoint started;
@@ -369,10 +437,25 @@ select pg_temp.expect(has_function_privilege('authenticated', 'public.chaos_auto
   and not has_function_privilege('authenticated', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute') and not has_function_privilege('anon', 'public.chaos_bounty_waiver_order(uuid, timestamptz)', 'execute')
   and not has_function_privilege('authenticated', 'public.chaos_lock_auto_captain(uuid, uuid)', 'execute') and not has_function_privilege('anon', 'public.chaos_lock_auto_captain(uuid, uuid)', 'execute'),
   'privileges: signed-in managers may ask who the automatic captain would be (the two functions run with the caller''s rights, not the definer''s); anon may not; the bounty order and recording an automatic captain are for the service role');
-select pg_temp.expect((select count(*) = 17 and bool_and(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.proname in ('chaos_asset_game_started','chaos_week_first_kickoff','chaos_lower_seed','chaos_card_deal_order','chaos_card_side_score','chaos_captain_expected_points','chaos_auto_captain','chaos_lock_auto_captain','chaos_bounty_waiver_order','deal_chaos_week_cards','audit_chaos_week_deal','set_chaos_card_selection','clear_chaos_card_selection','chaos_clause_decision','recompute_matchup','set_lineup_slot','process_due_waivers')),
+select pg_temp.expect(has_function_privilege('authenticated', 'public.chaos_auto_pick(uuid, uuid, text)', 'execute') and not has_function_privilege('anon', 'public.chaos_auto_pick(uuid, uuid, text)', 'execute')
+  and not (select prosecdef from pg_proc where oid = 'public.chaos_auto_pick(uuid, uuid, text)'::regprocedure)
+  and not has_function_privilege('authenticated', 'public.chaos_lock_auto_selection(uuid, uuid)', 'execute') and not has_function_privilege('anon', 'public.chaos_lock_auto_selection(uuid, uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.chaos_sync_selections(uuid)', 'execute') and not has_function_privilege('anon', 'public.chaos_sync_selections(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.chaos_cards_sync_on_change()', 'execute') and not has_function_privilege('anon', 'public.chaos_cards_sync_on_change()', 'execute')
+  and has_function_privilege('service_role', 'public.chaos_lock_auto_selection(uuid, uuid)', 'execute') and has_function_privilege('service_role', 'public.chaos_sync_selections(uuid)', 'execute'),
+  'privileges: signed-in managers may ask what the automatic Wild Slot or raid would be (caller''s rights); recording a selection, syncing a matchup and the trigger function are not callable by managers or anon');
+select pg_temp.expect((select count(*) = 21 and bool_and(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname in ('chaos_asset_game_started','chaos_week_first_kickoff','chaos_lower_seed','chaos_card_deal_order','chaos_card_side_score','chaos_captain_expected_points','chaos_auto_captain','chaos_auto_pick','chaos_lock_auto_captain','chaos_lock_auto_selection','chaos_sync_selections','chaos_cards_sync_on_change','chaos_bounty_waiver_order','deal_chaos_week_cards','audit_chaos_week_deal','set_chaos_card_selection','clear_chaos_card_selection','chaos_clause_decision','recompute_matchup','set_lineup_slot','process_due_waivers')),
   'every function this migration creates or replaces has a fixed search_path');
-select pg_temp.expect((select bool_and(c.relrowsecurity) and count(*) = 5 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname in ('chaos_cards','chaos_card_deals','chaos_card_draws','chaos_card_selections','chaos_bounty_grants')), 'RLS is enabled on all five new tables');
+select pg_temp.expect((select bool_and(c.relrowsecurity) and count(*) = 6 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname in ('chaos_cards','chaos_card_deals','chaos_card_draws','chaos_card_selections','chaos_bounty_grants','chaos_card_auto_marks')), 'RLS is enabled on all six new tables');
+select pg_temp.expect((select array_agg(t.tgrelid::regclass::text || ':' || t.tgname order by t.tgname) = array['roster_entries:chaos_cards_after_roster_drop', 'lineups:chaos_cards_before_lineup_change', 'roster_entries:chaos_cards_before_roster_change']
+  from pg_trigger t where not t.tgisinternal and t.tgname like 'chaos_cards%'), 'triggers: exactly three, on roster_entries (before a change, after a drop) and lineups (before a change)');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', :'uh', true);
+select pg_temp.expect(pg_temp.error_of(format('insert into public.chaos_card_auto_marks(matchup_id, season_franchise_id, evaluated_through) values (%L, %L, now())', :'g', :'h')) like 'permission denied%'
+  and pg_temp.error_of(format('update public.league_seasons set chaos_cards_enabled = true where id = %L', :'ls')) like 'permission denied%', 'privileges: authenticated cannot write the evaluation marks, and cannot opt a league season in');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
 rollback;
 
 -- A deck smaller than the number of games: cards repeat only after the deck is used up.
@@ -516,8 +599,10 @@ create function pg_temp.give_hb1_history() returns void language sql as $$
   select (select ls from ids), (select id from cast_list where role = 'hb1'), gen_random_uuid(), w, 30.00, '{}'::jsonb from generate_series(10, 12) w
 $$;
 -- T1-T2 kicked off three hours ago, T3-T4 one hour ago (or only the first).
-create function pg_temp.kickoff_at(p_home_team uuid, p_hours_ago integer) returns timestamptz language sql as
+create function pg_temp.kickoff_keeping_marks(p_home_team uuid, p_hours_ago integer) returns timestamptz language sql as
 $$ update public.real_games set starts_at = date_trunc('second', now()) - make_interval(hours => p_hours_ago), state = 'in_progress' where week = 13 and home_team_id = p_home_team returning starts_at $$;
+create function pg_temp.kickoff_at(p_home_team uuid, p_hours_ago integer) returns timestamptz language sql as
+$$ select pg_temp.rewind_marks(date_trunc('second', now()) - make_interval(hours => p_hours_ago)); select pg_temp.kickoff_keeping_marks(p_home_team, p_hours_ago) $$;
 
 begin;
 select pg_temp.deal();
@@ -619,12 +704,18 @@ create policy member_read_lineups on public.lineups for select to authenticated 
 create policy member_read_player_scores on public.fantasy_player_scores for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = fantasy_player_scores.league_season_id and is_league_member(ls.league_id)));
 create policy member_read_team_scores on public.fantasy_team_scores for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = fantasy_team_scores.league_season_id and is_league_member(ls.league_id)));
 create policy member_read_matchups on public.matchups for select to authenticated using (exists (select 1 from league_seasons ls where ls.id = matchups.league_season_id and is_league_member(ls.league_id)));
-grant select on public.lineups, public.fantasy_player_scores, public.fantasy_team_scores, public.season_franchises, public.athletes, public.real_games to authenticated;
+alter table public.roster_entries enable row level security;
+create policy member_read_roster on public.roster_entries for select to authenticated using (exists (select 1 from season_franchises sf join league_seasons ls on ls.id = sf.league_season_id where sf.id = roster_entries.season_franchise_id and is_league_member(ls.league_id)));
+grant select on public.lineups, public.fantasy_player_scores, public.fantasy_team_scores, public.season_franchises, public.athletes, public.real_games, public.roster_entries to authenticated;
+select public.chaos_auto_pick(:'g', :'h', 'wild_slot') as auto_w, public.chaos_auto_pick(:'g', :'a', 'raid') as auto_r \gset
 set local role authenticated;
 select set_config('request.jwt.claim.sub', :'ua', true);
 select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') = :'auto_h'::jsonb, 'RLS: a league member (here the opponent) gets the same automatic captain the scoring function uses');
+select pg_temp.expect(:'auto_w'::jsonb->>'athlete_id' is not null and :'auto_r'::jsonb->>'athlete_id' is not null and public.chaos_auto_pick(:'g', :'h', 'wild_slot') = :'auto_w'::jsonb and public.chaos_auto_pick(:'g', :'a', 'raid') = :'auto_r'::jsonb,
+  'RLS: a league member gets the same automatic Wild Slot player and automatic raid the scoring function uses (chaos_auto_pick runs with the caller''s rights)');
 select set_config('request.jwt.claim.sub', :'outsider', true);
 select pg_temp.expect(public.chaos_auto_captain(:'g', :'h') is null and (public.chaos_captain_expected_points(:'ls', 13, :'hq', null)->>'games')::int = 0, 'RLS: a user outside the league learns nothing (production read policies copied into this scenario)');
+select pg_temp.expect(public.chaos_auto_pick(:'g', :'h', 'wild_slot') is null and public.chaos_auto_pick(:'g', :'a', 'raid') is null and (select count(*) = 0 from public.chaos_card_auto_marks), 'RLS: a user outside the league learns nothing about the automatic Wild Slot or raid either, and reads no evaluation mark');
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
 rollback to savepoint rls;
@@ -727,9 +818,88 @@ select pg_temp.expect(pg_temp.auto_row(:'g', :'h') @> jsonb_build_object('asset'
 rollback to savepoint late_second_game;
 rollback;
 
+-- NO HINDSIGHT THROUGH A LATER CHANGE (found and closed 2026-10-04, third
+-- round). The automatic rule is evaluated in kickoff order on the lineup as it
+-- stood. Once a kickoff has passed with nothing to lock, a lineup change or a
+-- cleared choice made AFTERWARDS must not hand the captaincy to a starter whose
+-- game has already been played.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'CAPTAIN');
+savepoint bench_the_later_starter;
+select pg_temp.give_hb1_history();
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '', 'no hindsight fixture: before any kickoff the manager starts hb1 (average 30.00, later game), who outranks hq (20.00, first game)');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') is null and pg_temp.auto_pick(:'g', :'h') = :'hb1' || ' preview' and (select evaluated_through = now() from public.chaos_card_auto_marks where season_franchise_id = :'h'),
+  'no hindsight fixture: scoring ran after the first kickoff; hq has played, nothing locked (hb1 outranks him and has not kicked off), and the evaluation mark is the time of that run');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'WR')) = '', 'no hindsight: now that hq''s game has been played, the manager benches hb1');
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hte' || ' preview' and pg_temp.auto_row(:'g', :'h') is null,
+  'NO HINDSIGHT (captain): benching the better-ranked later starter does NOT make hq captain after the fact; the automatic captain is now the best-ranked starter whose game is still to come (hte)');
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') @> jsonb_build_object('asset', :'hte', 'source', 'automatic') and (pg_temp.auto_row(:'g', :'h')->>'locked_at')::timestamptz = :'k3'::timestamptz and pg_temp.points(:'g') = array[64.50, 41.00],
+  'no hindsight (captain): hte locks at its own kickoff (56.50 + 8.00 = 64.50), not hq (+ 20.00)');
+rollback to savepoint bench_the_later_starter;
+savepoint name_then_clear;
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hk')) = '', 'no hindsight fixture: before any kickoff the manager names the kicker (later game) as captain');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '', 'no hindsight: after hq''s game has been played, the manager clears the named captain');
+select pg_temp.expect(pg_temp.auto_pick(:'g', :'h') = :'hte' || ' preview' and (select count(*) = 0 from public.chaos_card_selections where season_franchise_id = :'h'),
+  'NO HINDSIGHT (captain): clearing a named captain after an earlier game does NOT make that game''s starter (hq) captain; the automatic captain is the best-ranked starter still to play (hte)');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hk')) = '', 'no hindsight: the manager may still name a starter who has not kicked off');
+rollback to savepoint name_then_clear;
+-- The gap that was open until 2026-10-04 ("a not-yet-started starter is dropped
+-- between a kickoff and the recording of the lock"): the job is late, nothing
+-- is recorded, and the better-ranked later starter is DROPPED (out of the
+-- lineup first, then off the roster, as claim_free_agent and
+-- process_due_waivers do it). The lineups trigger evaluates the rule on the
+-- lineup as it stood, before the row goes.
+savepoint drop_the_later_starter;
+select pg_temp.give_hb1_history();
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '', 'drop fixture: before any kickoff the manager starts hb1 (average 30.00, later game)');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections) and pg_temp.auto_pick(:'g', :'h') = :'hb1' || ' preview', 'drop fixture: the first game has kicked off, scoring has not run, nothing is recorded; hb1 (not kicked off) outranks hq');
+delete from public.lineups where season_franchise_id = :'h' and week = 13 and athlete_id = :'hb1';
+update public.roster_entries set dropped_at = now() where season_franchise_id = :'h' and athlete_id = :'hb1' and dropped_at is null;
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') is null and pg_temp.auto_pick(:'g', :'h') = :'hte' || ' preview',
+  'A STARTER DROPPED BETWEEN A KICKOFF AND THE RECORDING OF THE LOCK: the rule was evaluated on the lineup as it stood (hb1 outranked hq, so nothing locked at the first kickoff); after the drop hq is NOT made captain after the fact, and the automatic captain is the best-ranked starter still to play (hte)');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.auto_row(:'g', :'h') is null and pg_temp.points(:'g') = array[64.50, 41.00], 'dropped starter: scoring records nothing for seed 1 yet (hte has not kicked off); 56.50 + 8.00 pending');
+rollback to savepoint drop_the_later_starter;
+rollback;
+
 -- ---------------------------------------------------------------------------
 -- 4. WILD SLOT.
 -- ---------------------------------------------------------------------------
+-- Three earlier weeks (10-12) at p_points each for a cast player: an average of p_points.
+create function pg_temp.give_history(p_role text, p_points numeric) returns void language sql as $$
+  insert into public.fantasy_player_scores(league_season_id, athlete_id, game_id, week, points, breakdown)
+  select (select ls from ids), (select id from cast_list where role = p_role), gen_random_uuid(), w, p_points, '{}'::jsonb from generate_series(10, 12) w
+$$;
+-- A player leaves a roster the way claim_free_agent, process_due_waivers and
+-- resolve_trade make him leave: out of the franchise's open lineups first, then
+-- roster_entries.dropped_at is set. p_hours_ago places the drop on the
+-- scenario's clock (kickoffs are simulated 3 hours and 1 hour ago), so
+-- "dropped 6 hours ago" is before every kickoff and "2 hours ago" is between them.
+create function pg_temp.drop_player(p_sf uuid, p_athlete uuid, p_hours_ago integer default 6) returns timestamptz language sql as $$
+  delete from public.lineups where season_franchise_id = p_sf and athlete_id = p_athlete and week = 13;
+  update public.roster_entries set dropped_at = date_trunc('second', now()) - make_interval(hours => p_hours_ago) where season_franchise_id = p_sf and athlete_id = p_athlete and dropped_at is null returning dropped_at
+$$;
+-- A selection row without ids of its own and without its long details.
+create function pg_temp.sel(p_matchup uuid, p_sf uuid) returns jsonb language sql as $$
+  select jsonb_build_object('asset', coalesce(s.athlete_id, s.real_team_id), 'source', s.source, 'from', s.source_season_franchise_id, 'selected_by', s.selected_by, 'locked_at', s.locked_at,
+    'void', s.void_reason, 'voided_at', s.voided_at, 'penalty', coalesce((s.details->>'penalty')::boolean, false), 'replaced', s.details->'replaced'->>'athlete_id',
+    'compared', (select jsonb_agg(coalesce(x->>'athlete_id', x->>'real_team_id') order by ord) from jsonb_array_elements(s.details->'compared') with ordinality t(x, ord)))
+  from public.chaos_card_selections s where s.matchup_id = p_matchup and s.season_franchise_id = p_sf
+$$;
+-- What chaos_auto_pick answers: '<asset> preview|locked[ penalty]', or null.
+create function pg_temp.pick(p_matchup uuid, p_sf uuid, p_kind text) returns text language sql as
+$$ select coalesce(a->>'athlete_id', a->>'real_team_id') || case when a->>'locked_at' is null then ' preview' else ' locked' end || case when a->>'penalty' = 'true' then ' penalty' else '' end from public.chaos_auto_pick(p_matchup, p_sf, p_kind) a $$;
+create function pg_temp.lines(p_matchup uuid, p_side text) returns jsonb language sql as
+$$ select (select jsonb_agg(jsonb_strip_nulls(jsonb_build_object('effect', x->'effect', 'asset', coalesce(x->>'athlete_id', x->>'real_team_id'), 'points', x->'points', 'automatic', x->'automatic', 'penalty', nullif(x->'penalty', 'false'::jsonb), 'locked', case when x ? 'automatic' then x->>'locked_at' is not null end)) order by ord)
+   from jsonb_array_elements(pg_temp.cards(p_matchup)->p_side->'adjustments') with ordinality t(x, ord)) $$;
+
 begin;
 select pg_temp.deal();
 select pg_temp.force_card(:'g', 'WILD_SLOT');
@@ -754,15 +924,211 @@ select pg_temp.expect(pg_temp.points(:'g') = array[71.50, 55.00], 'WILD SLOT sco
 select pg_temp.expect(pg_temp.cards(:'g')->'home' = jsonb_build_object('base', 56.50, 'adjustments', jsonb_build_array(jsonb_build_object('effect', 'wild_slot', 'athlete_id', :'hb1', 'real_team_id', null, 'points', 15.00)), 'total', 71.50), 'WILD SLOT: the adjustment line names the extra player and the points');
 rollback;
 
--- A kicked-off player cannot be picked; no pick means no points.
+-- A kicked-off player cannot be picked; a side that never picks gets the automatic Wild Slot.
 begin;
 select pg_temp.deal();
 select pg_temp.force_card(:'g', 'WILD_SLOT');
+select pg_temp.give_history('hb2', 12.00);
 select pg_temp.kickoff(:'t3');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb1')) = 'That player''s game has already started', 'LOCK wild slot: a player whose game has kicked off cannot be picked');
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb2')) = '', 'wild slot: a bench player whose game has not kicked off can still be picked');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb2')) = '', 'wild slot: a bench player whose game has not kicked off can still be picked (the automatic pick, hb2, had not kicked off, so nothing had locked)');
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[62.50, 42.00], 'NO SELECTION: 56.50 + 6.00 for the side that picked; 42.00 for the side that never picked');
+select pg_temp.expect(pg_temp.points(:'g') = array[62.50, 55.00] and pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'ab1', 'source', 'automatic'),
+  'NO SELECTION (changed 2026-10-04): 56.50 + 6.00 for the side that picked; the side that never picked gets the AUTOMATIC Wild Slot (ab1, its only non-starter, kicked off): 42.00 + 13.00 = 55.00');
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- 4b. WILD SLOT: void on drop, and the AUTOMATIC Wild Slot (owner decisions of
+--     2026-10-04, third round). Seed 1's non-starters: hb1 (plays in the later
+--     T3-T4 game, 15.00 in Week 13) and hb2 (plays in the first T1-T2 game,
+--     6.00). Seed 10's only non-starter: ab1 (T3-T4 game, 13.00).
+-- ---------------------------------------------------------------------------
+-- VOID ON DROP, THEN RE-CHOOSE.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'WILD_SLOT');
+select pg_temp.give_history('hb1', 30.00);
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.expect(pg_temp.pick(:'g', :'h', 'wild_slot') = :'hb1' || ' preview' and pg_temp.pick(:'g', :'a', 'wild_slot') = :'ab1' || ' preview' and pg_temp.pick(:'g', :'h', 'raid') is null and pg_temp.pick(:'g', :'h', 'nonsense') is null,
+  'AUTOMATIC WILD SLOT preview: the franchise''s best-ranked non-starter (hb1, average 30.00, over hb2, 12.00); seed 10''s is ab1');
+select pg_temp.expect((select jsonb_agg(x - 'kickoff' order by ord) from jsonb_array_elements(public.chaos_auto_pick(:'g', :'h', 'wild_slot')->'compared') with ordinality t(x, ord)) = jsonb_build_array(
+    jsonb_build_object('athlete_id', :'hb1', 'real_team_id', null, 'expected', 30.00, 'games', 3, 'season_total', 90.00),
+    jsonb_build_object('athlete_id', :'hb2', 'real_team_id', null, 'expected', 12.00, 'games', 3, 'season_total', 36.00))
+  and public.chaos_auto_pick(:'g', :'h', 'wild_slot') @> jsonb_build_object('basis', 'recent_average_v1', 'expected', 30.00, 'locked_at', null) and not (public.chaos_auto_pick(:'g', :'h', 'wild_slot') ? 'penalty'),
+  'automatic wild slot: ranked by the SAME function as the automatic captain (recent_average_v1); only non-starters on the active roster are compared, no starter and no opponent');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb2')) = '', 'void: seed 1 names hb2 as its Wild Slot player');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[62.50, 55.00] and pg_temp.lines(:'g', 'home') = jsonb_build_array(jsonb_build_object('effect', 'wild_slot', 'asset', :'hb2', 'points', 6.00))
+  and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'wild_slot', 'asset', :'ab1', 'points', 13.00, 'automatic', true, 'locked', false)),
+  'void fixture: the NAMED pick wins over the automatic one (56.50 + 6.00, not + 15.00) and its line is not marked automatic; seed 10, which named nobody, shows its automatic pick as not yet locked');
+select pg_temp.drop_player(:'h', :'hb2') as dropped_hb2 \gset
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hb2', 'source', 'named', 'void', 'dropped', 'voided_at', :'dropped_hb2'::timestamptz, 'locked_at', null),
+  'VOID ON DROP: the moment the Wild Slot pick is dropped (before its kickoff) its row is marked void, with the time of the drop');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[71.50, 55.00] and pg_temp.lines(:'g', 'home') = jsonb_build_array(jsonb_build_object('effect', 'wild_slot', 'asset', :'hb1', 'points', 15.00, 'automatic', true, 'locked', false)),
+  'VOID: the dropped pick adds NOTHING (no 6.00); until the manager chooses again the automatic rule applies to the roster as it now stands (hb1)');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb2')) = 'Your Wild Slot player must be on your active roster', 'void: the dropped player cannot be chosen again');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hte')) = 'That player is already starting; the Wild Slot is for a player outside your starting lineup', 'RE-CHOOSE under the normal rules: a starter is still refused');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'K')) = ''
+  and pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hk')) = '', 'VOID THEN RE-CHOOSE: the manager benches the kicker and names him as the new Wild Slot player');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hk', 'source', 'named', 'selected_by', :'uh', 'void', null, 'voided_at', null) and (select count(*) = 1 from public.chaos_card_selections where season_franchise_id = :'h')
+  and pg_temp.points(:'g') = array[56.50, 55.00] and pg_temp.lines(:'g', 'home') = jsonb_build_array(jsonb_build_object('effect', 'wild_slot', 'asset', :'hk', 'points', 9.00)),
+  'RE-CHOSEN: one row, named, no longer void; base 56.50 - 9.00 = 47.50, + 9.00 for the new pick = 56.50; the automatic pick (hb1, + 15.00) does not replace a named one');
+-- A drop AFTER the pick's game has been played does not void it.
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select pg_temp.drop_player(:'h', :'hk', 0);
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hk', 'void', null) and pg_temp.points(:'g') = array[56.50, 55.00],
+  'NOT VOID: a pick dropped AFTER its own kickoff keeps counting (the points were earned while the player was on the roster)');
+rollback;
+
+-- VOID ON DROP, THEN AUTOMATIC. Also: a pick that is traded away is void in the same way.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'WILD_SLOT');
+select pg_temp.give_history('hb1', 30.00);
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb1')) = '', 'void then automatic: seed 1 names hb1');
+-- hb1 leaves in a trade: dropped from seed 1's roster, added to another franchise's.
+select pg_temp.drop_player(:'h', :'hb1') as traded_hb1 \gset
+insert into public.roster_entries(season_franchise_id, athlete_id, acquired_via) values (:'h3', :'hb1', 'trade');
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hb1', 'void', 'dropped', 'voided_at', :'traded_hb1'::timestamptz) and pg_temp.pick(:'g', :'h', 'wild_slot') = :'hb2' || ' preview',
+  'VOID: a Wild Slot pick that leaves the roster in a trade is void like a dropped one; the automatic pick is now hb2');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.expect(pg_temp.pick(:'g', :'h', 'wild_slot') = :'hb2' || ' locked' and pg_temp.sel(:'g', :'h')->>'source' = 'named', 'void then automatic: hb2''s game kicks off with nothing chosen again; the automatic pick is due, scoring has not run');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'K')) = ''
+  and pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hk'))
+    = 'Wild Slot locked: no player was named before your automatic Wild Slot player''s game kicked off, so the automatic pick is fixed for the week',
+  'LOCK AT KICKOFF: after the automatic Wild Slot player''s kickoff the manager cannot name anyone, even a player who has not kicked off; the lineup change before it recorded the lock');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'h') = jsonb_build_object('asset', :'hb2', 'source', 'automatic', 'from', :'h', 'selected_by', null, 'locked_at', :'k1'::timestamptz, 'void', null, 'voided_at', null, 'penalty', false, 'replaced', :'hb1', 'compared', jsonb_build_array(:'hb2')),
+  'VOID THEN AUTOMATIC: the void row is replaced by ONE automatic row: hb2, source automatic, no user, locked at hb2''s kickoff, recording the pick it replaced and what was compared (the kicker benched afterwards is not in it)');
+select pg_temp.expect(pg_temp.points(:'g') = array[53.50, 55.00] and pg_temp.lines(:'g', 'home') = jsonb_build_array(jsonb_build_object('effect', 'wild_slot', 'asset', :'hb2', 'points', 6.00, 'automatic', true, 'locked', true))
+  and pg_temp.cards(:'g')->'home'->'adjustments'->0 @> jsonb_build_object('basis', 'recent_average_v1', 'expected', 12.00, 'locked_at', :'k1'::timestamptz) and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'wild_slot', 'asset', :'ab1', 'points', 13.00, 'automatic', true, 'locked', false)),
+  'void then automatic, score: 56.50 - 9.00 (kicker benched) + 6.00 = 53.50; the line says automatic and locked');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = 'Selection locked: that player''s game has already started', 'automatic wild slot: it cannot be cleared');
+rollback;
+
+-- THE AUTOMATIC WILD SLOT LOCK, in kickoff order, on time and late.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'WILD_SLOT');
+savepoint on_time;
+select pg_temp.give_history('hb1', 30.00);
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.pick(:'g', :'h', 'wild_slot') = :'hb1' || ' preview' and (select count(*) = 0 from public.chaos_card_selections) and pg_temp.points(:'g') = array[71.50, 55.00],
+  'AUTOMATIC WILD SLOT, first kickoff: hb2 has kicked off but is outranked by hb1, who has not, so NOTHING locks and nothing is recorded');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb2')) = 'That player''s game has already started'
+  and pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'WILD_SLOT', :'hb1')) = '' and pg_temp.err_as(:'uh', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'h')) = '',
+  'before its automatic pick kicks off, seed 1 may still name (and clear) a non-starter who has not kicked off, but not one who has');
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'h') = jsonb_build_object('asset', :'hb1', 'source', 'automatic', 'from', :'h', 'selected_by', null, 'locked_at', :'k3'::timestamptz, 'void', null, 'voided_at', null, 'penalty', false, 'replaced', null, 'compared', jsonb_build_array(:'hb1', :'hb2'))
+  and pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'ab1', 'source', 'automatic', 'locked_at', :'k3'::timestamptz) and pg_temp.points(:'g') = array[71.50, 55.00],
+  'AUTOMATIC WILD SLOT, second kickoff: hb1 locks at ITS OWN kickoff, recorded with source automatic; seed 10''s ab1 locks at the same kickoff; 56.50 + 15.00 and 42.00 + 13.00');
+create temp table wild_snap on commit drop as select pg_temp.snapshot(:'g') as s;
+select public.recompute_matchup(:'g', false), public.recompute_matchup(:'g', false);
+select pg_temp.expect((select pg_temp.snapshot(:'g') = s from wild_snap) and (select count(*) = 2 from public.chaos_card_selections), 'IDEMPOTENT: scoring run twice more leaves one automatic row per franchise, unchanged, and the same result');
+-- No hindsight: Week 13 scores do not move the pick.
+update public.fantasy_player_scores set points = 0 where week = 13 and athlete_id = :'hb1';
+update public.fantasy_player_scores set points = 99 where week = 13 and athlete_id = :'hb2';
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'h')->>'asset' = :'hb1' and pg_temp.points(:'g') = array[56.50, 55.00], 'NO HINDSIGHT: with hb1 scoring 0 and hb2 99 in Week 13 the automatic pick is still hb1 and adds 0.00');
+select pg_temp.finish_week13();
+select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'automatic wild slot: Week 13 closes');
+select pg_temp.expect((select is_final and home_points = 56.50 and away_points = 55.00 from public.matchups where id = :'g')
+  and (select payload->'chaos_cards' = pg_temp.cards(:'g') from public.league_feed_events where event_type = 'matchup_final' and payload->>'matchup_id' = :'g'), 'AUTOMATIC WILD SLOT: Week 13 closes with both automatic picks in the final build-up and in the feed');
+create temp table wild_final on commit drop as select pg_temp.snapshot(:'g') as s;
+select pg_temp.drop_player(:'h', :'hb1', 0);
+select public.recompute_matchup(:'g', true), public.recompute_matchup(:'g', false);
+select pg_temp.expect((select pg_temp.snapshot(:'g') = s from wild_final), 'STABLE: after the game is final, dropping the automatic pick and recomputing changes nothing');
+rollback to savepoint on_time;
+
+savepoint late_first;
+select pg_temp.give_history('hb2', 30.00);
+select pg_temp.give_history('hb1', 12.00);
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections) and pg_temp.pick(:'g', :'h', 'wild_slot') = :'hb2' || ' locked', 'late job: both games have kicked off and nothing is recorded');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hb2', 'source', 'automatic', 'locked_at', :'k1'::timestamptz) and pg_temp.points(:'g') = array[62.50, 55.00],
+  'LATE JOB, kickoff order: at the first kickoff the best-ranked non-starter (hb2) was in that game, so it is the Wild Slot player, locked at the FIRST kickoff (56.50 + 6.00), although hb1 would add more');
+rollback to savepoint late_first;
+
+savepoint late_second;
+select pg_temp.give_history('hb1', 30.00);
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.kickoff_at(:'t3', 1) as k3 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hb1', 'source', 'automatic', 'locked_at', :'k3'::timestamptz) and pg_temp.points(:'g') = array[71.50, 55.00],
+  'LATE JOB, kickoff order: at the first kickoff the best-ranked non-starter (hb1) had not kicked off, so nothing locked then; hb1 locked at the SECOND kickoff');
+rollback to savepoint late_second;
+
+-- The job is late and the roster or lineup changes first: the lock is recorded from the state BEFORE the change.
+savepoint late_lineup_first;
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'TE')) = '', 'late job: after the first kickoff the manager benches hte (average 8.00, not kicked off), which makes hte a non-starter');
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hb2', 'source', 'automatic', 'locked_at', :'k1'::timestamptz, 'compared', jsonb_build_array(:'hb2', :'hb1')),
+  'LINEUP CHANGE AFTER THE KICKOFF, BEFORE SCORING: set_lineup_slot records the automatic Wild Slot (hb2) from the lineup as it was before the change; hte is not among those compared');
+rollback to savepoint late_lineup_first;
+savepoint late_roster_first;
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.give_history('fa', 40.00);
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+insert into public.roster_entries(season_franchise_id, athlete_id, acquired_via) values (:'h', :'fa', 'free_agent');
+select pg_temp.expect(pg_temp.sel(:'g', :'h') @> jsonb_build_object('asset', :'hb2', 'source', 'automatic', 'locked_at', :'k1'::timestamptz, 'compared', jsonb_build_array(:'hb2', :'hb1')),
+  'ROSTER CHANGE AFTER THE KICKOFF, BEFORE SCORING: adding a free agent with a better average (40.00) first records the automatic Wild Slot (hb2) from the roster as it was; the newcomer is not compared and does not take over');
+rollback to savepoint late_roster_first;
+
+-- NO HINDSIGHT through a later change. The rule was evaluated after the first
+-- kickoff and nothing locked (hb1, the better-ranked, plays later). Dropping
+-- hb1 afterwards must not hand the pick to hb2, whose game is already played.
+savepoint no_retro;
+select pg_temp.give_history('hb1', 30.00);
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect((select count(*) = 0 from public.chaos_card_selections) and (select evaluated_through = now() from public.chaos_card_auto_marks where season_franchise_id = :'h'), 'no hindsight fixture: scoring ran after the first kickoff; nothing locked for seed 1, and the evaluation mark is the time of that run');
+select pg_temp.drop_player(:'h', :'hb1', 0);
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(public.chaos_auto_pick(:'g', :'h', 'wild_slot') is null and (select count(*) = 0 from public.chaos_card_selections where season_franchise_id = :'h') and pg_temp.lines(:'g', 'home') is null and (pg_temp.points(:'g'))[1] = 56.50,
+  'NO HINDSIGHT: after hb2''s game has been played, dropping the better-ranked hb1 does NOT make hb2 the Wild Slot player; no eligible player is left whose game is still to come, so there is no bonus (56.50)');
+rollback to savepoint no_retro;
+rollback;
+
+-- NO ELIGIBLE NON-STARTER: no Wild Slot bonus.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'WILD_SLOT');
+savepoint none_at_all;
+select pg_temp.drop_player(:'a', :'ab1');
+select pg_temp.expect(public.chaos_auto_pick(:'g', :'a', 'wild_slot') is null, 'no eligible non-starter: with no player outside its starting lineup, seed 10 has no automatic Wild Slot');
+select pg_temp.kickoff_at(:'t1', 3), pg_temp.kickoff_at(:'t3', 1);
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect((pg_temp.points(:'g'))[2] = 42.00 and pg_temp.cards(:'g')->'away' = '{"base":42.00,"adjustments":[],"total":42.00}'::jsonb and (select count(*) = 0 from public.chaos_card_selections where season_franchise_id = :'a'),
+  'NO ELIGIBLE NON-STARTER: no Wild Slot bonus: 42.00, no adjustment line, no row recorded');
+select pg_temp.finish_week13();
+select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'no eligible non-starter: Week 13 closes');
+select pg_temp.expect((select is_final and away_points = 42.00 from public.matchups where id = :'g') and (select count(*) = 0 from public.chaos_card_selections where season_franchise_id = :'a'), 'no eligible non-starter: the game is final at 42.00 for seed 10');
+rollback to savepoint none_at_all;
+savepoint bye;
+-- ab1's team has no Week 13 game (a bye): on the roster, not starting, but not eligible.
+update public.athletes set real_team_id = '00000000-0000-0000-0000-0000000000e9' where id = :'ab1';
+delete from public.fantasy_player_scores where week = 13 and athlete_id = :'ab1';
+select pg_temp.expect(public.chaos_auto_pick(:'g', :'a', 'wild_slot') is null, 'BYE: a non-starter whose team has no Week 13 game is not eligible, so there is no automatic Wild Slot');
+update public.athletes set real_team_id = :'t4' where id = :'ab1';
+update public.real_games set state = 'postponed' where week = 13 and home_team_id = :'t3';
+select pg_temp.expect(public.chaos_auto_pick(:'g', :'a', 'wild_slot') is null and pg_temp.pick(:'g', :'h', 'wild_slot') = :'hb2' || ' preview', 'POSTPONED: a non-starter whose game is postponed is not eligible (seed 10: none; seed 1: hb2, whose game will be played, not hb1)');
+update public.real_games set state = 'canceled' where week = 13 and home_team_id = :'t3';
+select pg_temp.expect(public.chaos_auto_pick(:'g', :'a', 'wild_slot') is null and pg_temp.pick(:'g', :'h', 'wild_slot') = :'hb2' || ' preview', 'CANCELED: the same for a canceled game');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'WILD_SLOT', :'ab1')) = '', 'postponed or canceled: a manager may still NAME that player (it adds 0.00), as before');
+rollback to savepoint bye;
 rollback;
 
 -- ---------------------------------------------------------------------------
@@ -803,13 +1169,217 @@ select pg_temp.expect((select count(*) = 0 from public.chaos_bounty_grants where
 select pg_temp.expect(public.chaos_clause_decision(:'ls', :'h', :'a')->'steps'->0 @> '{"home":56.50,"away":42.00,"outcome":"home","away_adjusted":57.00}', 'CHAOS CLAUSE: base totals decide (56.50 beats 42.00) although the adjusted result went the other way');
 rollback;
 
--- No raid made: nothing happens.
+-- No raid made yet: nothing is recorded before the deadline; the build-up shows the raid the system would make.
 begin;
 select pg_temp.deal();
 select pg_temp.force_card(:'g', 'RAID');
+select pg_temp.give_history('hb1', 30.00);
 select public.recompute_matchup(:'g', false);
-select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 42.00] and pg_temp.cards(:'g')->>'card_code' = 'RAID' and pg_temp.cards(:'g')->'away'->'adjustments' = '[]'::jsonb, 'NO SELECTION: no raid made means base totals, and the card is still recorded');
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '', 'no raid: the higher seed''s lineup is not restricted');
+select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 57.00] and pg_temp.cards(:'g')->>'card_code' = 'RAID' and (select count(*) = 0 from public.chaos_card_selections)
+  and jsonb_array_length(pg_temp.cards(:'g')->'away'->'adjustments') = 1 and pg_temp.cards(:'g')->'away'->'adjustments'->0 @> jsonb_build_object('effect', 'raid', 'athlete_id', :'hb1', 'points', 15.00, 'automatic', true, 'locked_at', null, 'penalty', false)
+  and pg_temp.cards(:'g')->'home'->'adjustments' = '[]'::jsonb,
+  'NO SELECTION (changed 2026-10-04): before the deadline no raid is recorded; the build-up carries the raid the system WOULD make (hb1, the best-ranked bench player, not locked)');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = '', 'no raid: before the deadline the higher seed''s lineup is not restricted');
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- 5b. RAID: the AUTOMATIC raid, the PENALTY, and a raid made void by a drop
+--     (owner decisions of 2026-10-04, third round). Seed 10 (A) is the raider.
+--     Seed 1 (H) lends: bench hb1 (later game, 15.00) and hb2 (first game,
+--     6.00); starters ranked hq (20.00 over 100.00), hrb (20.00 over 40.00),
+--     hte 8.00, T1 D/ST 7.00, hk none. The deadline is the T1-T2 kickoff.
+-- ---------------------------------------------------------------------------
+create function pg_temp.raid_events() returns jsonb language sql as
+$$ select jsonb_agg(jsonb_build_object('asset', coalesce(payload->>'athlete_id', payload->>'real_team_id'), 'automatic', payload->'automatic', 'penalty', payload->'penalty', 'actor', actor_user_id) order by payload->>'automatic', payload->>'athlete_id') from public.league_feed_events where event_type = 'chaos_raid' $$;
+
+-- THE AUTOMATIC RAID AT THE DEADLINE.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'RAID');
+select pg_temp.give_history('hb1', 30.00);
+select pg_temp.give_history('hb2', 12.00);
+select pg_temp.expect(pg_temp.pick(:'g', :'a', 'raid') = :'hb1' || ' preview' and pg_temp.pick(:'g', :'h', 'raid') is null
+  and public.chaos_auto_pick(:'g', :'a', 'raid') @> jsonb_build_object('penalty', false, 'basis', 'recent_average_v1', 'expected', 30.00, 'locked_at', null)
+  and (public.chaos_auto_pick(:'g', :'a', 'raid')->>'deadline')::timestamptz = (select starts_at from public.real_games where week = 13 and home_team_id = :'t1')
+  and (select array_agg(x->>'athlete_id' order by ord) from jsonb_array_elements(public.chaos_auto_pick(:'g', :'a', 'raid')->'compared') with ordinality t(x, ord)) = array[:'hb1', :'hb2'],
+  'AUTOMATIC RAID preview: the best-ranked player on the HIGHER seed''s bench (hb1, 30.00, over hb2, 12.00), same ranking function; its deadline is the first Week 13 kickoff; the higher seed has no raid');
+savepoint on_time;
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.expect(pg_temp.pick(:'g', :'a', 'raid') = :'hb1' || ' locked' and (select count(*) = 0 from public.chaos_card_selections), 'deadline: the automatic raid is due; scoring has not run, so nothing is recorded yet');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb2')) = 'The raid deadline has passed: raids close at the first Week 13 kickoff', 'deadline: the raider can no longer choose');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'a') = jsonb_build_object('asset', :'hb1', 'source', 'automatic', 'from', :'h', 'selected_by', null, 'locked_at', :'k1'::timestamptz, 'void', null, 'voided_at', null, 'penalty', false, 'replaced', null, 'compared', jsonb_build_array(:'hb1', :'hb2'))
+  and (select count(*) = 1 from public.chaos_card_selections),
+  'AUTOMATIC RAID AT THE DEADLINE: with no raid made, the system raids the best-ranked bench player (hb1): one row, source automatic, no user, recorded against the lender, locked at the deadline');
+select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 57.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hb1', 'points', 15.00, 'automatic', true, 'locked', true)) and pg_temp.lines(:'g', 'home') is null,
+  'automatic raid, score: the raider gets 42.00 + 15.00 = 57.00, the lender keeps 56.50; the line says automatic');
+select pg_temp.expect(pg_temp.raid_events() = jsonb_build_array(jsonb_build_object('asset', :'hb1', 'automatic', true, 'penalty', false, 'actor', null)), 'automatic raid: one feed event tells the league, marked automatic, with no acting user');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = 'Lineup locked: your Chaos Week opponent raided this player, so they cannot start for you in Week 13', 'automatic raid: the raided player cannot start for the lender, as with a named raid');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.clear_chaos_card_selection(%L, %L)', :'g', :'a')) = 'Your raid is already made and cannot be changed', 'automatic raid: it is final');
+create temp table raid_snap on commit drop as select pg_temp.snapshot(:'g') as s;
+select public.recompute_matchup(:'g', false), public.recompute_matchup(:'g', false);
+select pg_temp.expect((select pg_temp.snapshot(:'g') = s from raid_snap) and jsonb_array_length(pg_temp.raid_events()) = 1, 'IDEMPOTENT: scoring run twice more records nothing new and announces nothing twice');
+select pg_temp.finish_week13();
+select pg_temp.expect(pg_temp.close_week(13, false) = 5, 'automatic raid: Week 13 closes');
+select pg_temp.expect((select is_final and winner_season_franchise_id = :'a' and home_points = 56.50 and away_points = 57.00 from public.matchups where id = :'g'), 'AUTOMATIC RAID: final 56.50 to 57.00; the lower seed wins on a raid it never made itself');
+rollback to savepoint on_time;
+
+-- The job is late and the lender moves first: the raid is recorded from the bench as it stood at the deadline.
+savepoint late_lender_moves;
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'WR', :'hb1')) = 'Lineup locked: your Chaos Week opponent raided this player, so they cannot start for you in Week 13',
+  'LATE JOB: after the deadline the lender tries to start hb1 before scoring has run; the automatic raid is applied first and the move is refused');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'TE')) = '' and pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hb1', 'source', 'automatic', 'locked_at', :'k1'::timestamptz, 'compared', jsonb_build_array(:'hb1', :'hb2')),
+  'LATE JOB: any other lineup move by the lender first records the automatic raid from the bench as it was (hb1; hte, benched by this move, is not compared)');
+rollback to savepoint late_lender_moves;
+savepoint late_lender_adds;
+select pg_temp.give_history('fa', 40.00);
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+insert into public.roster_entries(season_franchise_id, athlete_id, acquired_via) values (:'h', :'fa', 'free_agent');
+select pg_temp.expect(pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hb1', 'source', 'automatic', 'locked_at', :'k1'::timestamptz, 'compared', jsonb_build_array(:'hb1', :'hb2')),
+  'LATE JOB: a player the lender adds after the deadline (average 40.00) is not raided; the raid is recorded from the bench as it stood, before the roster changes');
+rollback to savepoint late_lender_adds;
+-- A raid made in time always wins over the automatic one.
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb2')) = '', 'named raid: the raider takes hb2 before the deadline');
+select pg_temp.kickoff_at(:'t1', 3);
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hb2', 'source', 'named', 'selected_by', :'ua') and pg_temp.points(:'g') = array[56.50, 48.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hb2', 'points', 6.00)),
+  'A NAMED RAID ALWAYS WINS: after the deadline it stands (42.00 + 6.00), although the automatic raid would have taken hb1');
+rollback;
+
+-- THE PENALTY: a higher seed with no eligible bench player is raided for its best-ranked starter.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'RAID');
+select pg_temp.drop_player(:'h', :'hb1'), pg_temp.drop_player(:'h', :'hb2');
+select pg_temp.expect(pg_temp.pick(:'g', :'a', 'raid') = :'hq' || ' preview penalty'
+  and (select array_agg(coalesce(x->>'athlete_id', x->>'real_team_id') order by ord) from jsonb_array_elements(public.chaos_auto_pick(:'g', :'a', 'raid')->'compared') with ordinality t(x, ord)) = array[:'hq', :'hrb', :'hte', :'t1', :'hk'],
+  'PENALTY: the higher seed has dropped its whole bench, so the raid takes its best-ranked STARTER (hq: 20.00, season total 100.00 over hrb''s 40.00), ranked by the same function among all its starters');
+savepoint manual_penalty;
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hrb')) = 'Your opponent has no eligible bench player, so the raid takes their best-ranked starter. Only that starter can be raided'
+  and pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, null, %L)', :'g', :'a', 'RAID', :'t1')) = 'Your opponent has no eligible bench player, so the raid takes their best-ranked starter. Only that starter can be raided'
+  and pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'fa')) = 'Your opponent has no eligible bench player, so the raid takes their best-ranked starter. Only that starter can be raided',
+  'PENALTY, manual: any other starter (or anyone else) is refused, with the reason');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hq')) = '', 'PENALTY, manual: the raider takes exactly that starter');
+select pg_temp.expect(pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hq', 'source', 'named', 'from', :'h', 'selected_by', :'ua', 'penalty', true, 'void', null) and (select locked_at is not null from public.chaos_card_selections where season_franchise_id = :'a')
+  and pg_temp.raid_events() = jsonb_build_array(jsonb_build_object('asset', :'hq', 'automatic', false, 'penalty', true, 'actor', :'ua')),
+  'PENALTY, manual: the raid is recorded as named, marked penalty, final at once, and announced as a penalty raid');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 62.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hq', 'points', 20.00, 'penalty', true)) and pg_temp.lines(:'g', 'home') is null
+  and (pg_temp.cards(:'g')->'home'->>'base')::numeric = 56.50,
+  'PENALTY, effect: the raider adds the starter''s 20.00 (42.00 + 20.00 = 62.00); the higher seed KEEPS him in its lineup and still scores him (56.50, no line)');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, null, null)', :'h', 'QB')) = '' and pg_temp.err_as(:'uh', format('select public.set_lineup_slot(%L, 13, %L, 1, %L, null)', :'h', 'QB', :'hq')) = '',
+  'PENALTY: the taken starter is not locked out of the higher seed''s lineup (it may bench him and start him again before his kickoff)');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hrb')) = 'Your raid is already made and cannot be changed', 'PENALTY, manual: one raid, final');
+rollback to savepoint manual_penalty;
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'a') = jsonb_build_object('asset', :'hq', 'source', 'automatic', 'from', :'h', 'selected_by', null, 'locked_at', :'k1'::timestamptz, 'void', null, 'voided_at', null, 'penalty', true, 'replaced', null, 'compared', jsonb_build_array(:'hq', :'hrb', :'hte', :'t1', :'hk')),
+  'PENALTY, automatic: with no raid made and no bench to raid, at the deadline the system takes the best-ranked starter (hq), recorded as automatic and penalty');
+select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 62.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hq', 'points', 20.00, 'automatic', true, 'penalty', true, 'locked', true)) and pg_temp.lines(:'g', 'home') is null
+  and pg_temp.raid_events() = jsonb_build_array(jsonb_build_object('asset', :'hq', 'automatic', true, 'penalty', true, 'actor', null)),
+  'PENALTY, automatic, effect: 42.00 + 20.00 = 62.00 for the raider; 56.50 for the higher seed, which still scores him; announced as an automatic penalty raid');
+rollback;
+-- The penalty also applies when the bench is not empty but holds nobody whose game will be played.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'RAID');
+update public.athletes set real_team_id = '00000000-0000-0000-0000-0000000000e9' where id in (:'hb1', :'hb2');
+select pg_temp.expect(pg_temp.pick(:'g', :'a', 'raid') = :'hq' || ' preview penalty', 'PENALTY: a bench made only of players on a bye (no Week 13 game) holds no ELIGIBLE player, so the penalty applies');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb1')) = 'Your opponent has no eligible bench player, so the raid takes their best-ranked starter. Only that starter can be raided', 'penalty: a bye player on that bench cannot be raided instead');
+update public.athletes set real_team_id = :'t1' where id = :'hb2';
+select pg_temp.expect(pg_temp.pick(:'g', :'a', 'raid') = :'hb2' || ' preview', 'no penalty: one eligible bench player is enough; the automatic raid takes him, never a starter');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hq')) = 'You can only raid the bench: that player is in your opponent''s starting lineup', 'no penalty: with an eligible bench player, a starter cannot be raided');
+rollback;
+
+-- THE RAIDED PLAYER IS DROPPED BY THE LENDER.
+begin;
+select pg_temp.deal();
+select pg_temp.force_card(:'g', 'RAID');
+select pg_temp.give_history('hb1', 30.00);
+select pg_temp.give_history('hb2', 12.00);
+savepoint before_deadline;
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb1')) = '', 'raid void: the raider takes hb1 before the deadline');
+select pg_temp.drop_player(:'h', :'hb1') as dropped_hb1 \gset
+select pg_temp.expect(pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hb1', 'source', 'named', 'void', 'dropped', 'voided_at', :'dropped_hb1'::timestamptz),
+  'RAID VOID, BEFORE THE DEADLINE: the lender drops the raided player before his kickoff; the raid row is marked void at once');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 48.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hb2', 'points', 6.00, 'automatic', true, 'locked', false)),
+  'raid void: the dropped player adds nothing; the build-up shows the raid the system would now make (hb2), not locked');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb1')) = 'That player is not on your opponent''s roster'
+  and pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hq')) = 'You can only raid the bench: that player is in your opponent''s starting lineup',
+  'RAID VOID, BEFORE THE DEADLINE: the raider may choose again, from the lender''s bench AS IT NOW STANDS (not the dropped player, not a starter)');
+savepoint rechoose;
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb2')) = '', 'RAID VOID THEN RE-CHOOSE: the raider takes hb2');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hb2', 'source', 'named', 'selected_by', :'ua', 'void', null, 'voided_at', null, 'penalty', false) and (select count(*) = 1 from public.chaos_card_selections)
+  and pg_temp.points(:'g') = array[56.50, 48.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hb2', 'points', 6.00))
+  and pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb2')) = 'Your raid is already made and cannot be changed',
+  're-chosen: one row, named, not void, final again; 42.00 + 6.00 = 48.00');
+rollback to savepoint rechoose;
+-- The raider does not choose again: the automatic raid at the deadline.
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.sel(:'g', :'a') = jsonb_build_object('asset', :'hb2', 'source', 'automatic', 'from', :'h', 'selected_by', null, 'locked_at', :'k1'::timestamptz, 'void', null, 'voided_at', null, 'penalty', false, 'replaced', :'hb1', 'compared', jsonb_build_array(:'hb2'))
+  and pg_temp.points(:'g') = array[56.50, 48.00],
+  'RAID VOID THEN AUTOMATIC: with no new choice by the deadline the system raids the best-ranked player of the bench as it stands then (hb2), at the deadline, recording the raid it replaced');
+rollback to savepoint before_deadline;
+
+savepoint after_deadline;
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb1')) = '', 'raid void after the deadline: the raider takes hb1 (later game) in time');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select public.recompute_matchup(:'g', false);
+select pg_temp.drop_player(:'h', :'hb1', 2) as dropped_hb1 \gset
+select pg_temp.expect(pg_temp.sel(:'g', :'a') = jsonb_build_object('asset', :'hb2', 'source', 'automatic', 'from', :'h', 'selected_by', null, 'locked_at', :'dropped_hb1'::timestamptz, 'void', null, 'voided_at', null, 'penalty', false, 'replaced', :'hb1', 'compared', jsonb_build_array(:'hb2'))
+  and :'dropped_hb1'::timestamptz > :'k1'::timestamptz,
+  'RAID VOID, AFTER THE DEADLINE: the lender drops the raided player after the deadline and before his kickoff; the automatic rule applies AT ONCE, in the same statement as the drop: hb2, the best-ranked player of the bench as it then stands, locked at the time of the drop');
+select pg_temp.expect(pg_temp.raid_events() = jsonb_build_array(jsonb_build_object('asset', :'hb1', 'automatic', false, 'penalty', false, 'actor', :'ua'), jsonb_build_object('asset', :'hb2', 'automatic', true, 'penalty', false, 'actor', null)), 'raid void after the deadline: the replacement raid is announced');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 48.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hb2', 'points', 6.00, 'automatic', true, 'locked', true))
+  and pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb2')) = 'The raid deadline has passed: raids close at the first Week 13 kickoff',
+  'raid void after the deadline: 42.00 + 6.00 = 48.00 (hb2 had already kicked off; the ranking reads nothing from Week 13); the raider cannot choose after the deadline');
+-- A raided player dropped AFTER his own kickoff: the raid stands.
+select pg_temp.drop_player(:'h', :'hb2', 0) as dropped_hb2 \gset
+select pg_temp.expect(pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hb2', 'source', 'automatic', 'void', null), 'not void: hb2 is dropped AFTER his own kickoff, so the raid of hb2 stands');
+rollback to savepoint after_deadline;
+
+savepoint after_deadline_penalty;
+select pg_temp.drop_player(:'h', :'hb2');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb1')) = '', 'void into penalty: the lender keeps one bench player (hb1), and the raider takes him');
+select pg_temp.kickoff_at(:'t1', 3) as k1 \gset
+select pg_temp.drop_player(:'h', :'hb1', 2) as dropped_hb1 \gset
+select pg_temp.expect(pg_temp.sel(:'g', :'a') = jsonb_build_object('asset', :'hq', 'source', 'automatic', 'from', :'h', 'selected_by', null, 'locked_at', :'dropped_hb1'::timestamptz, 'void', null, 'voided_at', null, 'penalty', true, 'replaced', :'hb1', 'compared', jsonb_build_array(:'hq', :'hrb', :'hte', :'t1', :'hk')),
+  'RAID VOID, AFTER THE DEADLINE, INTO THE PENALTY: the lender drops its last bench player to dodge the raid; at once the raid takes its best-ranked starter (hq) instead');
+select public.recompute_matchup(:'g', false);
+select pg_temp.expect(pg_temp.points(:'g') = array[56.50, 62.00] and pg_temp.lines(:'g', 'away') = jsonb_build_array(jsonb_build_object('effect', 'raid', 'asset', :'hq', 'points', 20.00, 'automatic', true, 'penalty', true, 'locked', true)),
+  'void into penalty, score: the raider gets 42.00 + 20.00 = 62.00 instead of the 15.00 the dodged raid would have added; the higher seed still scores hq (56.50)');
+rollback to savepoint after_deadline_penalty;
+
+-- The same through the real waiver function of this migration: the lender wins a claim and drops the raided player with it.
+savepoint real_waiver_drop;
+select pg_temp.give_history('fa', 40.00);
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'hb1')) = '', 'waiver drop: the raider takes hb1');
+with hold as (insert into public.waiver_holds(league_season_id, athlete_id, clears_at) values (:'ls', :'fa', now() - interval '1 minute') returning id)
+insert into public.waiver_claims(waiver_hold_id, season_franchise_id, drop_roster_entry_id) select hold.id, :'h', (select id from public.roster_entries where season_franchise_id = :'h' and athlete_id = :'hb1' and dropped_at is null) from hold;
+select pg_temp.expect(public.process_due_waivers(:'ls') @> '{"status":"ok","claimed":1}', 'waiver drop: process_due_waivers awards the lender a free agent and drops hb1');
+select pg_temp.expect(pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'hb1', 'source', 'named', 'void', 'dropped') and (select count(*) = 1 from public.roster_entries where season_franchise_id = :'h' and athlete_id = :'fa' and dropped_at is null)
+  and pg_temp.pick(:'g', :'a', 'raid') = :'fa' || ' preview',
+  'RAID VOID through process_due_waivers: the raid is void as soon as the waiver award drops the raided player; the raider chooses again from the bench as it now stands, which includes the player the lender just added (the automatic raid would take him)');
+select pg_temp.expect(pg_temp.err_as(:'ua', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'a', 'RAID', :'fa')) = '' and pg_temp.sel(:'g', :'a') @> jsonb_build_object('asset', :'fa', 'source', 'named', 'void', null), 'waiver drop: the raider takes the newly added player');
+rollback to savepoint real_waiver_drop;
+
+-- The triggers FAIL OPEN: if the card bookkeeping raises, the roster or lineup change still goes through.
+savepoint fail_open;
+create or replace function public.chaos_sync_selections(p_matchup_id uuid) returns void language plpgsql set search_path = public as $$ begin raise exception 'simulated failure in the card bookkeeping'; end $$;
+select pg_temp.kickoff_at(:'t1', 3);
+update public.roster_entries set dropped_at = now() where season_franchise_id = :'h' and athlete_id = :'hb1' and dropped_at is null;
+insert into public.roster_entries(season_franchise_id, athlete_id, acquired_via) values (:'h', :'fa', 'free_agent');
+delete from public.lineups where season_franchise_id = :'h' and week = 13 and athlete_id = :'hte';
+select pg_temp.expect((select count(*) = 1 from public.roster_entries where season_franchise_id = :'h' and athlete_id = :'hb1' and dropped_at is not null) and (select count(*) = 1 from public.roster_entries where season_franchise_id = :'h' and athlete_id = :'fa' and dropped_at is null)
+  and (select count(*) = 0 from public.lineups where season_franchise_id = :'h' and week = 13 and athlete_id = :'hte') and (select count(*) = 0 from public.chaos_card_selections),
+  'FAIL OPEN: with the card bookkeeping raising an error, a drop, an add and a lineup delete in a RAID game past its deadline all go through (the failure is a database WARNING); nothing is recorded by the failed calls');
+select pg_temp.expect(pg_temp.error_of(format('select public.recompute_matchup(%L, false)', :'g')) = 'simulated failure in the card bookkeeping', 'fail open is for the triggers only: scoring itself does not hide the failure');
+rollback to savepoint fail_open;
 rollback;
 
 -- ---------------------------------------------------------------------------
@@ -825,8 +1395,9 @@ insert into twist_expected values
   ('TWIST_RUSH_DOUBLE',   70.00, 49.00, 2, 1, 'rushing double: +4.00 +9.50, +7.00'),
   ('TWIST_PASS_DOUBLE',   74.50, 58.00, 1, 1, 'passing double: +18.00, +16.00'),
   ('TWIST_FUMBLE_TRIPLE', 52.50, 42.00, 1, 0, 'fumbles lost triple: -4.00 more, nothing for a side with no fumble');
-select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) like 'This matchup was dealt % not CAPTAIN', 'twist: a selection is refused in a matchup that was dealt another card');
+-- The card is forced BEFORE the check: the deal is random, and one deal in ten gives this game Captain (which made this check fail at random before 2026-10-04).
 select pg_temp.force_card(:'g', 'TWIST_TE_DOUBLE');
+select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'CAPTAIN', :'hq')) = 'This matchup was dealt Tight End Takeover, not CAPTAIN', 'twist: a selection is refused in a matchup that was dealt another card');
 select pg_temp.expect(pg_temp.err_as(:'uh', format('select public.set_chaos_card_selection(%L, %L, %L, %L)', :'g', :'h', 'TWIST_TE_DOUBLE', :'hte')) = 'Tight End Takeover needs no selection', 'twist: a twist card takes no selection');
 create function pg_temp.twist_result(p_matchup uuid, p_code text) returns jsonb language plpgsql as $$
 declare v jsonb;
@@ -865,7 +1436,9 @@ select pg_temp.force_card(d.matchup_id, 'TWIST_TE_DOUBLE') from public.chaos_car
 select pg_temp.force_card(:'g5', 'BOUNTY');
 select pg_temp.force_card(:'g3', 'BOUNTY');
 update public.real_games set starts_at = now() + interval '9 days', state = 'scheduled' where week = 14;
+update public.real_games set starts_at = now() + interval '16 days', state = 'scheduled' where week = 15;
 select starts_at as week14_kickoff from public.real_games where week = 14 \gset
+select starts_at as week15_kickoff from public.real_games where week = 15 \gset
 -- The lower seeds of both bounty games win; in the 1 v 10 game seed 1 wins.
 update public.fantasy_player_scores s set points = 150 from teams t where s.week = 13 and s.athlete_id = t.athlete and t.sf in (:'a5', :'a3');
 update public.fantasy_player_scores s set points = 60 from teams t where s.week = 13 and s.athlete_id = t.athlete and t.sf in (:'h5', :'h3');
@@ -898,9 +1471,22 @@ select pg_temp.expect(:'normal_first' = :'a', 'waiver fixture: by the normal inv
 select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'normal_among_holders' and :'normal_among_holders' in (:'a5', :'a3'), 'BOUNTY honoured: a lower-seed winner is awarded the claim ahead of seed 10; between the two holders the normal rule decides');
 select pg_temp.expect(pg_temp.claim_race(array[:'a', case when :'normal_among_holders' = :'a5' then :'a3' else :'a5' end]::uuid[]) <> :'a', 'BOUNTY honoured: the other holder also goes ahead of seed 10');
 select pg_temp.expect(pg_temp.claim_race(array[:'a', :'h']::uuid[]) = pg_temp.claim_race(array[:'a', :'h']::uuid[], 'process_due_waivers_before_cards'), 'bounty: claims between franchises with no bounty keep their normal order');
--- The week is over: the grant is no longer in force.
-update public.chaos_bounty_grants set effective_from = now() - interval '8 days', effective_until = now() - interval '1 second';
-select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'a' and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls')), 'BOUNTY lasts exactly one window: after effective_until the normal order is back (seed 10 first) and there is no bounty order');
+-- THE BOUNTY WINDOW IS WEEK 14 ONLY (owner decision 2026-10-04). The grant ends
+-- at the last Week 14 kickoff; Week 15's first game is a week later.
+select pg_temp.expect((select bool_and(effective_until = :'week14_kickoff'::timestamptz and effective_until < :'week15_kickoff'::timestamptz) from public.chaos_bounty_grants)
+  and :'week14_kickoff'::timestamptz = (select max(starts_at) from public.real_games where week = 14) and :'week15_kickoff'::timestamptz = (select min(starts_at) from public.real_games where week = 15),
+  'BOUNTY WINDOW: every grant ends exactly at the last Week 14 kickoff, before Week 15 begins');
+select pg_temp.expect((select count(*) = 10 and count(*) filter (where grant_kind = 'first') = 2 from public.chaos_bounty_waiver_order(:'ls', :'week14_kickoff'::timestamptz - interval '1 second'))
+  and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls', :'week14_kickoff'::timestamptz))
+  and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls', :'week14_kickoff'::timestamptz + interval '2 days'))
+  and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls', :'week15_kickoff'::timestamptz - interval '1 hour'))
+  and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls', :'week15_kickoff'::timestamptz + interval '1 day')),
+  'BOUNTY WINDOW: the bounty order exists up to one second before the last Week 14 kickoff, and at no time from that kickoff on: not between Week 14 and Week 15, and not in Week 15');
+-- Week 15 on the clock: the same grants, with the whole schedule ten days further in the past (the last Week 14 kickoff was yesterday).
+update public.chaos_bounty_grants set effective_from = effective_from - interval '10 days', effective_until = effective_until - interval '10 days';
+select pg_temp.expect((select bool_and(effective_until = :'week14_kickoff'::timestamptz - interval '10 days' and effective_until < now()) from public.chaos_bounty_grants) and (select count(*) = 2 from public.chaos_bounty_grants)
+  and pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'a' and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls')),
+  'BOUNTY GRANT IGNORED IN WEEK 15: with both grants still on record, a waiver run after the last Week 14 kickoff uses the normal order (seed 10 first) and there is no bounty order');
 update public.chaos_bounty_grants set effective_from = now() + interval '1 hour', effective_until = now() + interval '2 hours';
 select pg_temp.expect(pg_temp.claim_race(array[:'a5', :'a3', :'a']::uuid[]) = :'a' and (select count(*) = 0 from public.chaos_bounty_waiver_order(:'ls')), 'BOUNTY: a grant that is not yet in force changes nothing either');
 rollback;
@@ -1044,7 +1630,7 @@ select pg_temp.expect((select context->'chaos_clause'->'steps'->0 = '{"step":"ch
 select pg_temp.expect(pg_temp.close_week(15, false) = 3 and pg_temp.advance(16)->'result'->>'status' = 'created', 'season: Week 15 closes and Week 16 is generated');
 rollback;
 
-select pg_temp.expect((select n = 120 from compared), 'equivalence: 120 recompute_matchup calls of the base season (Weeks 1-12, open and finalizing) were run through both versions with identical results; the rolled-back scenarios compared 20 more (Week 13 with no card, Week 14 with cards dealt)');
+select pg_temp.expect((select n = 120 from compared), 'equivalence: 120 recompute_matchup calls of the base season (Weeks 1-12, open and finalizing) were run through both versions with identical results; the rolled-back scenarios compared 30 more (Week 13 with no card, Week 13 with the league season not opted in, Week 14 with cards dealt)');
 select pg_temp.expect((select count(*) = 65 and count(*) filter (where is_final) = 60 from public.matchups) and (select count(*) = 0 from public.chaos_card_draws) and (select count(*) = 0 from public.chaos_card_selections) and (select count(*) = 0 from public.chaos_bounty_grants),
   'every scenario rolled back: the base state is intact and holds no cards');
 
