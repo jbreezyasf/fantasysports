@@ -4,10 +4,8 @@ import {
   type AssistantGmToolContext,
   type AssistantGmToolRequest
 } from '../assistant-gm/tools';
-import {
-  type BigExecCapabilityId,
-  type CapabilityAudience
-} from '../executive/capabilities';
+import { resolveAssistantGmServerScope, type AssistantGmScopeSupabase } from '../assistant-gm/serverScope';
+import { type BigExecCapabilityId } from '../executive/capabilities';
 import { type EntitlementSupabase } from '../executive/entitlements';
 import { resolveExecutiveFeatureFlags } from '../executive/featureFlags';
 import { createClient } from '../supabase/server';
@@ -42,9 +40,12 @@ export async function currentDraftId(leagueId: string) {
   return draft?.id ?? null;
 }
 
+// Shared entry point for the read-only /api/leagues/{leagueId}/* machine routes.
+// Audience is always derived from the caller's own league_members row; routes cannot pass one,
+// so a route cannot grant a manager commissioner reach. The real feature flags are used, so
+// BIG_EXEC_ASSISTANT_GM is a working kill switch for these routes too.
 export async function runMachineReadTools(input: {
   leagueId: string;
-  audience?: CapabilityAudience;
   capabilityId: BigExecCapabilityId;
   toolRequests: AssistantGmToolRequest[];
 }) {
@@ -54,23 +55,18 @@ export async function runMachineReadTools(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using this machine API.' }, { status: 401 });
 
-  const [{ data: member }, { data: season }] = await Promise.all([
-    supabase.from('league_members').select('role').eq('league_id', input.leagueId).eq('user_id', user.id).maybeSingle(),
-    supabase.from('league_seasons').select('id').eq('league_id', input.leagueId).eq('is_current', true).maybeSingle()
-  ]);
-  if (!member) return NextResponse.json({ ok: false, code: 'unauthorized', message: 'User is not a member of this league.' }, { status: 403 });
-  if (!season) return NextResponse.json({ ok: false, code: 'not_found', message: 'Current league season not found.' }, { status: 404 });
+  const scope = await resolveAssistantGmServerScope(supabase as unknown as AssistantGmScopeSupabase, { userId: user.id, leagueId: input.leagueId });
+  if (!scope.ok) return NextResponse.json({ ok: false, code: scope.code, message: scope.message }, { status: scope.status });
 
-  const audience = input.audience ?? (member.role === 'commissioner' ? 'commissioner' : 'manager');
   const gateway = createAssistantGmGateway({
     supabase: supabase as unknown as EntitlementSupabase & AssistantGmToolContext['supabase'],
-    flags: { ...resolveExecutiveFeatureFlags(), assistant_gm: true }
+    flags: resolveExecutiveFeatureFlags()
   });
   const result = await gateway.handle({
     userId: user.id,
     leagueId: input.leagueId,
-    leagueSeasonId: season.id,
-    audience,
+    leagueSeasonId: scope.leagueSeasonId,
+    audience: scope.audience,
     capabilityId: input.capabilityId,
     toolRequests: input.toolRequests
   });

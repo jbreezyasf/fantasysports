@@ -211,12 +211,12 @@ export async function GET() {
         AssistantGmStructuredAnswer: assistantGmStructuredAnswerJsonSchema,
         AssistantGmToolRunRequest: {
           type: 'object',
-          required: ['leagueId', 'capabilityId', 'audience', 'toolRequests'],
+          required: ['leagueId', 'capabilityId', 'toolRequests'],
           additionalProperties: false,
           properties: {
             leagueId: { type: 'string', format: 'uuid' },
             capabilityId: { type: 'string' },
-            audience: { enum: ['league_member', 'manager', 'commissioner', 'ops_staff'] },
+            audience: { enum: ['league_member', 'manager', 'commissioner', 'ops_staff'], deprecated: true, description: 'Ignored. The server derives the audience from the signed-in user\'s league membership.' },
             toolRequests: {
               type: 'array',
               minItems: 1,
@@ -244,12 +244,12 @@ export async function GET() {
         },
         AssistantGmAgentRunRequest: {
           type: 'object',
-          required: ['leagueId', 'capabilityId', 'audience', 'steps'],
+          required: ['leagueId', 'capabilityId', 'steps'],
           additionalProperties: false,
           properties: {
             leagueId: { type: 'string', format: 'uuid' },
             capabilityId: { type: 'string' },
-            audience: { enum: ['league_member', 'manager', 'commissioner', 'ops_staff'] },
+            audience: { enum: ['league_member', 'manager', 'commissioner', 'ops_staff'], deprecated: true, description: 'Ignored. The server derives the audience from the signed-in user\'s league membership.' },
             maxSteps: { type: 'integer', minimum: 1, maximum: 8, default: 4 },
             steps: {
               type: 'array',
