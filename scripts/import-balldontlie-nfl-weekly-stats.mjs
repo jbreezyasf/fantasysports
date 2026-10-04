@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { finalizeCompleteFootballWeeks } from './finalize-complete-football-weeks.mjs';
+import { advanceFantasySeasons } from './advance-fantasy-season.mjs';
 
 if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
   const match = /^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/.exec(line);
@@ -112,9 +113,17 @@ for (const leagueSeason of leagueSeasons ?? []) {
   const { data: matchups } = await db.from('matchups').select('id').eq('league_season_id', leagueSeason.id).eq('week', week).eq('is_final', false);
   for (const matchup of matchups ?? []) { const { error: matchupError } = await db.rpc('recompute_matchup', { p_matchup_id: matchup.id, p_finalize: false }); if (matchupError) throw new Error(matchupError.message); }
 }
-const lifecycle=await finalizeCompleteFootballWeeks({db,competitionSeasonId:competitionSeason.id,leagueSeasons,throughWeek:week,now});
-const report = { season, week, fetched: rows.length, playerStats: playerStats.length, teamStats: teamStats.length, recalculatedLeagues: leagueSeasons?.length ?? 0, lifecycle, ingestedAt };
+// A week-close failure in one league must not stop the season step for the
+// others, so the step still runs and the failure is reported afterwards.
+let lifecycle; let lifecycleError;
+try { lifecycle=await finalizeCompleteFootballWeeks({db,competitionSeasonId:competitionSeason.id,leagueSeasons,throughWeek:week,now}); }
+catch (error) { lifecycleError=error; lifecycle=error?.results ?? null; }
+// Off unless SECOND_HALF_AUTOMATION_ENABLED is set; see docs/qa/SECOND_HALF_RUNBOOK.md.
+const seasonAdvance=await advanceFantasySeasons({db,leagueSeasons});
+const report = { season, week, fetched: rows.length, playerStats: playerStats.length, teamStats: teamStats.length, recalculatedLeagues: leagueSeasons?.length ?? 0, lifecycle, seasonAdvance, ingestedAt };
 console.log(JSON.stringify(report, null, 2));
+if (lifecycleError) throw lifecycleError;
+if (seasonAdvance.failures.length) throw new Error(`Season step failed for ${seasonAdvance.failures.length} league season(s): ${seasonAdvance.failures.map(f => `${f.leagueSeasonId}: ${f.message}`).join(' | ')}`);
 return report;
 }
 
