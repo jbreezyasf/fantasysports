@@ -14,6 +14,7 @@ import { type EntitlementSupabase } from '../../../../lib/executive/entitlements
 import { resolveAssistantGmServerScope, type AssistantGmScopeSupabase } from '../../../../lib/assistant-gm/serverScope';
 import { resolveExecutiveFeatureFlags } from '../../../../lib/executive/featureFlags';
 import { createClient } from '../../../../lib/supabase/server';
+import { checkRateLimit, rateLimitedResponse } from '../../../../lib/security/rateLimit';
 
 type AgentRunBody = {
   leagueId?: unknown;
@@ -76,6 +77,8 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using Front Office Advisor.' }, { status: 401 });
+  const rateLimit = await checkRateLimit('machineApiByUser', user.id);
+  if (!rateLimit.allowed) return rateLimitedResponse(rateLimit);
   // Audience and league scope come from the caller's own membership row. Any `audience` in the
   // request body is ignored, so a client cannot claim a wider role than the database grants.
   const scope = await resolveAssistantGmServerScope(supabase as unknown as AssistantGmScopeSupabase, { userId: user.id, leagueId: body.leagueId });

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '../../lib/supabase/server';
 import { createAdminClient } from '../../lib/supabase/admin';
 import { analyzeBetaFeedback } from '../../lib/beta-feedback/analyze';
+import { checkRateLimit, RATE_LIMITED_MESSAGE } from '../../lib/security/rateLimit';
 
 const clean = (formData: FormData, name: string, max = 4000) => String(formData.get(name) ?? '').trim().slice(0, max);
 const required = (formData: FormData, name: string, max = 4000) => {
@@ -22,6 +23,8 @@ export async function submitBetaFeedback(formData: FormData) {
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id);
   if (membershipError || !membershipCount) redirect('/dashboard');
+
+  if (!(await checkRateLimit('betaFeedbackByUser', user.id)).allowed) throw new Error(RATE_LIMITED_MESSAGE);
 
   const taskArea = required(formData, 'task_area', 50);
   const outcome = required(formData, 'outcome', 30) as 'easy_success' | 'confusing_success' | 'partial' | 'failed';

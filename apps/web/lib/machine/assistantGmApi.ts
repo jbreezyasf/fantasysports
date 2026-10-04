@@ -11,6 +11,7 @@ import {
 import { type EntitlementSupabase } from '../executive/entitlements';
 import { resolveExecutiveFeatureFlags } from '../executive/featureFlags';
 import { createClient } from '../supabase/server';
+import { checkRateLimit, rateLimitedResponse } from '../security/rateLimit';
 
 export type MachineRouteParams = { params: Promise<{ leagueId: string }> };
 
@@ -53,6 +54,8 @@ export async function runMachineReadTools(input: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, code: 'unauthenticated', message: 'Sign in before using this machine API.' }, { status: 401 });
+  const rateLimit = await checkRateLimit('machineApiByUser', user.id);
+  if (!rateLimit.allowed) return rateLimitedResponse(rateLimit);
 
   const [{ data: member }, { data: season }] = await Promise.all([
     supabase.from('league_members').select('role').eq('league_id', input.leagueId).eq('user_id', user.id).maybeSingle(),
