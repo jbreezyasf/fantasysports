@@ -2,6 +2,26 @@
 
 Working brand placeholder: **Fantasy All-Sports**. Replace once the permanent product name/domain is selected.
 
+## Implementation status (2026-10-04)
+
+This document is a specification. Most of it is not built. What the code does today, read from the source on 2026-10-04:
+
+| Item | State |
+|---|---|
+| Provider | Resend, called from `apps/web/lib/email/resend.ts` with `RESEND_BIGEXEC_API_KEY` and `EMAIL_LEAGUE_FROM`. Whether the key is set in Vercel and the sending domain is verified is UNVERIFIED. |
+| 4. League invitation | **Sent** from `apps/web/app/leagues/actions.ts` (invite, and "Resend" in the commissioner ledger, which sends the same email again). The only one of the 22 that application code sends. |
+| 5. Invitation reminder | Not built as its own email. |
+| 10. Draft date announced, 17. Weekly matchup final | Template functions exist in `apps/web/lib/email/templates.ts`. **Nothing calls them.** |
+| 1 to 3 (confirm account, welcome, password reset) | Not in this repository. Confirmation and password-reset email is sent by Supabase Auth with whatever templates are configured in the Supabase dashboard (UNVERIFIED). There is no welcome email. |
+| 6 to 9, 11 to 16, 18 to 22 | Not built. |
+| League announcement (not one of the 22) | **Built on branch `feat/notifications-email-and-push`, not sent, inert until configured.** An operator-written notice to one league's members, with preferences, a signed unsubscribe link, a `List-Unsubscribe` header, an HTML and a plain-text part, English and Spanish, and web push beside it. See `docs/NOTIFICATIONS.md`. |
+| Unsubscribe / preferences | Built on that branch for league email (`docs/NOTIFICATIONS.md`). The invite email does not consult preferences: it goes to an address that may have no account. |
+| Template rule 10 (central brand substitution) | Not done. The invite templates and the announcement template each carry the brand name. |
+
+The sender addresses below (`auth.example.com`, `updates.example.com`) are placeholders from before the domain was chosen. The code sends league email from `EMAIL_LEAGUE_FROM`, default `Big Exec Fantasy Sports <league@bigexecfs.com>`.
+
+A physical postal address is required by CAN-SPAM in commercial email. None exists in this repository; `EMAIL_POSTAL_ADDRESS` adds one to the announcement footer when set.
+
 ## Delivery architecture
 
 - Supabase Auth remains the identity/authentication source of truth.

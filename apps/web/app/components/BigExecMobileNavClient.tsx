@@ -49,6 +49,7 @@ export default function BigExecMobileNavClient({ items }: { items: BigExecMobile
           <strong>{t('More')}</strong>
           <a href={item.href}>{t('League')}</a>
           <a href="/dashboard">{t('All Leagues')}</a>
+          <a href="/settings/notifications" aria-current={pathname === '/settings/notifications' ? 'page' : undefined}>{t('Notifications')}</a>
           <LanguageToggle />
         </div>
       </details>;

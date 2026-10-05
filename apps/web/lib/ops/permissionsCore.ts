@@ -15,7 +15,8 @@ export const OPS_PERMISSIONS = [
   'rollback.read',
   'audit.read',
   'staff.manage',
-  'assistant_gm_usage.read'
+  'assistant_gm_usage.read',
+  'announcements.send'
 ] as const;
 export type OpsPermission = typeof OPS_PERMISSIONS[number];
 
@@ -40,5 +41,11 @@ export function roleHasPermission(role: OpsRole, permission: OpsPermission) {
 // No delegated ops role is granted it: docs/ops-portal-phase1.md defers data repair and manual
 // sync tools for staff, so only super_admin qualifies. Unknown or missing roles are denied.
 export function canManageProviderData(role: OpsRole | null | undefined) {
+  return role === 'super_admin';
+}
+
+// League announcements reach every member of a league by email and push, so drafting and
+// sending them is owner-level too. Unknown or missing roles are denied.
+export function canSendAnnouncements(role: OpsRole | null | undefined) {
   return role === 'super_admin';
 }

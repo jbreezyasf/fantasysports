@@ -3,7 +3,8 @@ import { signOut } from '../auth/actions';
 const nav = [
   { href: '/ops', label: 'Search' },
   { href: '/ops/data-health', label: 'Data Health' },
-  { href: '/ops/audit', label: 'Audit' }
+  { href: '/ops/audit', label: 'Audit' },
+  { href: '/ops/announcements', label: 'Announcements' }
 ];
 
 export default function OpsLayout({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,638 @@
+[
+  {
+    "name": "settings-default",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-push-on",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "permissionRequestsBeforeClick": 0,
+    "permissionRequestsAfterClick": 1,
+    "liveRegion": "Push is now on for this device."
+  },
+  {
+    "name": "settings-push-denied",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "liveRegion": "Permission was not given, so push stays off for this device."
+  },
+  {
+    "name": "settings-saved-keyboard",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "submitted": {
+      "category_league_announcements": "on",
+      "category_score_final": "on",
+      "category_trade_offer": "on",
+      "category_waiver_result": "on",
+      "category_weekly_recap": "on",
+      "locale": "en"
+    },
+    "liveRegion": "Notification preferences saved."
+  },
+  {
+    "name": "settings-save-error",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "liveRegion": "Your preferences were not saved. Please try again."
+  },
+  {
+    "name": "settings-devices-on",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-blocked",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-spanish",
+    "width": 1440,
+    "lang": "es-419",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-iphone-needs-install",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "installPrompt": "INSTALL BIG EXEC\n\nTap Share, then choose Add to Home Screen.\n\nNOT NOW"
+  },
+  {
+    "name": "settings-push-not-configured",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-unavailable",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-no-league",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-confirm",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-confirm-spanish",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-done",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-done-spanish",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-invalid",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-list",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-list-not-installed",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-detail-draft",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "frames": 2
+  },
+  {
+    "name": "ops-detail-not-ready",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-detail-confirm",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "focusOnHeading": true,
+    "liveRegion": "Confirm sending to 10 members of Stress Test 2026. Type SEND to enable the send button."
+  },
+  {
+    "name": "ops-detail-confirmed-submit",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "submitted": {
+      "name": "live",
+      "data": {
+        "notification_id": "5b0e6f0a-5c1d-4c59-9a55-2f3c0d1f4a10",
+        "expected_members": "10",
+        "confirm": "SEND"
+      }
+    }
+  },
+  {
+    "name": "ops-detail-confirm-cancelled",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "focusReturned": "Review and send to 10 members",
+    "actions": 0
+  },
+  {
+    "name": "ops-detail-failed-retry",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-detail-sent",
+    "width": 1440,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-default",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-push-on",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "permissionRequestsBeforeClick": 0,
+    "permissionRequestsAfterClick": 1,
+    "liveRegion": "Push is now on for this device."
+  },
+  {
+    "name": "settings-push-denied",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "liveRegion": "Permission was not given, so push stays off for this device."
+  },
+  {
+    "name": "settings-saved-keyboard",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "submitted": {
+      "category_league_announcements": "on",
+      "category_score_final": "on",
+      "category_trade_offer": "on",
+      "category_waiver_result": "on",
+      "category_weekly_recap": "on",
+      "locale": "en"
+    },
+    "liveRegion": "Notification preferences saved."
+  },
+  {
+    "name": "settings-save-error",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "liveRegion": "Your preferences were not saved. Please try again."
+  },
+  {
+    "name": "settings-devices-on",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-blocked",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-spanish",
+    "width": 390,
+    "lang": "es-419",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-iphone-needs-install",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "installPrompt": "INSTALL BIG EXEC\n\nTap Share, then choose Add to Home Screen.\n\nNOT NOW"
+  },
+  {
+    "name": "settings-push-not-configured",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-unavailable",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "settings-no-league",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-confirm",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-confirm-spanish",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-done",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-done-spanish",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "unsubscribe-invalid",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-list",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-list-not-installed",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-detail-draft",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "frames": 2
+  },
+  {
+    "name": "ops-detail-not-ready",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-detail-confirm",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "focusOnHeading": true,
+    "liveRegion": "Confirm sending to 10 members of Stress Test 2026. Type SEND to enable the send button."
+  },
+  {
+    "name": "ops-detail-confirmed-submit",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "submitted": {
+      "name": "live",
+      "data": {
+        "notification_id": "5b0e6f0a-5c1d-4c59-9a55-2f3c0d1f4a10",
+        "expected_members": "10",
+        "confirm": "SEND"
+      }
+    }
+  },
+  {
+    "name": "ops-detail-confirm-cancelled",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": [],
+    "focusReturned": "Review and send to 10 members",
+    "actions": 0
+  },
+  {
+    "name": "ops-detail-failed-retry",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "ops-detail-sent",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "email-en",
+    "width": 640,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "email-es",
+    "width": 640,
+    "lang": "es-419",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "email-en-images-off",
+    "width": 640,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "email-en",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "email-es",
+    "width": 390,
+    "lang": "es-419",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  },
+  {
+    "name": "email-en-images-off",
+    "width": 390,
+    "lang": "en",
+    "overflow": false,
+    "offenders": [],
+    "axe": [],
+    "unlabelled": [],
+    "consoleErrors": []
+  }
+]
