@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { finalizeCompleteFootballWeeks } from './finalize-complete-football-weeks.mjs';
-import { advanceFantasySeasons } from './advance-fantasy-season.mjs';
+import { advanceFantasySeasons, dealChaosWeekCards } from './advance-fantasy-season.mjs';
 
 if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
   const match = /^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/.exec(line);
@@ -120,10 +120,13 @@ try { lifecycle=await finalizeCompleteFootballWeeks({db,competitionSeasonId:comp
 catch (error) { lifecycleError=error; lifecycle=error?.results ?? null; }
 // Off unless SECOND_HALF_AUTOMATION_ENABLED is set; see docs/qa/SECOND_HALF_RUNBOOK.md.
 const seasonAdvance=await advanceFantasySeasons({db,leagueSeasons});
-const report = { season, week, fetched: rows.length, playerStats: playerStats.length, teamStats: teamStats.length, recalculatedLeagues: leagueSeasons?.length ?? 0, lifecycle, seasonAdvance, ingestedAt };
+// Off unless CHAOS_CARDS_ENABLED is set; see docs/product/CHAOS_WEEK_RULE_CARDS.md. After the season step, so the run that creates Chaos Week also deals its cards.
+const chaosCards=await dealChaosWeekCards({db,leagueSeasons});
+const report = { season, week, fetched: rows.length, playerStats: playerStats.length, teamStats: teamStats.length, recalculatedLeagues: leagueSeasons?.length ?? 0, lifecycle, seasonAdvance, chaosCards, ingestedAt };
 console.log(JSON.stringify(report, null, 2));
 if (lifecycleError) throw lifecycleError;
 if (seasonAdvance.failures.length) throw new Error(`Season step failed for ${seasonAdvance.failures.length} league season(s): ${seasonAdvance.failures.map(f => `${f.leagueSeasonId}: ${f.message}`).join(' | ')}`);
+if (chaosCards.failures.length) throw new Error(`Chaos Week card deal failed for ${chaosCards.failures.length} league season(s): ${chaosCards.failures.map(f => `${f.leagueSeasonId}: ${f.message}`).join(' | ')}`);
 return report;
 }
 

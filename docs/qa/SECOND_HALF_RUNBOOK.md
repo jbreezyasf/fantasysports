@@ -88,6 +88,7 @@ Every function takes a league id and acts on that league's season with the highe
 - **Preconditions in the body:** commissioner; no Week 13 matchups; exactly 10 standings rows.
 - **What it does:** standings order 1v10, 2v9, 3v8, 4v7, 5v6, better rank at home; each matchup records both seeds in `context` (PROVEN, body, rehearsal).
 - **Writes:** 5 `matchups`, `event_type = 'chaos'`; one `chaos_week_created` feed event. When the week closes, a lower seed that wins earns `CHAOS_GIANT_KILLER` (PROVEN, body, rehearsal).
+- **Rule cards:** not part of this function. See "Chaos Week rule cards (Week 13)" below; off by default.
 
 ### Week 14: Judgment Week
 
@@ -194,6 +195,43 @@ A step is "unavailable" when either franchise has no **final** matchup of that w
 - `publish_finalized_league_week` was not changed. Its recap moment title already follows the winner ("A defeats B"), but its `facts` do not include the clause, so the weekly recap and its League News story show a level score without the explanation.
 - A Week 13 or Week 10 matchup with `result_source = 'SIMULATED_LATE_START'` that is final counts like any other final matchup. Whether a simulated score should decide a playoff game is an owner decision that has not been made.
 - The page changes were typechecked, unit-tested and built, not looked at in a browser: no league has a postseason game yet.
+
+## Chaos Week rule cards (Week 13)
+
+**Status 2026-10-04:** branch `feat/chaos-week-rule-cards`; `supabase/migrations/20261004020000_chaos_week_rule_cards.sql` written, **not applied**; flag `CHAOS_CARDS_ENABLED` **off**; **no league season opted in**. Rules, edge cases and open decisions: `docs/product/CHAOS_WEEK_RULE_CARDS.md`.
+
+**Opt-in (owner decision 2026-10-04, third round).** The flag alone deals nothing. A league season gets cards only when `league_seasons.chaos_cards_enabled` is true; it is false by default and the migration sets it for nobody. For the 2026 test season only the Stress Test 2026 league season is to be opted in; the exact operator SQL is in the product document, section 5, step 2.
+
+**What changes in the Week 13 steps, only when the flag is on, the migration is applied and the league season is opted in:**
+
+| When | Done by | What |
+|---|---|---|
+| The weekly job run that creates Week 13 (or the next run, if a commissioner created it), before the first Week 13 kickoff | `dealChaosWeekCards` in `scripts/advance-fantasy-season.mjs`, calling `deal_chaos_week_cards(league_season_id, 13)` | 1 `chaos_card_deals` row (the seed), 5 `chaos_card_draws`, one `chaos_cards_dealt` feed event. A second call writes nothing. Refused after kickoff. |
+| Until each player's kickoff (Raid: until the first Week 13 kickoff) | managers, through `set_chaos_card_selection` / `clear_chaos_card_selection` | `chaos_card_selections`; a raid also writes a `chaos_raid` feed event (`automatic: false`, `penalty` true when the raid took a starter) |
+| Every rescore | `recompute_matchup(id, false)`, which first runs `chaos_sync_selections` | adjusted `home_points` / `away_points`; base totals and adjustment lines in `matchups.context.chaos_cards`. With no selection of the manager's own that counts, an `automatic: true` line for the automatic captain, Wild Slot player or raid, and once it is due (the player's kickoff; for a raid, the first Week 13 kickoff) one `chaos_card_selections` row with `source = 'automatic'`, written once; an automatic raid also writes a `chaos_raid` feed event with `automatic: true`. `locked_at` on selections whose player has kicked off. One `chaos_card_auto_marks` row per franchise (the evaluation mark). |
+| Every lineup or roster change of a franchise in an open Chaos Week game that holds a Captain, Wild Slot or Raid card | triggers `chaos_cards_before_lineup_change` on `lineups`, `chaos_cards_before_roster_change` and `chaos_cards_after_roster_drop` on `roster_entries`, calling `chaos_sync_selections` | before the change: any automatic selection that is already due is recorded from the lineup and roster as they stood, and the evaluation mark moves to now. After a drop: a Wild Slot pick or raided player who left before his kickoff makes the selection void (`voided_at`, `void_reason`); a raid past its deadline is replaced by the automatic raid at once. Nothing is written for any other league, week or card. |
+| Week close | `recompute_matchup(id, true)` | standings from the **adjusted** totals; for a Bounty game with a winner, one `chaos_bounty_grants` row (`grant_kind` `first` for a lower seed, `up_three` for a higher seed) and a `chaos_bounty_granted` feed event; a tied Bounty game writes none |
+| Waiver processing until the last Week 14 kickoff | `process_due_waivers` | claims are ranked by `chaos_bounty_waiver_order`: lower-seed winners first, higher-seed winners up three places; with no grant in force, the normal order exactly as before |
+| Every weekly job run after Tuesday 12:00 New York time of Week 13's week, while an **opted-in** league season has open Chaos Week matchups and no deal | `dealChaosWeekCards` | one `deal-deadline-missed` error log line per league season, repeated in `chaosCards.alerts` of the job report. Deal by hand: `docs/product/CHAOS_WEEK_RULE_CARDS.md`, section 5 |
+
+**Order of migrations.** `20261003030000`, then `20261004010000`, then `20261004020000`. The last one replaces `recompute_matchup`, `chaos_clause_decision`, `set_lineup_slot` and `process_due_waivers`; never re-apply an earlier file after it. It also adds one column to `league_seasons` (`chaos_cards_enabled`) and three triggers to tables of earlier migrations (`roster_entries`, `lineups`).
+
+**Checks on the day (operator, service role):**
+
+```sql
+select public.audit_chaos_week_deal('<league_season_id>', 13);   -- expect dealt: true, matches: true, repeats: 0
+select matchup_id, card_code, deal_position, revealed_at from public.chaos_card_draws where league_season_id = '<league_season_id>' order by deal_position;
+```
+
+Then open one Chaos Week matchup page and one lineup page for Week 13 as a manager of that league.
+
+**Chaos Clause.** With cards, a franchise's "Chaos Week score" for the playoff tiebreak is its **base lineup total** (`context.chaos_cards.<side>.base`), not the adjusted total in `home_points` / `away_points`. The step in `context.chaos_clause` records `basis: base_lineup_total` and both adjusted totals. Without cards the step is unchanged. Confirmed by the owner on 2026-10-04.
+
+**Evidence.** PROVEN locally (Postgres 16, synthetic season, production function bodies): `supabase/tests/chaos_week_rule_cards.sql`, 365 assertions (2026-10-04, third round: the opt-in, void selections, the automatic Wild Slot and raid, the raid penalty, the no-hindsight mark, the Week 15 Bounty check), including that with no card dealt, and with the league season not opted in, `recompute_matchup` returns and writes exactly what the `20261004010000` version does. The existing five SQL tests still pass unchanged.
+
+**Turning it off after a deal.** Unsetting the flag hides the pages and stops new deals; it does not stop scoring of cards already dealt. See the product document, section 5.
+
+**UNVERIFIED.** Everything in production. The three triggers alongside production's `roster_entries_roster_integrity` trigger and inside the production bodies of `claim_free_agent` and `resolve_trade` (no test database has them; the drop path was run through `process_due_waivers`, which this migration carries, and through direct writes in the same order). They were run alongside production's `roster_entries_prevent_started_drop` trigger and the real `roster_asset_game_has_started` once, ad hoc, on 2026-10-04: the 17 scenarios of `lineup_week_integrity.sql` with `20261004010000` and `20261004020000` loaded on top all passed (not a committed test; none of those scenarios deals a card, so this shows only that the triggers do not disturb them). The JavaScript deal step against a real database. The pages in a deployed environment, with real data, with client hydration or in Spanish (a local harness rendered them with synthetic data: `qa-artifacts/2026-10-04-chaos-cards/VERIFICATION.md`). The weekly recap and League News do not mention cards (`publish_finalized_league_week` unchanged). The committed `lineup_week_integrity.sql` loads only `20261003030000`, so it does not exercise the replaced `set_lineup_slot` and `process_due_waivers`. Its 17 scenarios were re-run once, unchanged, with `20261004010000` and `20261004020000` loaded on top, and all 17 passed (2026-10-04, ad hoc, not a committed test; repeated after the third round with the triggers in place, as said above). The two functions were produced by inserting text into the `20261003030000` bodies and are also exercised by the new test.
 
 ## Still unverified
 
