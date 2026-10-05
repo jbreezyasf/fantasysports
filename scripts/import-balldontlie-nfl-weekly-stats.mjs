@@ -10,7 +10,13 @@ if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf
   const match = /^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/.exec(line);
   if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
 }
-export async function runWeeklyStatsImport() {
+// mode 'current' (the 15-minute job): import the current week, close finished
+// weeks, run the season steps.
+// mode 'corrections' (the daily job): re-import the current week and the weeks
+// before it, then correct matchups that are already final and whose totals
+// changed (system_correct_final_matchups). Closes nothing and advances nothing.
+export const correctionWeeksFor = (week, lookback = 3) => { const weeks = []; for (let w = Math.max(1, week - lookback); w <= week; w += 1) weeks.push(w); return weeks; };
+export async function runWeeklyStatsImport({ mode = 'current', weeks: requestedWeeks } = {}) {
 const args = new Map(process.argv.slice(2).map(value => value.replace(/^--/, '').split('=', 2)).map(([key, value]) => [key, value ?? 'true']));
 const now = new Date();
 const season = Number(args.get('season') ?? (now.getUTCMonth() < 3 ? now.getUTCFullYear() - 1 : now.getUTCFullYear()));
@@ -83,10 +89,8 @@ if (!week) {
   week = Number(nearby?.[0]?.week ?? 0);
 }
 if (!Number.isInteger(week) || week < 1 || week > 18) throw new Error('Could not resolve a current regular-season week. Supply --week=1..18.');
-const rows = await all('/nfl/v1/fantasy/weekly_stats', { season, week, scoring_format: 'half_ppr' });
-const [{ data: links }, { data: games }, { data: teams }] = await Promise.all([
+const [{ data: links }, { data: teams }] = await Promise.all([
   db.from('athlete_provider_ids').select('athlete_id,provider_athlete_id').eq('provider', 'balldontlie').range(0, 10000),
-  db.from('real_games').select('id,provider_game_id').eq('competition_season_id', competitionSeason.id).eq('week', week),
   db.from('real_teams').select('id,abbreviation').eq('competition_id', competition.id),
 ]);
 // Players with no stored balldontlie id are matched by name, position and team
@@ -99,11 +103,16 @@ for (let from = 0; ; from += 1000) {
   if ((data?.length ?? 0) < 1000) break;
 }
 const resolveAthlete = buildAthleteResolver({ links: links ?? [], athletes: activeAthletes });
-const newLinks = new Map(); let matchedByName = 0; let unmatchedPlayers = 0;
-const athleteByProvider = new Map((links ?? []).map(row => [String(row.provider_athlete_id), row.athlete_id]));
-const gameByProvider = new Map((games ?? []).map(row => [String(row.provider_game_id).replace(/^balldontlie:/, ''), row.id]));
 const providerAlias = value => ({ JAX: 'JAC', WAS: 'WSH', LA: 'LAR' }[String(value)] ?? String(value));
 const teamByAlias = new Map((teams ?? []).map(row => [providerAlias(row.abbreviation), row.id]));
+const { data: leagueSeasons } = await db.from('league_seasons').select('id').eq('competition_season_id', competitionSeason.id);
+// Fetches one week from the provider, stores the statistics and recalculates
+// that week's fantasy scores in every league. Open matchups are re-totalled.
+async function importWeek(week) {
+const rows = await all('/nfl/v1/fantasy/weekly_stats', { season, week, scoring_format: 'half_ppr' });
+const { data: games } = await db.from('real_games').select('id,provider_game_id').eq('competition_season_id', competitionSeason.id).eq('week', week);
+const newLinks = new Map(); let matchedByName = 0; let unmatchedPlayers = 0;
+const gameByProvider = new Map((games ?? []).map(row => [String(row.provider_game_id).replace(/^balldontlie:/, ''), row.id]));
 const playerStats = []; const teamStats = []; const ingestedAt = new Date().toISOString();
 for (const row of rows) {
   const gameId = gameByProvider.get(String(row.game?.id ?? row.game_id ?? '')); if (!gameId) continue;
@@ -127,12 +136,32 @@ if (newLinks.size) {
 for (const [table, values, conflict] of [['athlete_game_stats', playerStats, 'athlete_id,game_id,source_provider'], ['real_team_game_stats', teamStats, 'real_team_id,game_id,source_provider']]) {
   for (let index = 0; index < values.length; index += 500) { const { error } = await db.from(table).upsert(values.slice(index, index + 500), { onConflict: conflict }); if (error) throw new Error(error.message); }
 }
-const { data: leagueSeasons } = await db.from('league_seasons').select('id').eq('competition_season_id', competitionSeason.id);
 for (const leagueSeason of leagueSeasons ?? []) {
   const { error } = await db.rpc('calculate_pro_football_week_scores', { p_league_season_id: leagueSeason.id, p_week: week }); if (error) throw new Error(error.message);
   const { data: matchups } = await db.from('matchups').select('id').eq('league_season_id', leagueSeason.id).eq('week', week).eq('is_final', false);
   for (const matchup of matchups ?? []) { const { error: matchupError } = await db.rpc('recompute_matchup', { p_matchup_id: matchup.id, p_finalize: false }); if (matchupError) throw new Error(matchupError.message); }
 }
+return { week, fetched: rows.length, matchedByName, unmatchedPlayers, playerStats: playerStats.length, teamStats: teamStats.length, ingestedAt };
+}
+if (mode === 'corrections') {
+  const lookback = Math.max(0, Math.min(17, Number(process.env.STAT_CORRECTION_WEEKS ?? 3) || 0));
+  const list = (requestedWeeks?.length ? requestedWeeks : correctionWeeksFor(week, lookback)).filter(w => Number.isInteger(w) && w >= 1 && w <= 18);
+  const weekReports = []; const failures = [];
+  for (const target of list) {
+    const imported = await importWeek(target); const leagues = [];
+    for (const leagueSeason of leagueSeasons ?? []) {
+      const { data, error } = await db.rpc('system_correct_final_matchups', { p_league_season_id: leagueSeason.id, p_week: target });
+      if (error) { failures.push({ week: target, leagueSeasonId: leagueSeason.id, message: error.message }); continue; }
+      if (data?.corrected) leagues.push({ leagueSeasonId: leagueSeason.id, corrected: data.corrected, resultsChanged: data.results_changed, changes: data.changes });
+    }
+    weekReports.push({ ...imported, correctedMatchups: leagues.reduce((sum, league) => sum + league.corrected, 0), resultsChanged: leagues.reduce((sum, league) => sum + league.resultsChanged, 0), leagues });
+  }
+  const correctionReport = { season, mode, weeks: weekReports, failures };
+  console.log(JSON.stringify(correctionReport, null, 2));
+  if (failures.length) throw new Error(`Stat correction failed for ${failures.length} league-week(s): ${failures.map(f => `week ${f.week} league season ${f.leagueSeasonId}: ${f.message}`).join(' | ')}`);
+  return correctionReport;
+}
+const { fetched, matchedByName, unmatchedPlayers, playerStats: playerStatCount, teamStats: teamStatCount, ingestedAt } = await importWeek(week);
 // A week-close failure in one league must not stop the season step for the
 // others, so the step still runs and the failure is reported afterwards.
 let lifecycle; let lifecycleError;
@@ -142,7 +171,7 @@ catch (error) { lifecycleError=error; lifecycle=error?.results ?? null; }
 const seasonAdvance=await advanceFantasySeasons({db,leagueSeasons});
 // Off unless CHAOS_CARDS_ENABLED is set; see docs/product/CHAOS_WEEK_RULE_CARDS.md. After the season step, so the run that creates Chaos Week also deals its cards.
 const chaosCards=await dealChaosWeekCards({db,leagueSeasons});
-const report = { season, week, fetched: rows.length, matchedByName, unmatchedPlayers, playerStats: playerStats.length, teamStats: teamStats.length, recalculatedLeagues: leagueSeasons?.length ?? 0, lifecycle, seasonAdvance, chaosCards, ingestedAt };
+const report = { season, week, fetched, matchedByName, unmatchedPlayers, playerStats: playerStatCount, teamStats: teamStatCount, recalculatedLeagues: leagueSeasons?.length ?? 0, lifecycle, seasonAdvance, chaosCards, ingestedAt };
 console.log(JSON.stringify(report, null, 2));
 if (lifecycleError) throw lifecycleError;
 if (seasonAdvance.failures.length) throw new Error(`Season step failed for ${seasonAdvance.failures.length} league season(s): ${seasonAdvance.failures.map(f => `${f.leagueSeasonId}: ${f.message}`).join(' | ')}`);
@@ -151,5 +180,6 @@ return report;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  runWeeklyStatsImport().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+  const cli = new Map(process.argv.slice(2).map(value => value.replace(/^--/, '').split('=', 2)));
+  runWeeklyStatsImport(cli.has('corrections') ? { mode: 'corrections', weeks: cli.get('weeks')?.split(',').map(Number) } : {}).catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
 }
