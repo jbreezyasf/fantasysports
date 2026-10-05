@@ -7,6 +7,9 @@ import MatchupLiveRefresh from './MatchupLiveRefresh';
 import { matchupRowLabel, matchupStatus } from './matchupAccessibility';
 import { defenseScoreDetails, playerScoreDetails, type RawFootballStats, type ScoreBreakdown, type ScoreDetail } from './scoreDetails';
 import { gameIsLive } from './matchupGameState';
+import { chaosClauseSentence, presentChaosClause } from '../../../lib/matchups/chaosClause';
+import { buildChaosAssets, chaosAssetLabels, chaosCardSurface, chaosCardsEnabled, chaosLowerSeedSide, chaosSelectionView, chaosUnlistedSelectionIds, presentChaosScoreBuild, selectionKind, type ChaosDrawRow, type ChaosGame, type ChaosLineupRow, type ChaosRosterRow, type ChaosSelectionRow } from '../../../lib/matchups/chaosCards';
+import { ChaosCardPanel, type ChaosPanelSide } from './ChaosCardPanel';
 
 type FranchiseCard = {
   name?: string;
@@ -45,7 +48,7 @@ export default async function MatchupPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
-  const { data: matchup } = await supabase.from('matchups').select('id,league_season_id,week,event_type,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,winner_season_franchise_id').eq('id', matchupId).maybeSingle();
+  const { data: matchup } = await supabase.from('matchups').select('id,league_season_id,week,event_type,home_season_franchise_id,away_season_franchise_id,home_points,away_points,is_final,winner_season_franchise_id,context').eq('id', matchupId).maybeSingle();
   if (!matchup) notFound();
   const { data: sf } = await supabase.from('season_franchises').select('id,franchise_id,franchises(name,abbreviation,primary_color,secondary_color,avatar_key)').eq('league_season_id', matchup.league_season_id);
   const home = sf?.find((x) => x.id === matchup.home_season_franchise_id),
@@ -145,7 +148,76 @@ export default async function MatchupPage({
   const userIsHome = ownedIds.has(home?.franchise_id ?? ''),
     userIsAway = ownedIds.has(away?.franchise_id ?? '');
   const userFranchiseId = userIsHome ? home?.franchise_id : userIsAway ? away?.franchise_id : null;
+  const chaosClause = matchup.is_final && matchup.winner_season_franchise_id ? presentChaosClause(matchup.context) : null;
+  // Chaos Week rule cards. Nothing is queried or rendered unless CHAOS_CARDS_ENABLED is on,
+  // this is a Chaos Week game, and the database holds a revealed draw for it.
+  let chaosPanel: React.ReactNode = null;
+  if (chaosCardsEnabled() && matchup.event_type === 'chaos') {
+    const { data: draw } = await supabase.from('chaos_card_draws').select('matchup_id,card_code,revealed_at').eq('matchup_id', matchupId).maybeSingle();
+    const card = chaosCardSurface({ eventType: matchup.event_type, draw: draw as ChaosDrawRow | null });
+    if (card) {
+      const sides = [matchup.home_season_franchise_id, matchup.away_season_franchise_id];
+      const kind = selectionKind(card.kind);
+      // The automatic selection (captain, Wild Slot player, raid) comes from the same database function the score uses (chaos_auto_pick). It answers nothing for the higher seed under RAID.
+      const autoFor = (seasonFranchiseId: string) => (kind ? supabase.rpc('chaos_auto_pick', { p_matchup_id: matchupId, p_season_franchise_id: seasonFranchiseId, p_kind: kind }) : Promise.resolve({ data: null }));
+      const [{ data: selections }, { data: rosters }, { data: cardGames }, { data: homeAuto }, { data: awayAuto }] = await Promise.all([
+        supabase.from('chaos_card_selections').select('season_franchise_id,card_code,athlete_id,real_team_id,locked_at,source,details,voided_at,void_reason').eq('matchup_id', matchupId),
+        supabase.from('roster_entries').select('season_franchise_id,athlete_id,real_team_id,athletes(display_name,position,real_team_id,real_teams(abbreviation)),real_teams(display_name,abbreviation)').in('season_franchise_id', sides).is('dropped_at', null).order('added_at'),
+        member?.competition_season_id ? supabase.from('real_games').select('home_team_id,away_team_id,starts_at,state').eq('competition_season_id', member.competition_season_id).eq('week', matchup.week) : Promise.resolve({ data: [] }),
+        autoFor(matchup.home_season_franchise_id),
+        autoFor(matchup.away_season_franchise_id),
+      ]);
+      const lowerSide = chaosLowerSeedSide(matchup.context);
+      const assetsFor = (seasonFranchiseId: string) => buildChaosAssets(((rosters ?? []) as unknown as Array<ChaosRosterRow & { season_franchise_id: string }>).filter((row) => row.season_franchise_id === seasonFranchiseId), ((lineups ?? []) as unknown as Array<ChaosLineupRow & { season_franchise_id: string }>).filter((row) => row.season_franchise_id === seasonFranchiseId));
+      const homeAssets = assetsFor(matchup.home_season_franchise_id);
+      const awayAssets = assetsFor(matchup.away_season_franchise_id);
+      // A selected player who has since left the roster (a void pick, or one dropped after the week's games) is not in the rosters above: look the name up.
+      const unlisted = chaosUnlistedSelectionIds((selections ?? []) as ChaosSelectionRow[], [...homeAssets, ...awayAssets]);
+      const [{ data: unlistedAthletes }, { data: unlistedTeams }] = await Promise.all([
+        unlisted.athleteIds.length ? supabase.from('athletes').select('id,display_name,position,real_teams(abbreviation)').in('id', unlisted.athleteIds) : Promise.resolve({ data: [] }),
+        unlisted.teamIds.length ? supabase.from('real_teams').select('id,display_name,abbreviation').in('id', unlisted.teamIds) : Promise.resolve({ data: [] }),
+      ]);
+      const assetLabels = chaosAssetLabels((unlistedAthletes ?? []) as never, (unlistedTeams ?? []) as never);
+      const panelSide = (which: 'home' | 'away'): ChaosPanelSide => {
+        const seasonFranchiseId = which === 'home' ? matchup.home_season_franchise_id : matchup.away_season_franchise_id;
+        return {
+          seasonFranchiseId,
+          name: which === 'home' ? homeName : awayName,
+          isLowerSeed: lowerSide === which,
+          selection: kind
+            ? chaosSelectionView({
+                kind,
+                isLowerSeed: lowerSide === which,
+                ownAssets: which === 'home' ? homeAssets : awayAssets,
+                opponentAssets: which === 'home' ? awayAssets : homeAssets,
+                selection: ((selections ?? []) as ChaosSelectionRow[]).find((row) => row.season_franchise_id === seasonFranchiseId) ?? null,
+                games: (cardGames ?? []) as ChaosGame[],
+                matchupFinal: matchup.is_final,
+                now,
+                autoCaptain: kind === 'captain' ? (which === 'home' ? homeAuto : awayAuto) : null,
+                autoPick: kind === 'captain' ? null : which === 'home' ? homeAuto : awayAuto,
+                assetLabels,
+              })
+            : null,
+        };
+      };
+      const userSide = userIsHome ? panelSide('home') : userIsAway ? panelSide('away') : null;
+      chaosPanel = (
+        <ChaosCardPanel
+          card={card}
+          home={panelSide('home')}
+          away={panelSide('away')}
+          build={presentChaosScoreBuild(matchup.context)}
+          assetNames={{ ...assetLabels, ...Object.fromEntries([...homeAssets, ...awayAssets].map((asset) => [asset.athleteId ?? asset.realTeamId ?? '', asset.label])) }}
+          isFinal={matchup.is_final}
+          lineupHref={userFranchiseId && userSide?.selection?.status === 'open' ? `/franchises/${userFranchiseId}/team?week=${matchup.week}` : null}
+        />
+      );
+    }
+  }
+  const chaosClauseWinner = chaosClause ? (chaosClause.winnerSide === 'home' ? homeName : awayName) : null;
   const summary = matchupStatus({
+    decidedNote: chaosClause ? chaosClauseSentence(chaosClause, chaosClauseWinner) : null,
     userTeam: userIsHome ? homeName : userIsAway ? awayName : null,
     opponentTeam: userIsHome ? awayName : userIsAway ? homeName : null,
     userScore: userIsHome ? homeScore : userIsAway ? awayScore : null,
@@ -190,6 +262,15 @@ export default async function MatchupPage({
             <p>{awayName}</p>
           </div>
         </div>
+        {chaosClause && (
+          <p className="chaosClauseNote" role="note">
+            <strong>{chaosClause.title}</strong>
+            <span>{chaosClause.basisLabel}</span>
+            <span data-no-translate>
+              {chaosClauseWinner} {chaosClause.basis === 'postseason_seed' ? `#${chaosClause.winnerValue} – #${chaosClause.loserValue}` : `${chaosClause.winnerValue} – ${chaosClause.loserValue}`}
+            </span>
+          </p>
+        )}
         {query.error && (
           <p className="errorNotice" role="alert">
             {query.error}
@@ -218,6 +299,7 @@ export default async function MatchupPage({
           {userFranchiseId && <a className="primary" href={`/franchises/${userFranchiseId}/team`}>Set Lineup</a>}
         </div>
       </section>
+      {chaosPanel}
       <section className="panel matchupStandingsPanel" aria-labelledby="matchup-standings-heading">
         <div className="lineupSectionHeading">
           <div><p className="eyebrow">LEAGUE STANDINGS</p><h2 id="matchup-standings-heading">Where this matchup stands</h2></div>

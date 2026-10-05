@@ -2,7 +2,8 @@
 -- championship, using the REAL production season functions
 -- (fixtures/production_season_functions.sql) driven the way the weekly job
 -- drives them: recompute_matchup(..., true) to close each week, then
--- system_advance_fantasy_season (20261003060000) for the next step.
+-- system_advance_fantasy_season for the next step (both as defined by
+-- 20261004010000_chaos_clause_tiebreak.sql).
 --
 -- Run against an EMPTY throwaway Postgres database, never production:
 --
@@ -93,6 +94,13 @@ select pg_temp.expect(
   join pg_proc p on p.proname = expected.name and p.pronamespace = 'public'::regnamespace
    and md5(regexp_replace(convert_from(convert_to(p.prosrc, 'UTF8'), 'UTF8'), '\s+', '', 'g')) = expected.hash) = 12,
   'all 12 fixture function bodies match their production hashes');
+
+-- On top of the production bodies: the two earlier migrations, then the Chaos
+-- Clause migration that supersedes both (20261004010000). From here on
+-- recompute_matchup and system_advance_fantasy_season are the new definitions;
+-- the ten generator and postseason functions are still production's.
+\ir ../migrations/20261003040000_week_close_terminal_game_rule.sql
+\ir ../migrations/20261004010000_chaos_clause_tiebreak.sql
 
 -- ---------------------------------------------------------------------------
 -- Fixture: one league, one commissioner, ten franchises, weeks 1-17 of real
@@ -231,15 +239,16 @@ select pg_temp.expect((select status = 'postseason' from public.league_seasons),
 select pg_temp.expect(pg_temp.advance(15)->'result'->>'status' = 'exists' and (select count(*) = 4 from public.matchups where week = 15), 'Week 15 step is idempotent');
 select pg_temp.expect(pg_temp.advance_error(16) = 'Week 15 must be final first', 'semifinals wait for Week 15');
 
--- A tied quarterfinal has no winner. Production's own function then fails on a
--- NOT NULL column; the system path refuses with a readable reason. Rolled back.
+-- A tied quarterfinal used to be final with no winner, and production's
+-- generate_postseason_week16 then failed on a NOT NULL column. With the Chaos
+-- Clause the game gets a winner at finalization (details and every other case:
+-- chaos_clause_tiebreak.sql). Rolled back.
 begin;
 update public.fantasy_player_scores s set points = 100 from public.matchups m, teams t
   where m.week = 15 and m.event_type = 'playoff_qf' and s.week = 15 and s.athlete_id = t.athlete and t.sf in (m.home_season_franchise_id, m.away_season_franchise_id);
 select pg_temp.close_week(15);
-select pg_temp.expect((select count(*) = 2 from public.matchups where week = 15 and event_type = 'playoff_qf' and is_final and winner_season_franchise_id is null), 'a tied playoff game is final with no winner');
-select pg_temp.expect(pg_temp.advance_error(16) = 'A postseason matchup ended in a tie; a commissioner decision is required', 'the system path stops on a tied playoff game');
-select pg_temp.expect(pg_temp.error_of(format('select pg_temp.as_commissioner(%L)', format('select public.generate_postseason_week16(%L::uuid)', (select league from ids)))) like 'null value in column "away_season_franchise_id"%', 'PRODUCTION BEHAVIOUR: the commissioner button fails on a tied quarterfinal (no tiebreak rule exists)');
+select pg_temp.expect((select count(*) = 2 from public.matchups where week = 15 and event_type = 'playoff_qf' and is_final and home_points = away_points and winner_season_franchise_id is not null and context->'chaos_clause'->>'decided_by' = 'chaos_week'), 'a tied playoff game is final, level on points, with a winner decided by the Chaos Clause');
+select pg_temp.expect(pg_temp.advance(16) @> '{"step":"generate_postseason_week16","result":{"status":"created","matchups":2}}' and pg_temp.week_shape(16, 'playoff_sf', 2), 'Week 16 generates after tied quarterfinals');
 rollback;
 
 select pg_temp.expect(pg_temp.close_week(15) = 4, 'Week 15 closes');
