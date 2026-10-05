@@ -353,6 +353,27 @@ Seeds 1–2 receive first-round byes.
 
 Week 17 contains the championship.
 
+#### Postseason tiebreak: the Chaos Clause (LOCKED)
+
+Decided by the owner on 2026-10-04.
+
+A postseason game cannot end without a winner. When a postseason matchup (championship quarterfinal, semifinal or final, a third-place game if one is ever added, and every Redemption bracket game) finishes level on fantasy points, the winner is decided by this ladder, in order:
+
+1. **Chaos Week score.** The franchise with the higher fantasy point total in its own Week 13 Chaos Week matchup of the same league season.
+2. **Rivalry Week score.** If the Chaos Week totals are equal, or either franchise has no final Chaos Week matchup, the higher point total in its Week 10 Rivalry Week matchup.
+3. **Higher postseason seed** (the lower seed number), as the last resort, so a winner always exists.
+
+Rules:
+
+- The scores shown for the game stay level. Only the winner is set, and the product says how it was decided ("Decided by the Chaos Clause", with the compared scores).
+- Fantasy Core decides this at finalization from stored results. AI may explain it; AI does not decide it.
+- Regular-season ties are unchanged: they stay ties.
+- A step is unavailable when that week's matchup does not exist or is not final for either franchise (late-start and test leagues); the ladder then moves to the next step.
+
+**This rule must be announced to managers before Week 13 lineups lock**, because it makes Chaos Week (and Rivalry Week) scores matter in the postseason.
+
+Implementation: `supabase/migrations/20261004010000_chaos_clause_tiebreak.sql` (not applied to production as of 2026-10-04).
+
 ---
 
 # 22. All-Play

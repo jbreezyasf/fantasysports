@@ -1,3 +1,5 @@
+import { chaosClauseSentence, presentChaosClause } from "../../../../lib/matchups/chaosClause";
+
 type FeedEvent = { event_type: string; body: string | null; payload: unknown };
 type FeedLookups = {
   athletes: Map<string, string>;
@@ -38,6 +40,11 @@ export function presentLockerEvent(event: FeedEvent, lookups: FeedLookups) {
   }
   if (event.event_type === "waiver_claimed")
     return `${franchise ?? "A franchise"} won the waiver claim for ${asset ?? "a new player"}.`;
+  if (event.event_type === "matchup_final") {
+    const clause = presentChaosClause(payload);
+    if (clause)
+      return `Matchup final, level on points. ${chaosClauseSentence(clause, lookups.franchises.get(clause.winnerSeasonFranchiseId) ?? "The winner")}`;
+  }
   return event.body?.trim() || "League update";
 }
 

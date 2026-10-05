@@ -132,7 +132,7 @@ Every function takes a league id and acts on that league's season with the highe
 
 - **Where:** `scripts/advance-fantasy-season.mjs`, called by the weekly job (`scripts/import-balldontlie-nfl-weekly-stats.mjs`) after the week-close step.
 - **Rule:** for each league season, find its latest week that has matchups. If that week is 9 to 17 and every matchup in it is final, run the step for the following week (the table above; after Week 17, close the season). One step per league per run. Leagues with no matchups, with an open latest week, or already complete are skipped.
-- **Extra checks in `system_advance_fantasy_season`:** 10 franchises with standings; the previous week exists and is entirely final; the season is the league's latest; no tied postseason game; and after the generator runs, the new week must have the expected number of games with every franchise at most once, otherwise the whole step is rolled back.
+- **Extra checks in `system_advance_fantasy_season`:** 10 franchises with standings; the previous week exists and is entirely final; the season is the league's latest; no postseason game that is final without a winner (see "Tied postseason games"); and after the generator runs, the new week must have the expected number of games with every franchise at most once, otherwise the whole step is rolled back.
 - **Failure handling:** a failing league is logged and reported and the other leagues still advance; the run is then reported as failed. If the migration is not applied, the job logs `system-advance-function-not-applied` once and does nothing.
 - **Side effect to know about:** feed events written by Chaos Week, Judgment Week and season close name the league's commissioner as the actor, because the production functions record `auth.uid()` (PROVEN, rehearsal).
 - **Evidence:** unit tests in `tests/advance-fantasy-season.test.mjs` (fake database); the SQL function is exercised end to end by the rehearsal. The JavaScript and the SQL function have **not** been run against each other, and neither has run in production (UNVERIFIED).
@@ -153,10 +153,47 @@ Unset the variable and redeploy. Matchups already created stay. The commissioner
 The competition structure in `docs/product/PRD_02_TRANSACTIONS_AND_SEASON.md` section 21 matches the functions for Weeks 10 to 17: same event per week, same pairings for Position, Chaos and Judgment, six qualifiers, byes for seeds 1 and 2, championship in Week 17. Differences and gaps:
 
 1. **Week 17 participation.** Section 25 requires that "all 10 managers should still have a reason to open Big Exec in Week 17". The functions give only four franchises a Week 17 game and only four a Week 16 game (PROVEN, body, rehearsal).
-2. **No tiebreak for playoff games.** A tied matchup is final with no winner (PROVEN, body). With a tied quarterfinal, `generate_postseason_week16` fails with a NOT NULL error on `away_season_franchise_id` (PROVEN, rehearsal); a tied final makes `close_league_season` refuse forever. The PRD does not define a tiebreak. The automated path stops with "A postseason matchup ended in a tie; a commissioner decision is required"; there is currently no tool for making that decision.
+2. **Tied playoff games: the Chaos Clause.** See "Tied postseason games" below. In production today (migration not applied) a tied matchup is final with no winner (PROVEN, body); a tied quarterfinal makes `generate_postseason_week16` fail with a NOT NULL error on `away_season_franchise_id`, and a tied final makes `close_league_season` refuse forever (PROVEN, rehearsal as it stood on 2026-10-03). The PRD now defines the tiebreak (section 21, decided by the owner on 2026-10-04).
 3. **Standings tiebreak.** The PRD ranks franchises "#1 to #10" without defining ties. The functions use wins, then points for; tied games do not count for anything (PROVEN, body).
 4. **Postseason games change the standings.** Closing a playoff game adds a win and a loss to the same `standings` rows as the regular season (PROVEN, rehearsal). Seeding is taken before that, so the bracket is not affected, but the standings page will show postseason results mixed in after Week 15.
 5. **Rivalry and Revenge do not check the previous week.** The commissioner button for Week 10 or 11 can be pressed early and will build the week from whatever results exist (PROVEN, body). The automated path refuses.
+
+## Tied postseason games: the Chaos Clause
+
+**Status 2026-10-04:** rule decided by the owner; implemented in `supabase/migrations/20261004010000_chaos_clause_tiebreak.sql`; **not applied to production**. Until it is applied, production behaves as item 2 above describes.
+
+**The rule.** A postseason matchup (`playoff_qf`, `playoff_sf`, `championship`, `redemption_sf`, `redemption_final`; `third_place` is accepted although nothing creates it) that is level on points when it is finalized gets a winner from the first step that separates the two franchises:
+
+1. higher point total in the franchise's own Week 13 `chaos` matchup of the same league season;
+2. higher point total in its Week 10 `rivalry` matchup;
+3. higher postseason seed (lower seed number).
+
+A step is "unavailable" when either franchise has no **final** matchup of that week and event type, and "level" when the totals are equal; both fall through. Regular-season ties are unchanged.
+
+**Where it happens.** Inside `recompute_matchup(id, true)`, in the same branch that finalizes the matchup, so every later function sees a winner (PROVEN, `supabase/tests/chaos_clause_tiebreak.sql`). Nothing else decides a winner.
+
+**What it writes.**
+
+- `matchups.winner_season_franchise_id`; `home_points` and `away_points` stay level.
+- `matchups.context.chaos_clause` and the same object under `chaos_clause` in the `matchup_final` feed payload: `decided_by` (`chaos_week`, `rivalry_week`, `postseason_seed` or `unresolved`), `winner_season_franchise_id`, and `steps`, one entry per step looked at with the home and away value and the outcome.
+- `standings`: exactly what any won postseason game writes. The winner gets a win and a longer win streak, the loser a loss, both get the level points for and against, and `ties` is not touched (PROVEN, test). Postseason results are still added to the regular-season standings rows (item 4 above); that was deliberately left alone.
+
+**Idempotent.** The decision is taken once, when the matchup becomes final. Recomputing a final matchup, with or without `p_finalize`, changes neither the winner, the record, the standings nor the feed, even if the Week 13 row is edited afterwards (PROVEN, test).
+
+**The one case with no winner.** If a franchise has no row in `postseason_seeds` and the first two steps do not decide, the game is final and level, recorded with `decided_by: unresolved`. `system_advance_fantasy_season` then stops with "A postseason matchup is final with no winner (the Chaos Clause could not decide it); a commissioner decision is required" (PROVEN, test). The same stop catches a postseason game that was finalized level before the migration was applied. There is still no tool for making that decision by hand. With seeds in place (they are written by `initialize_postseason` before any postseason game exists) this cannot happen.
+
+**Applying it.** The migration supersedes `20261003040000` and `20261003060000`: it repeats their objects and replaces `recompute_matchup` and `system_advance_fantasy_season`. Apply in timestamp order, or this file alone. Never apply either of the two older files after it; that would put back a definition without the clause. Applying it also turns on the canceled/postponed week-close rule from `20261003040000`.
+
+**In the product.** The matchup page shows a "Decided by the Chaos Clause" note with the compared values under the scoreboard and says so in the screen-reader summary instead of "tied"; the schedule marks the game "Chaos Clause winner" with the winner; the Locker Room league moment says who won and how. English and Spanish.
+
+**Before Week 13.** The rule must be announced to managers before Week 13 lineups lock (first Week 13 kickoff in production `real_games`: 2026-12-04 01:15 UTC, PROVEN 2026-10-04), because Chaos Week scores now decide postseason ties.
+
+**Not done / UNVERIFIED.**
+
+- Nothing here has run in production; the tests run on a local Postgres 16 with synthetic scores.
+- `publish_finalized_league_week` was not changed. Its recap moment title already follows the winner ("A defeats B"), but its `facts` do not include the clause, so the weekly recap and its League News story show a level score without the explanation.
+- A Week 13 or Week 10 matchup with `result_source = 'SIMULATED_LATE_START'` that is final counts like any other final matchup. Whether a simulated score should decide a playoff game is an owner decision that has not been made.
+- The page changes were typechecked, unit-tested and built, not looked at in a browser: no league has a postseason game yet.
 
 ## Still unverified
 
