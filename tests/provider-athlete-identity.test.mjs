@@ -57,3 +57,17 @@ test('rows without a player id, name or position resolve to nothing', () => {
   assert.equal(resolve({ player: { first_name: 'Jason', last_name: 'Myers', position_abbreviation: 'K' } }).athleteId, null);
   assert.equal(resolve(row(5, '', '', 'K', 'SEA')).athleteId, null);
 });
+
+test("the provider's 'PK' label is the same position as Big Exec's 'K'", () => {
+  const resolve = buildAthleteResolver({ links, athletes });
+  const result = resolve(row(77, 'Jason', 'Myers', 'PK', 'SEA'));
+  assert.equal(result.athleteId, 'myers'); assert.equal(result.via, 'name_position_team');
+  assert.deepEqual(result.link, { athlete_id: 'myers', provider: 'balldontlie', provider_athlete_id: '77' });
+});
+
+test('a position label the two sources disagree on is settled by name and team, never by name alone', () => {
+  const resolve = buildAthleteResolver({ links, athletes });
+  assert.equal(resolve(row(78, 'James', 'Cook', 'FB', 'BUF')).via, 'name_team');
+  assert.equal(resolve(row(79, 'Josh', 'Allen', 'LB', 'JAX')).athleteId, null);
+  assert.equal(resolve(row(80, 'Mike', 'Smith', 'TE', 'PHI')).athleteId, null);
+});
