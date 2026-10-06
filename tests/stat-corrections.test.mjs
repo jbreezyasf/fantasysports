@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { correctionWeeksFor } from '../scripts/import-balldontlie-nfl-weekly-stats.mjs';
 
-test('the correction pass covers the current week and the three before it', () => {
-  assert.deepEqual(correctionWeeksFor(4), [1, 2, 3, 4]);
-  assert.deepEqual(correctionWeeksFor(9), [6, 7, 8, 9]);
+test('the correction pass covers the current week and the two before it', () => {
+  assert.deepEqual(correctionWeeksFor(4), [2, 3, 4]);
+  assert.deepEqual(correctionWeeksFor(9), [7, 8, 9]);
 });
 test('it never reaches before Week 1', () => {
   assert.deepEqual(correctionWeeksFor(1), [1]);
