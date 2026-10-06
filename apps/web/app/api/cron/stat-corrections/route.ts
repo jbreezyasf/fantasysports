@@ -1,4 +1,4 @@
-// Daily stat-correction pass. Re-imports the current week and the three weeks
+// Daily stat-correction pass. Re-imports the current week and the two weeks
 // before it (STAT_CORRECTION_WEEKS) and corrects matchups that are already
 // final when a total changed: see system_correct_final_matchups in
 // supabase/migrations/20261005010000_final_matchup_stat_corrections.sql.

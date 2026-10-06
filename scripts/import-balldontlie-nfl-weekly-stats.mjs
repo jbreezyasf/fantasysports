@@ -15,7 +15,9 @@ if (existsSync('.env.local')) for (const line of readFileSync('.env.local', 'utf
 // mode 'corrections' (the daily job): re-import the current week and the weeks
 // before it, then correct matchups that are already final and whose totals
 // changed (system_correct_final_matchups). Closes nothing and advances nothing.
-export const correctionWeeksFor = (week, lookback = 3) => { const weeks = []; for (let w = Math.max(1, week - lookback); w <= week; w += 1) weeks.push(w); return weeks; };
+// Two weeks back by default. 2026-10-05: a third week would have reached Week 1, where a correction changes all five
+// Stress Test totals and one result; that is held until the owner decides (set STAT_CORRECTION_WEEKS to widen).
+export const correctionWeeksFor = (week, lookback = 2) => { const weeks = []; for (let w = Math.max(1, week - lookback); w <= week; w += 1) weeks.push(w); return weeks; };
 export async function runWeeklyStatsImport({ mode = 'current', weeks: requestedWeeks } = {}) {
 const args = new Map(process.argv.slice(2).map(value => value.replace(/^--/, '').split('=', 2)).map(([key, value]) => [key, value ?? 'true']));
 const now = new Date();
@@ -144,7 +146,7 @@ for (const leagueSeason of leagueSeasons ?? []) {
 return { week, fetched: rows.length, matchedByName, unmatchedPlayers, playerStats: playerStats.length, teamStats: teamStats.length, ingestedAt };
 }
 if (mode === 'corrections') {
-  const lookback = Math.max(0, Math.min(17, Number(process.env.STAT_CORRECTION_WEEKS ?? 3) || 0));
+  const lookback = Math.max(0, Math.min(17, Number(process.env.STAT_CORRECTION_WEEKS ?? 2) || 0));
   const list = (requestedWeeks?.length ? requestedWeeks : correctionWeeksFor(week, lookback)).filter(w => Number.isInteger(w) && w >= 1 && w <= 18);
   const weekReports = []; const failures = [];
   for (const target of list) {
